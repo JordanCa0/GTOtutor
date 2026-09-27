@@ -1,0 +1,17 @@
+{
+  "name": "gtotutor",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w apps/api\" \"npm run dev -w apps/web\"",
+    "test": "npm run test -w apps/api",
+    "typecheck": "npm run typecheck -w apps/api && npm run typecheck -w apps/web",
+    "build": "npm run build -w apps/web"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

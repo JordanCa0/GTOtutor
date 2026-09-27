@@ -1,0 +1,83 @@
+import type { ActionType } from '@gtotutor/shared-types';
+import { describe, expect, it } from 'vitest';
+import { ChartService } from '../src/charts/chartService.js';
+import { buildFixtureChartSet } from '../src/charts/fixtures.js';
+import { HandEngine, HttpError } from '../src/engine/handEngine.js';
+import { runoutResolver } from '../src/engine/showdownResolver.js';
+import { handClass } from '../src/poker/cards.js';
+import { seededRng } from '../src/poker/rng.js';
+
+const charts = new ChartService(buildFixtureChartSet());
+const newEngine = (seed: number) => new HandEngine(charts, seededRng(seed), runoutResolver);
+const req = { tableSize: 'SIX_MAX', stackDepthBb: 100, heroPosition: 'random' } as const;
+
+describe('hand engine', () => {
+  it('plays thousands of random hands to completion with consistent accounting', () => {
+    const engine = newEngine(42);
+    const rng = seededRng(99);
+    let showdowns = 0;
+    for (let i = 0; i < 3000; i++) {
+      const state = engine.start(req);
+      let view = engine.view(state);
+      expect(view.status).toBe('awaiting_hero');
+      let guard = 0;
+      while (view.status === 'awaiting_hero') {
+        const legal = view.legalActions;
+        const action = legal[rng.int(legal.length)].id as ActionType;
+        engine.decide(state, action);
+        view = engine.view(state);
+        if (++guard > 10) throw new Error('hand did not terminate');
+      }
+      const r = view.result!;
+      const committed = view.seats.reduce((s, seat) => s + seat.committedBb, 0);
+      expect(r.potBb).toBeCloseTo(committed, 5);
+      const hero = view.seats.find((s) => s.isHero)!;
+      expect(r.heroNetBb).toBeGreaterThanOrEqual(-hero.committedBb - 1e-9);
+      expect(r.heroNetBb).toBeLessThanOrEqual(r.potBb - hero.committedBb + 1e-9);
+      expect(view.decisions.length).toBeGreaterThan(0);
+      if (r.showdown) {
+        showdowns++;
+        expect(r.board).toHaveLength(5);
+        const allCards = [...r.board, ...r.showdown.flatMap((s) => s.cards)];
+        expect(new Set(allCards).size).toBe(allCards.length);
+      }
+    }
+    expect(showdowns).toBeGreaterThan(100);
+  });
+
+  it('seats hero where requested and hides villain cards until showdown', () => {
+    const engine = newEngine(3);
+    const state = engine.start({ ...req, heroPosition: 'CO' });
+    const view = engine.view(state);
+    expect(view.heroPosition).toBe('CO');
+    expect(view.seats.filter((s) => s.cards !== null).map((s) => s.position)).toEqual(['CO']);
+  });
+
+  it('grades pure folds: folding is best, opening is a mistake', () => {
+    const engine = newEngine(5);
+    const rfi = charts.getNode('SIX_MAX|100|RFI|UTG');
+    const grades = new Set<string>();
+    for (let i = 0; i < 200 && grades.size < 2; i++) {
+      const state = engine.start({ ...req, heroPosition: 'UTG' });
+      const [c1, c2] = engine.view(state).heroCards;
+      if (rfi.strategy.get(handClass(c1, c2))![0] !== 1) continue;
+      const choice = i % 2 === 0 ? 'fold' : 'raise';
+      const { grade } = engine.decide(state, choice);
+      expect(grade).toBe(choice === 'fold' ? 'best' : 'mistake');
+      grades.add(grade);
+    }
+    expect(grades).toEqual(new Set(['best', 'mistake']));
+  });
+
+  it('rejects illegal and out-of-turn actions', () => {
+    const engine = newEngine(8);
+    const state = engine.start({ ...req, heroPosition: 'UTG' });
+    expect(() => engine.decide(state, 'allin')).toThrow(HttpError);
+    engine.decide(state, 'fold');
+    expect(() => engine.decide(state, 'fold')).toThrow(/not your turn/);
+  });
+
+  it('rejects configurations without charts yet', () => {
+    expect(() => newEngine(1).start({ ...req, tableSize: 'NINE_MAX' })).toThrow(/Only 6-max/);
+  });
+});
