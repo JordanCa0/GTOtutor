@@ -12,7 +12,11 @@ import type { ChartNode, ChartSet } from './types.js';
 const STACK = 100;
 const TOTAL_COMBOS = 1326;
 
-export const RFI_WIDTH_PCT: Record<Position, number> = { UTG: 15, HJ: 19, CO: 27, BTN: 44, SB: 40, BB: 0 };
+/** Open-raise widths. The SB also limps (SB_LIMP_PCT) instead of playing raise-or-fold. */
+export const RFI_WIDTH_PCT: Record<Position, number> = { UTG: 15, HJ: 19, CO: 27, BTN: 44, SB: 24, BB: 0 };
+export const SB_LIMP_PCT = 36;
+export const ISO_RAISE_SIZE = 3.5;
+const SB_VS_ISO_3BET_SIZE = 11;
 export const openSize = (pos: Position) => (pos === 'SB' ? 3 : 2.5);
 export const threeBetSize = (pos: Position) => (pos === 'SB' || pos === 'BB' ? 10 : 7.5);
 export const FOUR_BET_SIZE = 22;
@@ -102,7 +106,8 @@ function makeNode(
   for (const [hc, m] of mixes) {
     strategy.set(
       hc,
-      actions.map((a) => (a.id === 'fold' ? m.fold : a.id === 'call' ? m.call : m.agg)),
+      // In check/raise spots the passive remainder of the range checks instead of folding.
+      actions.map((a) => (a.id === 'fold' || a.id === 'check' ? m.fold : a.id === 'call' ? m.call : m.agg)),
     );
     ev.set(hc, actions.map(() => null));
   }
@@ -118,7 +123,11 @@ export function buildFixtureChartSet(): ChartSet {
   const others = (p: Position) => SIX_MAX_POSITIONS.filter((q) => q !== p);
 
   for (const pos of SIX_MAX_POSITIONS) {
-    if (pos !== 'BB') {
+    if (pos === 'SB') {
+      add(
+        makeNode('RFI', pos, undefined, 'SB first in (raise, limp, or fold)', [act('fold', 'Fold', null), act('call', 'Limp', null), act('raise', `Raise to ${openSize(pos)}`, openSize(pos))], buildMixes(RFI_WIDTH_PCT.SB, SB_LIMP_PCT)),
+      );
+    } else if (pos !== 'BB') {
       add(
         makeNode('RFI', pos, undefined, `${pos} first in (open-raise or fold)`, [act('fold', 'Fold', null), act('raise', `Raise to ${openSize(pos)}`, openSize(pos))], buildMixes(RFI_WIDTH_PCT[pos], 0)),
       );
@@ -148,8 +157,14 @@ export function buildFixtureChartSet(): ChartSet {
     add(makeNode('COLD_VS_5BET', pos, undefined, isCold('5-bet all-in'), [act('fold', 'Fold', null), act('call', 'Call all-in', null)], buildMixes(0, 0.9)));
   }
 
+  // Limped pots: only the SB can limp, so these are always SB vs BB.
+  add(makeNode('VS_LIMP', 'BB', 'SB', 'BB facing SB limp', [act('check', 'Check', null), act('raise', `Raise to ${ISO_RAISE_SIZE}`, ISO_RAISE_SIZE)], buildMixes(28, 0, WHEEL_ACE_BLUFFS_3BET)));
+  add(
+    makeNode('VS_ISO', 'SB', 'BB', 'SB (limped) facing BB raise', [act('fold', 'Fold', null), act('call', 'Call', null), act('raise', `3-bet to ${SB_VS_ISO_3BET_SIZE}`, SB_VS_ISO_3BET_SIZE)], buildMixes(4, 24)),
+  );
+
   return {
-    version: 'fixture-v1',
+    version: 'fixture-v2',
     dataSource: {
       kind: 'fixture',
       note: 'Placeholder ranges from a heuristic hand ranking at approximate standard widths — not solver output yet. EVs are unavailable until the CFR+ solver lands.',

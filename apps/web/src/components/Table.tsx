@@ -25,8 +25,13 @@ const betSpot = (p: Point): Point => ({
 });
 const at = (p: Point) => ({ left: `${p.x}%`, top: `${p.y}%` });
 
-const ACTION_TEXT = (a: ActionLogEntry) =>
-  a.action === 'fold' ? 'Fold' : a.action === 'call' ? `Call ${a.toBb}` : a.action === 'allin' ? 'All-in' : `Raise ${a.toBb}`;
+const ACTION_TEXT: Record<ActionLogEntry['action'], (a: ActionLogEntry) => string> = {
+  fold: () => 'Fold',
+  check: () => 'Check',
+  call: (a) => (a.toBb === 1 ? 'Limp' : `Call ${a.toBb}`),
+  raise: (a) => `Raise ${a.toBb}`,
+  allin: () => 'All-in',
+};
 
 interface Props {
   hand: HandView;
@@ -120,7 +125,7 @@ export function Table({ hand, playback, onSkip }: Props) {
               <span className="stack">{Math.round((stack - d.committed + won) * 100) / 100}bb</span>
               {d.lastAction && !sd && !playback.awarded && (
                 <span key={d.lastAction.toBb + d.lastAction.action} className={`action-bubble act-${d.lastAction.action}`}>
-                  {ACTION_TEXT(d.lastAction)}
+                  {ACTION_TEXT[d.lastAction.action](d.lastAction)}
                 </span>
               )}
             </div>

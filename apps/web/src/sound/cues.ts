@@ -20,7 +20,7 @@ export function cuesFor(prev: PlaybackState | null, next: PlaybackState, hand: H
   }
 
   for (const a of hand.actionLog.slice(prev.steps, next.steps)) {
-    cues.push({ sound: a.action === 'fold' ? 'muck' : a.action === 'allin' ? 'allin' : 'chip', delayMs: 0 });
+    cues.push({ sound: a.action === 'fold' ? 'muck' : a.action === 'check' ? 'check' : a.action === 'allin' ? 'allin' : 'chip', delayMs: 0 });
   }
   if (!prev.gathered && next.gathered && hand.actionLog.some((a) => a.action !== 'fold')) cues.push({ sound: 'sweep', delayMs: 0 });
   for (let i = 0; i < next.board - prev.board; i++) cues.push({ sound: 'deal', delayMs: i * 90 });

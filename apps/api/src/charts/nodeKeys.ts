@@ -2,6 +2,8 @@ import type { Position, TableSize } from '@gtotutor/shared-types';
 
 export type NodeType =
   | 'RFI'
+  | 'VS_LIMP'
+  | 'VS_ISO'
   | 'VS_OPEN'
   | 'VS_3BET'
   | 'VS_4BET'

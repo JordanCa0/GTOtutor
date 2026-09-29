@@ -35,6 +35,8 @@ describe('session stats', () => {
     expect(leakTypeOf(decision(key, 'call', { fold: 0, call: 0.05, raise: 0.95 }, 'mistake'))).toBe('under_raise');
     expect(leakTypeOf(decision(key, 'raise', { fold: 0, call: 1, raise: 0 }, 'mistake'))).toBe('over_raise');
     expect(leakTypeOf(decision(key, 'call', { fold: 0.4, call: 0.6, raise: 0 }, 'best'))).toBeNull();
+    expect(leakTypeOf(decision('SIX_MAX|100|VS_LIMP|BB|SB', 'check', { check: 0, raise: 1 }, 'mistake'))).toBe('under_raise');
+    expect(spotTypeOf('SIX_MAX|100|VS_ISO|SB|BB')).toBe('LIMPED');
   });
 
   it('aggregates grades, spots, leaks, and the worst mistakes', () => {

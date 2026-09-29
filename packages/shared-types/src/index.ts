@@ -1,7 +1,7 @@
 export type TableSize = 'HU' | 'SIX_MAX' | 'NINE_MAX';
 export type StackDepth = 20 | 40 | 60 | 100 | 150;
 export type Position = 'UTG' | 'HJ' | 'CO' | 'BTN' | 'SB' | 'BB';
-export type ActionType = 'fold' | 'call' | 'raise' | 'allin';
+export type ActionType = 'fold' | 'check' | 'call' | 'raise' | 'allin';
 export type Grade = 'best' | 'mixed' | 'mistake';
 
 export const TABLE_SIZES: { id: TableSize; label: string; available: boolean }[] = [
@@ -167,7 +167,7 @@ export type ChatResponse =
 
 export type HintResponse = { status: 'ok'; hint: string; cached: boolean } | { status: 'unavailable'; reason: string };
 
-export type SpotType = 'RFI' | 'VS_OPEN' | 'VS_3BET' | 'VS_4BET_PLUS';
+export type SpotType = 'RFI' | 'LIMPED' | 'VS_OPEN' | 'VS_3BET' | 'VS_4BET_PLUS';
 export type LeakType = 'over_fold' | 'over_call' | 'over_raise' | 'under_raise';
 
 export interface SessionMistake {

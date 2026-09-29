@@ -47,6 +47,18 @@ describe('fixture charts', () => {
     expect(f).toBeLessThan(1);
   });
 
+  it('lets the SB limp as well as raise, and the BB check or raise against a limp', () => {
+    const sb = node('SIX_MAX|100|RFI|SB');
+    expect(sb.actions.map((a) => a.id)).toEqual(['fold', 'call', 'raise']);
+    const [fold, limp, raise] = charts.rangeSummary(sb);
+    expect(limp).toBeGreaterThan(0.25);
+    expect(raise).toBeGreaterThan(0.15);
+    expect(fold).toBeLessThan(0.5);
+    expect(node('SIX_MAX|100|VS_LIMP|BB|SB').actions.map((a) => a.id)).toEqual(['check', 'raise']);
+    expect(freq('SIX_MAX|100|VS_LIMP|BB|SB', '72o', 'check')).toBe(1);
+    expect(freq('SIX_MAX|100|VS_LIMP|BB|SB', 'AA', 'raise')).toBe(1);
+  });
+
   it('always calls AA against an all-in', () => {
     expect(freq('SIX_MAX|100|VS_5BET|UTG|BB', 'AA', 'call')).toBe(1);
   });

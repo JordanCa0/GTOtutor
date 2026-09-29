@@ -34,8 +34,8 @@ export function SettingsMenu() {
 
   return (
     <div className="settings-menu" ref={ref}>
-      <button className="ghost settings-btn" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)}>
-        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden>
+      <button className="icon-btn settings-btn" aria-expanded={open} aria-haspopup="dialog" aria-label="Settings" title="Settings (sound and animations)" onClick={() => setOpen((o) => !o)}>
+        <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden>
           <path
             d="M10 12.8a2.8 2.8 0 1 0 0-5.6 2.8 2.8 0 0 0 0 5.6Zm6.4-1.9.1-.9-.1-.9 1.7-1.3-1.6-2.8-2 .8a6 6 0 0 0-1.6-.9L12.6 3H9.4l-.3 2.1a6 6 0 0 0-1.6.9l-2-.8L3.9 8l1.7 1.3-.1.7.1.9-1.7 1.3 1.6 2.8 2-.8c.5.4 1 .7 1.6.9l.3 1.9h3.2l.3-2.1c.6-.2 1.1-.5 1.6-.9l2 .8 1.6-2.8-1.7-1.1Z"
             fill="none"
@@ -44,7 +44,6 @@ export function SettingsMenu() {
             strokeLinejoin="round"
           />
         </svg>
-        Settings
       </button>
       {open && (
         <div className="settings-pop" role="dialog" aria-label="Settings">

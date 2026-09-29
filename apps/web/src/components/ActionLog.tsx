@@ -1,7 +1,14 @@
 import type { ActionLogEntry } from '@gtotutor/shared-types';
 
-const describe = (a: ActionLogEntry) =>
-  a.action === 'fold' ? 'folds' : a.action === 'call' ? `calls ${a.toBb}` : a.action === 'allin' ? `all-in ${a.toBb}` : `raises ${a.toBb}`;
+const VERBS: Record<ActionLogEntry['action'], (a: ActionLogEntry) => string> = {
+  fold: () => 'folds',
+  check: () => 'checks',
+  // Only the SB can call exactly 1bb: that's a limp.
+  call: (a) => (a.toBb === 1 ? 'limps' : `calls ${a.toBb}`),
+  raise: (a) => `raises ${a.toBb}`,
+  allin: (a) => `all-in ${a.toBb}`,
+};
+const describe = (a: ActionLogEntry) => VERBS[a.action](a);
 
 export function ActionLog({ entries }: { entries: ActionLogEntry[] }) {
   return (

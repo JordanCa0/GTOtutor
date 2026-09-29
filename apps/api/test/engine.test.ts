@@ -76,7 +76,7 @@ describe('hand engine', () => {
       const n = 1000;
       for (let i = 0; i < n; i++) {
         const pending = engine.pendingDecision(engine.start({ ...req, skipEasyFolds }))!;
-        if (pending.options.find((o) => o.actionId === 'fold')!.frequency >= 0.98) easy++;
+        if ((pending.options.find((o) => o.actionId === 'fold')?.frequency ?? 0) >= 0.98) easy++;
       }
       return easy / n;
     };
@@ -85,6 +85,47 @@ describe('hand engine', () => {
     expect(unfiltered).toBeGreaterThan(0.5);
     expect(filtered).toBeLessThan(0.15);
     expect(filtered).toBeGreaterThan(0); // some folds are still dealt on purpose
+  });
+
+  it('lets the SB limp: the BB either checks it down or raises and the SB faces the iso-raise', () => {
+    const engine = newEngine(31);
+    const seen = new Set<string>();
+    for (let i = 0; i < 600 && seen.size < 2; i++) {
+      const state = engine.start({ ...req, heroPosition: 'SB', skipEasyFolds: false });
+      if (engine.pendingDecision(state)!.node.nodeKey !== 'SIX_MAX|100|RFI|SB') continue;
+      expect(engine.view(state).legalActions.map((a) => a.label)).toEqual(['Fold', 'Limp', 'Raise to 3']);
+      engine.decide(state, 'call');
+      const view = engine.view(state);
+      if (view.status === 'complete') {
+        expect(view.actionLog.slice(-2)).toMatchObject([
+          { position: 'SB', action: 'call', toBb: 1 },
+          { position: 'BB', action: 'check', toBb: 1 },
+        ]);
+        expect(view.result!.potBb).toBe(2);
+        expect(view.result!.board).toHaveLength(5);
+        seen.add('checked');
+      } else {
+        expect(view.pendingSpot!.nodeKey).toBe('SIX_MAX|100|VS_ISO|SB|BB');
+        expect(view.legalActions.map((a) => a.label)).toEqual(['Fold', 'Call 3.5', '3-bet to 11']);
+        seen.add('iso-raised');
+      }
+    }
+    expect(seen).toEqual(new Set(['checked', 'iso-raised']));
+  });
+
+  it('gives the BB a check-or-raise spot (no fold) after an SB limp', () => {
+    const engine = newEngine(32);
+    for (let i = 0; i < 2000; i++) {
+      const state = engine.start({ ...req, heroPosition: 'BB', skipEasyFolds: false });
+      if (engine.pendingDecision(state)!.node.nodeKey !== 'SIX_MAX|100|VS_LIMP|BB|SB') continue;
+      expect(engine.view(state).legalActions.map((a) => a.id)).toEqual(['check', 'raise']);
+      engine.decide(state, 'check');
+      const view = engine.view(state);
+      expect(view.status).toBe('complete');
+      expect(view.result!.potBb).toBe(2);
+      return;
+    }
+    throw new Error('never dealt an SB limp to a BB hero');
   });
 
   it('rejects illegal and out-of-turn actions', () => {

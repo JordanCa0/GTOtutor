@@ -2,6 +2,7 @@ import type { SessionReviewResponse } from '@gtotutor/shared-types';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { api } from '../api/client';
+import { CoachLoader } from './CoachLoader';
 import { PlayingCard } from './PlayingCard';
 
 const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : '—');
@@ -34,7 +35,7 @@ export function SessionReview({ sessionId, decisionsPlayed, onClose, onNewSessio
             Close
           </button>
         </div>
-        {isPending ? <p className="muted pulse">Crunching your session…</p> : error ? <p className="error">{error.message}</p> : <ReviewBody data={data} onRetry={() => refetch()} />}
+        {isPending ? <CoachLoader label="Reviewing your session" /> : error ? <p className="error">{error.message}</p> : <ReviewBody data={data} onRetry={() => refetch()} />}
         <div className="modal-foot">
           <button className="secondary" onClick={onNewSession}>
             Start a new session

@@ -7,62 +7,86 @@ import {
   type StartHandRequest,
   type TableSize,
 } from '@gtotutor/shared-types';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import JellyRadio, { type JellyItem } from './reactbits/JellyRadio';
 
 interface Props {
   initial: StartHandRequest | null;
   starting: boolean;
   error: string | null;
   onStart: (req: StartHandRequest) => void;
+  /** When set, the setup opens as a popup over the current session and this returns to it. */
+  onClose?: () => void;
 }
 
-export function SetupScreen({ initial, starting, error, onStart }: Props) {
+const JELLY_THEME = {
+  chipColor: '#1a212b',
+  activeColor: '#d4af6a',
+  textColor: '#e2ddd2',
+  activeTextColor: '#1b1307',
+  size: 'md' as const,
+};
+
+const soon = (label: string) => (
+  <>
+    {label}
+    <small className="soon">soon</small>
+  </>
+);
+
+const TABLE_ITEMS: JellyItem[] = TABLE_SIZES.map((t) => ({ value: t.id, label: t.available ? t.label : soon(t.label), disabled: !t.available }));
+const STACK_ITEMS: JellyItem[] = STACK_DEPTHS.map((s) => ({ value: String(s.id), label: s.available ? `${s.id}bb` : soon(`${s.id}bb`), disabled: !s.available }));
+const POSITION_ITEMS: JellyItem[] = [{ value: 'random', label: 'Random' }, ...SIX_MAX_POSITIONS.map((p) => ({ value: p, label: p }))];
+
+export function SetupScreen({ initial, starting, error, onStart, onClose }: Props) {
   const [tableSize, setTableSize] = useState<TableSize>(initial?.tableSize ?? 'SIX_MAX');
   const [stack, setStack] = useState<StackDepth>(initial?.stackDepthBb ?? 100);
   const [position, setPosition] = useState<Position | 'random'>(initial?.heroPosition ?? 'random');
   const [skipEasyFolds, setSkipEasyFolds] = useState(initial?.skipEasyFolds ?? true);
 
-  return (
-    <div className="setup">
-      <p className="eyebrow">Preflop trainer · 6-max cash</p>
-      <h1 className="brand">
-        GTO<span>tutor</span>
-      </h1>
-      <p className="tagline">Play preflop spots hand by hand. Every decision is graded against the range chart, and an AI coach explains why.</p>
+  useEffect(() => {
+    if (!onClose) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const card = (
+    <div className={`setup ${onClose ? 'setup-modal' : ''}`} role={onClose ? 'dialog' : undefined} aria-modal={onClose ? true : undefined} aria-label={onClose ? 'Configure game' : undefined} onClick={(e) => e.stopPropagation()}>
+      {onClose ? (
+        <div className="setup-head">
+          <div>
+            <p className="eyebrow">Configure game</p>
+            <h2>Table, stacks &amp; seat</h2>
+          </div>
+          <button className="ghost" onClick={onClose}>
+            Back to hand
+          </button>
+        </div>
+      ) : (
+        <>
+          <p className="eyebrow">Preflop trainer · 6-max cash</p>
+          <h1 className="brand">
+            GTO<span>tutor</span>
+          </h1>
+          <p className="tagline">Play preflop spots hand by hand. Every decision is graded against the range chart, and an AI coach explains why.</p>
+        </>
+      )}
 
       <fieldset>
         <legend>Table</legend>
-        <div className="chips">
-          {TABLE_SIZES.map((t) => (
-            <button key={t.id} className={`chip ${tableSize === t.id ? 'on' : ''}`} disabled={!t.available} onClick={() => setTableSize(t.id)}>
-              {t.label}
-              {!t.available && <small>soon</small>}
-            </button>
-          ))}
-        </div>
+        <JellyRadio {...JELLY_THEME} ariaLabel="Table size" items={TABLE_ITEMS} value={tableSize} onChange={(v) => setTableSize(v as TableSize)} />
       </fieldset>
 
       <fieldset>
         <legend>Stack depth</legend>
-        <div className="chips">
-          {STACK_DEPTHS.map((s) => (
-            <button key={s.id} className={`chip ${stack === s.id ? 'on' : ''}`} disabled={!s.available} onClick={() => setStack(s.id)}>
-              {s.id}bb
-              {!s.available && <small>soon</small>}
-            </button>
-          ))}
-        </div>
+        <JellyRadio {...JELLY_THEME} ariaLabel="Stack depth" items={STACK_ITEMS} value={String(stack)} onChange={(v) => setStack(Number(v) as StackDepth)} />
       </fieldset>
 
       <fieldset>
         <legend>Your position</legend>
-        <div className="chips">
-          {(['random', ...SIX_MAX_POSITIONS] as const).map((p) => (
-            <button key={p} className={`chip ${position === p ? 'on' : ''}`} onClick={() => setPosition(p)}>
-              {p === 'random' ? 'Random' : p}
-            </button>
-          ))}
-        </div>
+        <JellyRadio {...JELLY_THEME} ariaLabel="Your position" items={POSITION_ITEMS} value={position} onChange={(v) => setPosition(v as Position | 'random')} />
       </fieldset>
 
       <fieldset>
@@ -79,9 +103,17 @@ export function SetupScreen({ initial, starting, error, onStart }: Props) {
       <p className="muted small">Cash game only for now. Tournament/ICM, other table sizes, and other stack depths come with the solver.</p>
 
       <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, heroPosition: position, skipEasyFolds })}>
-        {starting ? 'Dealing…' : 'Deal a hand'}
+        {starting ? 'Dealing…' : onClose ? 'Deal with these settings' : 'Deal a hand'}
       </button>
       {error && <p className="error">{error}</p>}
     </div>
+  );
+
+  if (!onClose) return card;
+  return createPortal(
+    <div className="modal-backdrop" onClick={onClose}>
+      {card}
+    </div>,
+    document.body,
   );
 }

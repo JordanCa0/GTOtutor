@@ -16,6 +16,13 @@ import { playSound } from './sound/soundEngine';
 import { useTableSounds } from './sound/useTableSounds';
 import { usePlayback } from './usePlayback';
 
+/** Buttons always sit in the same place with the same colour; all-in takes the raise slot. */
+const ACTION_SLOTS: { key: 'fold' | 'call' | 'raise'; ids: ActionType[]; placeholder: string }[] = [
+  { key: 'fold', ids: ['fold'], placeholder: 'Fold' },
+  { key: 'call', ids: ['call', 'check'], placeholder: 'Call' },
+  { key: 'raise', ids: ['raise', 'allin'], placeholder: 'Raise' },
+];
+
 export function App() {
   const [settings, setSettings] = useState<StartHandRequest | null>(null);
   const [hand, setHand] = useState<HandView | null>(null);
@@ -24,11 +31,15 @@ export function App() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [chats, setChats] = useState<Record<string, ChatMessage[]>>({});
   const [showTitle, setShowTitle] = useState(true);
+  const [configOpen, setConfigOpen] = useState(false);
   const { animations } = useSettings();
 
   const start = useMutation({
     mutationFn: (req: StartHandRequest) => api.startHand({ ...req, sessionId }),
-    onSuccess: setHand,
+    onSuccess: (h) => {
+      setHand(h);
+      setConfigOpen(false);
+    },
   });
 
   const deal = (req: StartHandRequest) => {
@@ -58,8 +69,14 @@ export function App() {
         <button className="ghost" onClick={() => setReviewOpen(true)}>
           Session review
         </button>
-        <button className="ghost" onClick={() => setHand(null)}>
-          Change settings
+        <button className="ghost configure-btn" onClick={() => setConfigOpen(true)}>
+          <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden>
+            <path d="M3 5h8M15 5h2M3 10h2M9 10h8M3 15h10M17 15h0" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+            <circle cx="13" cy="5" r="2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+            <circle cx="7" cy="10" r="2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+            <circle cx="15" cy="15" r="2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          </svg>
+          Configure game
         </button>
       </header>
 
@@ -77,6 +94,10 @@ export function App() {
         onChat={(id, messages) => setChats((c) => ({ ...c, [id]: messages }))}
         animate={animations}
       />
+
+      {configOpen && (
+        <SetupScreen initial={settings} starting={start.isPending} error={start.error?.message ?? null} onStart={deal} onClose={() => setConfigOpen(false)} />
+      )}
 
       {reviewOpen && (
         <SessionReview
@@ -139,11 +160,18 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
             </div>
           ) : !complete ? (
             <div className="actions">
-              {hand.legalActions.map((a) => (
-                <button key={a.id} className={`act act-${a.id}`} disabled={decide.isPending} onClick={() => decide.mutate(a.id)}>
-                  {a.label}
-                </button>
-              ))}
+              {ACTION_SLOTS.map((slot) => {
+                const action = hand.legalActions.find((a) => slot.ids.includes(a.id));
+                return action ? (
+                  <button key={slot.key} className={`act act-${slot.key}`} disabled={decide.isPending} onClick={() => decide.mutate(action.id)}>
+                    {action.label}
+                  </button>
+                ) : (
+                  <button key={slot.key} className={`act act-${slot.key} unavailable`} disabled title="Not an option in this spot">
+                    {slot.placeholder}
+                  </button>
+                );
+              })}
             </div>
           ) : (
             result && (

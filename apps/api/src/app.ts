@@ -47,7 +47,7 @@ const decisionSchema = {
   type: 'object',
   required: ['action'],
   additionalProperties: false,
-  properties: { action: { enum: ['fold', 'call', 'raise', 'allin'] } },
+  properties: { action: { enum: ['fold', 'check', 'call', 'raise', 'allin'] } },
 } as const;
 
 const chatSchema = {

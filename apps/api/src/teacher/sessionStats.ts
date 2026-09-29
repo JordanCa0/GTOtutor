@@ -2,6 +2,7 @@ import type { DecisionFeedback, LeakType, SessionStats, SpotType } from '@gtotut
 
 const SPOT_LABELS: Record<SpotType, string> = {
   RFI: 'Opening (first in)',
+  LIMPED: 'Limped pots (SB vs BB)',
   VS_OPEN: 'Facing an open',
   VS_3BET: 'Facing a 3-bet',
   VS_4BET_PLUS: 'Facing a 4-bet or all-in',
@@ -11,12 +12,13 @@ const LEAK_LABELS: Record<LeakType, string> = {
   over_fold: 'Folding hands the chart plays',
   over_call: 'Calling hands the chart folds',
   over_raise: 'Raising where the chart folds or calls',
-  under_raise: 'Calling where the chart raises',
+  under_raise: 'Calling or checking where the chart raises',
 };
 
 export function spotTypeOf(nodeKey: string): SpotType {
   const type = nodeKey.split('|')[2];
   if (type === 'RFI') return 'RFI';
+  if (type === 'VS_LIMP' || type === 'VS_ISO') return 'LIMPED';
   if (type === 'VS_OPEN') return 'VS_OPEN';
   if (type === 'VS_3BET' || type === 'COLD_VS_3BET') return 'VS_3BET';
   return 'VS_4BET_PLUS';
@@ -27,6 +29,7 @@ export function leakTypeOf(d: DecisionFeedback): LeakType | null {
   const aggressive = (a: string) => a === 'raise' || a === 'allin';
   if (d.chosenAction === 'fold') return 'over_fold';
   if (d.chosenAction === 'call') return aggressive(d.bestAction) ? 'under_raise' : 'over_call';
+  if (d.chosenAction === 'check') return aggressive(d.bestAction) ? 'under_raise' : null;
   return 'over_raise';
 }
 

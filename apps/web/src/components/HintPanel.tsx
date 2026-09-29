@@ -2,6 +2,7 @@ import type { HandView } from '@gtotutor/shared-types';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api/client';
+import { CoachLoader } from './CoachLoader';
 import { PlayingCard } from './PlayingCard';
 
 export function HintPanel({ hand }: { hand: HandView }) {
@@ -23,14 +24,14 @@ export function HintPanel({ hand }: { hand: HandView }) {
         ))}
         <span className="muted">{spot.handClass}</span>
       </div>
-      <p className="muted small">Pick an action under the table. You'll see the chart's answer, the full range, and the coach's explanation right after.</p>
+      <p className="muted small">Pick an action under the table. You'll see the chart's answer and the full range right after, and can ask the coach to analyze it.</p>
 
       {!asked ? (
         <button className="secondary" onClick={() => setAsked(true)}>
           Ask the coach for a hint
         </button>
       ) : isFetching ? (
-        <p className="muted pulse">Coach is thinking…</p>
+        <CoachLoader label="Finding a hint" />
       ) : error ? (
         <p className="error small">{error.message}</p>
       ) : data?.status === 'ok' ? (

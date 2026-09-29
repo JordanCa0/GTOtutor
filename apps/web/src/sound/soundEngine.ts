@@ -1,5 +1,5 @@
 /** Synthesized table sounds (Web Audio) — no audio files to ship or license. */
-export type SoundName = 'deal' | 'muck' | 'chip' | 'allin' | 'sweep' | 'good' | 'mixed' | 'bad';
+export type SoundName = 'deal' | 'muck' | 'check' | 'chip' | 'allin' | 'sweep' | 'good' | 'mixed' | 'bad';
 
 const STORAGE_KEY = 'gtotutor.sound';
 
@@ -92,6 +92,13 @@ export function playSound(name: SoundName, delayMs = 0): void {
   switch (name) {
     case 'deal':
       burst(t, 2400, 0.9, 0.35, 0.07, out, c);
+      break;
+    case 'check':
+      // Two knuckle taps on the table.
+      [0, 0.11].forEach((dt) => {
+        burst(t + dt, 420, 1.2, 0.5, 0.06, out, c);
+        tone(t + dt, 140, 'sine', 0.18, 0.003, 0.08, out, c);
+      });
       break;
     case 'muck':
       burst(t, 1500, 0.7, 0.16, 0.12, out, c);

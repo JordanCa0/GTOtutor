@@ -52,6 +52,8 @@ export interface HandState {
   opener: Position | null;
   lastRaiser: Position | null;
   prevRaiser: Position | null;
+  /** Set when the SB completes instead of raising (the only limp in the tree). */
+  limper: Position | null;
   lastActorIndex: number;
   heroToAct: boolean;
   hintUsedPending: boolean;
@@ -215,6 +217,7 @@ export class HandEngine {
       opener: null,
       lastRaiser: null,
       prevRaiser: null,
+      limper: null,
       lastActorIndex: players.length - 1,
       heroToAct: false,
       hintUsedPending: false,
@@ -229,8 +232,15 @@ export class HandEngine {
   private nodeKeyFor(state: HandState, player: Player): string {
     const { tableSize, stackDepthBb } = state.config;
     const pos = player.position;
-    if (state.raiseLevel === 0) return makeNodeKey(tableSize, stackDepthBb, 'RFI', pos);
-    if (state.raiseLevel === 1) return makeNodeKey(tableSize, stackDepthBb, 'VS_OPEN', pos, state.opener!);
+    if (state.raiseLevel === 0) {
+      // The BB only acts in an unraised pot after the SB limps.
+      return pos === 'BB' ? makeNodeKey(tableSize, stackDepthBb, 'VS_LIMP', pos, state.limper!) : makeNodeKey(tableSize, stackDepthBb, 'RFI', pos);
+    }
+    if (state.raiseLevel === 1) {
+      return pos === state.limper
+        ? makeNodeKey(tableSize, stackDepthBb, 'VS_ISO', pos, state.opener!)
+        : makeNodeKey(tableSize, stackDepthBb, 'VS_OPEN', pos, state.opener!);
+    }
     const types = FACING_TYPES[state.raiseLevel];
     return pos === state.prevRaiser
       ? makeNodeKey(tableSize, stackDepthBb, types.direct, pos, state.lastRaiser!)
@@ -240,9 +250,8 @@ export class HandEngine {
   private legalActions(state: HandState, player: Player): LegalAction[] {
     const node = this.charts.getNode(this.nodeKeyFor(state, player));
     const callTo = Math.min(state.currentBet, state.config.stackDepthBb);
-    return node.actions.map((a) =>
-      a.id === 'call' ? { ...a, label: callTo >= state.config.stackDepthBb ? `Call all-in ${callTo}` : `Call ${callTo}`, toBb: callTo } : a,
-    );
+    const callLabel = state.raiseLevel === 0 ? 'Limp' : callTo >= state.config.stackDepthBb ? `Call all-in ${callTo}` : `Call ${callTo}`;
+    return node.actions.map((a) => (a.id === 'call' ? { ...a, label: callLabel, toBb: callTo } : a));
   }
 
   private apply(state: HandState, player: Player, action: LegalAction): void {
@@ -250,7 +259,10 @@ export class HandEngine {
     let toBb = player.committed;
     if (action.id === 'fold') {
       player.folded = true;
+    } else if (action.id === 'check') {
+      // Nothing to add: only offered when hero has already matched the bet.
     } else if (action.id === 'call') {
+      if (state.raiseLevel === 0) state.limper = player.position;
       toBb = Math.min(state.currentBet, stack);
       player.committed = toBb;
     } else {

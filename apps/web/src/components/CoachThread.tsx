@@ -2,6 +2,7 @@ import { CHAT_LIMITS, type ChatMessage } from '@gtotutor/shared-types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
+import { CoachLoader } from './CoachLoader';
 
 const SUGGESTIONS = ["Why is that the chart's play?", 'What range is my opponent likely on here?', 'How would this change from a different position?'];
 
@@ -26,6 +27,14 @@ export function CoachThread({ handId, decisionId, messages, onMessages, variant 
     enabled: requested || alreadyStarted,
   });
   const [draft, setDraft] = useState('');
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Grow the box with its text (CSS caps the height, then it scrolls).
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+  }, [draft]);
   const [notice, setNotice] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const atLimit = messages.filter((m) => m.role === 'user').length >= CHAT_LIMITS.maxUserTurns;
@@ -67,12 +76,7 @@ export function CoachThread({ handId, decisionId, messages, onMessages, variant 
       <div className="thread-scroll">
         {explanation.isFetching ? (
           <div className="coach-loading">
-            <span className="dots">
-              <i />
-              <i />
-              <i />
-            </span>
-            Coach is reviewing the spot…
+            <CoachLoader label="Coach is analyzing" />
           </div>
         ) : explanation.error ? (
           <p className="error small">
@@ -115,11 +119,7 @@ export function CoachThread({ handId, decisionId, messages, onMessages, variant 
         ))}
         {send.isPending && (
           <div className="bubble assistant">
-            <span className="dots">
-              <i />
-              <i />
-              <i />
-            </span>
+            <CoachLoader label="Coach is thinking" />
           </div>
         )}
         {messages.length === 0 && !explanation.isFetching && (
@@ -142,9 +142,18 @@ export function CoachThread({ handId, decisionId, messages, onMessages, variant 
           ask(draft);
         }}
       >
-        <input
+        <textarea
+          ref={inputRef}
+          rows={1}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter sends; Shift+Enter adds a line.
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
           maxLength={CHAT_LIMITS.maxUserChars}
           placeholder={atLimit ? 'Question limit reached for this decision' : 'Ask the coach a follow-up…'}
           disabled={atLimit}

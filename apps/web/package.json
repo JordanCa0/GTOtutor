@@ -15,6 +15,7 @@
     "@fontsource/playfair-display": "^5.3.0",
     "@gtotutor/shared-types": "*",
     "@tanstack/react-query": "^5.104.0",
+    "motion": "^13.4.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
