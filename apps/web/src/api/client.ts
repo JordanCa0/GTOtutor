@@ -1,8 +1,12 @@
 import type {
   ActionType,
   ChartNodeView,
+  ChatMessage,
+  ChatResponse,
   ExplanationResponse,
   HandView,
+  HintResponse,
+  SessionReviewResponse,
   StartHandRequest,
   SubmitDecisionResponse,
 } from '@gtotutor/shared-types';
@@ -19,11 +23,16 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+const post = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) });
+
 export const api = {
-  startHand: (req: StartHandRequest) => request<HandView>('/api/hands', { method: 'POST', body: JSON.stringify(req) }),
-  decide: (handId: string, action: ActionType) =>
-    request<SubmitDecisionResponse>(`/api/hands/${handId}/decisions`, { method: 'POST', body: JSON.stringify({ action }) }),
+  startHand: (req: StartHandRequest) => request<HandView>('/api/hands', post(req)),
+  decide: (handId: string, action: ActionType) => request<SubmitDecisionResponse>(`/api/hands/${handId}/decisions`, post({ action })),
+  hint: (handId: string) => request<HintResponse>(`/api/hands/${handId}/hint`),
   explanation: (handId: string, decisionId: string) =>
     request<ExplanationResponse>(`/api/hands/${handId}/decisions/${decisionId}/explanation`),
+  chat: (handId: string, decisionId: string, messages: ChatMessage[]) =>
+    request<ChatResponse>(`/api/hands/${handId}/decisions/${decisionId}/chat`, post({ messages })),
+  review: (sessionId: string) => request<SessionReviewResponse>(`/api/sessions/${sessionId}/review`),
   chart: (nodeKey: string) => request<ChartNodeView>(`/api/charts/${encodeURIComponent(nodeKey)}`),
 };

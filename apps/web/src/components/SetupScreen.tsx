@@ -20,10 +20,14 @@ export function SetupScreen({ initial, starting, error, onStart }: Props) {
   const [tableSize, setTableSize] = useState<TableSize>(initial?.tableSize ?? 'SIX_MAX');
   const [stack, setStack] = useState<StackDepth>(initial?.stackDepthBb ?? 100);
   const [position, setPosition] = useState<Position | 'random'>(initial?.heroPosition ?? 'random');
+  const [skipEasyFolds, setSkipEasyFolds] = useState(initial?.skipEasyFolds ?? true);
 
   return (
     <div className="setup">
-      <h1>GTOtutor</h1>
+      <p className="eyebrow">Preflop trainer · 6-max cash</p>
+      <h1 className="brand">
+        GTO<span>tutor</span>
+      </h1>
       <p className="tagline">Play preflop spots hand by hand. Every decision is graded against the range chart, and an AI coach explains why.</p>
 
       <fieldset>
@@ -61,9 +65,20 @@ export function SetupScreen({ initial, starting, error, onStart }: Props) {
         </div>
       </fieldset>
 
+      <fieldset>
+        <legend>Hands</legend>
+        <label className="toggle">
+          <input type="checkbox" checked={skipEasyFolds} onChange={(e) => setSkipEasyFolds(e.target.checked)} />
+          <span>
+            Skip easy folds
+            <small>Mostly deal spots with a real decision; an obvious fold still shows up now and then.</small>
+          </span>
+        </label>
+      </fieldset>
+
       <p className="muted small">Cash game only for now. Tournament/ICM, other table sizes, and other stack depths come with the solver.</p>
 
-      <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, heroPosition: position })}>
+      <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, heroPosition: position, skipEasyFolds })}>
         {starting ? 'Dealing…' : 'Deal a hand'}
       </button>
       {error && <p className="error">{error}</p>}

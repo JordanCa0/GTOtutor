@@ -6,10 +6,12 @@ const DESC = 'AKQJT98765432';
 const GRID: string[][] = [...DESC].map((r1, row) =>
   [...DESC].map((r2, col) => (row === col ? r1 + r2 : col > row ? r1 + r2 + 's' : r2 + r1 + 'o')),
 );
+const combos = (hc: string) => (hc.length === 2 ? 6 : hc[2] === 's' ? 4 : 12);
+const pct = (x: number) => `${Math.round(x * 100)}%`;
 
 export function RangeGrid({ nodeKey, highlight }: { nodeKey: string; highlight: string }) {
   const { data, isPending, error } = useQuery({ queryKey: ['chart', nodeKey], queryFn: () => api.chart(nodeKey) });
-  if (isPending) return <p className="muted small">Loading range…</p>;
+  if (isPending) return <div className="range placeholder" />;
   if (error) return <p className="error small">{error.message}</p>;
 
   const background = (hc: string) => {
@@ -26,22 +28,45 @@ export function RangeGrid({ nodeKey, highlight }: { nodeKey: string; highlight: 
     return stops.length ? `linear-gradient(to right, ${stops.join(', ')})` : ACTION_COLORS.fold;
   };
 
+  const totals = data.actions.map(() => 0);
+  let all = 0;
+  for (const hc of GRID.flat()) {
+    all += combos(hc);
+    data.strategy[hc].forEach((f, i) => (totals[i] += f * combos(hc)));
+  }
+
   return (
-    <div>
+    <section className="range">
       <div className="range-grid" role="grid" aria-label={`Range chart: ${data.label}`}>
         {GRID.flat().map((hc) => (
-          <div key={hc} className={`cell ${hc === highlight ? 'me' : ''}`} style={{ background: background(hc) }} title={`${hc}: ${data.actions.map((a, i) => `${a.label} ${Math.round(data.strategy[hc][i] * 100)}%`).join(', ')}`}>
+          <div
+            key={hc}
+            className={`cell ${hc === highlight ? 'me' : ''}`}
+            style={{ background: background(hc) }}
+            title={`${hc}: ${data.actions.map((a, i) => `${a.label} ${pct(data.strategy[hc][i])}`).join(', ')}`}
+          >
             {hc}
           </div>
         ))}
       </div>
-      <div className="legend">
-        {data.actions.map((a) => (
-          <span key={a.id}>
-            <i style={{ background: ACTION_COLORS[a.id] }} /> {a.label}
-          </span>
+      <aside className="range-side">
+        <p className="eyebrow">Range chart</p>
+        <p className="range-title">{data.label}</p>
+        <p className="label">Whole range</p>
+        {data.actions.map((a, i) => (
+          <div key={a.id} className="range-row">
+            <i style={{ background: ACTION_COLORS[a.id] }} />
+            <span>{a.label}</span>
+            <b>{pct(totals[i] / all)}</b>
+          </div>
         ))}
-      </div>
-    </div>
+        <p className="label">Your hand · {highlight}</p>
+        <div className="mini-bar">
+          {data.actions.map((a, i) => (
+            <span key={a.id} style={{ flex: data.strategy[highlight][i], background: ACTION_COLORS[a.id] }} />
+          ))}
+        </div>
+      </aside>
+    </section>
   );
 }

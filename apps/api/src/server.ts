@@ -2,9 +2,10 @@ import { buildApp } from './app.js';
 import { ChartService } from './charts/chartService.js';
 import { buildFixtureChartSet } from './charts/fixtures.js';
 import { HandEngine, HandStore } from './engine/handEngine.js';
+import { SessionStore } from './engine/sessionStore.js';
 import { runoutResolver } from './engine/showdownResolver.js';
 import { cryptoRng } from './poker/rng.js';
-import { LlmTeacher, claudeGenerator } from './teacher/llmTeacher.js';
+import { LlmTeacher, claudeCoachLlm } from './teacher/llmTeacher.js';
 
 try {
   process.loadEnvFile('.env');
@@ -18,7 +19,8 @@ const app = buildApp({
   charts,
   engine: new HandEngine(charts, cryptoRng, runoutResolver),
   store: new HandStore(),
-  teacher: new LlmTeacher(claudeGenerator(model), model, Number(process.env.EXPLANATION_MISS_LIMIT_PER_HOUR) || 50),
+  sessions: new SessionStore(),
+  teacher: new LlmTeacher(claudeCoachLlm(model), model, Number(process.env.EXPLANATION_MISS_LIMIT_PER_HOUR) || 50),
 });
 
 const port = Number(process.env.PORT) || 3001;

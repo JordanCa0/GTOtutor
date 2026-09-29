@@ -1,22 +1,34 @@
-import type {
-  ChartNodeView,
-  ExplanationResponse,
-  HandView,
-  StartHandRequest,
-  SubmitDecisionRequest,
-  SubmitDecisionResponse,
+import {
+  CHAT_LIMITS,
+  MIN_DECISIONS_FOR_REVIEW,
+  type ChartNodeView,
+  type ChatRequest,
+  type ChatResponse,
+  type ExplanationResponse,
+  type HandView,
+  type HintResponse,
+  type SessionReviewResponse,
+  type StartHandRequest,
+  type SubmitDecisionRequest,
+  type SubmitDecisionResponse,
 } from '@gtotutor/shared-types';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { ChartService } from './charts/chartService.js';
-import { HttpError, type HandEngine, type HandStore } from './engine/handEngine.js';
-import type { LlmTeacher } from './teacher/llmTeacher.js';
+import type { ChartNode } from './charts/types.js';
+import { HttpError, type HandEngine, type HandState, type HandStore } from './engine/handEngine.js';
+import type { SessionStore } from './engine/sessionStore.js';
+import type { ExplainInput, LlmTeacher, SpotContext } from './teacher/llmTeacher.js';
+import { computeSessionStats } from './teacher/sessionStats.js';
 
 export interface AppDeps {
   charts: ChartService;
   engine: HandEngine;
   store: HandStore;
+  sessions: SessionStore;
   teacher: LlmTeacher;
 }
+
+const sessionIdSchema = { type: 'string', pattern: '^[A-Za-z0-9-]{8,64}$' } as const;
 
 const startHandSchema = {
   type: 'object',
@@ -26,6 +38,8 @@ const startHandSchema = {
     tableSize: { enum: ['HU', 'SIX_MAX', 'NINE_MAX'] },
     stackDepthBb: { enum: [20, 40, 60, 100, 150] },
     heroPosition: { enum: ['random', 'UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'] },
+    sessionId: sessionIdSchema,
+    skipEasyFolds: { type: 'boolean' },
   },
 } as const;
 
@@ -36,7 +50,26 @@ const decisionSchema = {
   properties: { action: { enum: ['fold', 'call', 'raise', 'allin'] } },
 } as const;
 
-export function buildApp({ charts, engine, store, teacher }: AppDeps): FastifyInstance {
+const chatSchema = {
+  type: 'object',
+  required: ['messages'],
+  additionalProperties: false,
+  properties: {
+    messages: {
+      type: 'array',
+      minItems: 1,
+      maxItems: CHAT_LIMITS.maxUserTurns * 2 - 1,
+      items: {
+        type: 'object',
+        required: ['role', 'content'],
+        additionalProperties: false,
+        properties: { role: { enum: ['user', 'assistant'] }, content: { type: 'string', minLength: 1, maxLength: 4000 } },
+      },
+    },
+  },
+} as const;
+
+export function buildApp({ charts, engine, store, sessions, teacher }: AppDeps): FastifyInstance {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
 
   app.setErrorHandler((err, _req, reply) => {
@@ -47,11 +80,44 @@ export function buildApp({ charts, engine, store, teacher }: AppDeps): FastifyIn
     return reply.status(500).send({ error: 'Internal error' });
   });
 
+  const rangeSummary = (node: ChartNode) => {
+    const shares = charts.rangeSummary(node);
+    return node.actions.map((a, i) => ({ label: a.label, share: shares[i] }));
+  };
+
+  const baseSpot = (state: HandState, node: ChartNode) => ({
+    nodeKey: node.nodeKey,
+    nodeLabel: node.label,
+    heroPosition: state.heroPosition,
+    stackDepthBb: state.config.stackDepthBb,
+    rangeSummary: rangeSummary(node),
+    dataSource: charts.dataSource,
+  });
+
+  const decisionInput = (state: HandState, decisionId: string): ExplainInput => {
+    const k = state.decisions.findIndex((d) => d.id === decisionId);
+    if (k < 0) throw new HttpError(404, 'Decision not found.');
+    const decision = state.decisions[k];
+    // The k-th hero entry in the log is this decision; everything before it is the context.
+    let heroSeen = 0;
+    const cut = state.actionLog.findIndex((a) => a.isHero && heroSeen++ === k);
+    return {
+      ...baseSpot(state, charts.getNode(decision.nodeKey)),
+      decision,
+      heroCards: decision.heroCards,
+      handClass: decision.handClass,
+      options: decision.options,
+      actionsBefore: state.actionLog.slice(0, cut),
+      priorDecisions: state.decisions.slice(0, k),
+    };
+  };
+
   app.get('/api/health', async () => ({ ok: true }));
 
   app.post<{ Body: StartHandRequest }>('/api/hands', { schema: { body: startHandSchema } }, async (req): Promise<HandView> => {
     const state = engine.start(req.body);
     store.save(state);
+    sessions.add(state);
     return engine.view(state);
   });
 
@@ -67,29 +133,52 @@ export function buildApp({ charts, engine, store, teacher }: AppDeps): FastifyIn
     },
   );
 
+  app.get<{ Params: { id: string } }>('/api/hands/:id/hint', async (req): Promise<HintResponse> => {
+    const state = store.get(req.params.id);
+    const pending = engine.pendingDecision(state);
+    if (!pending) throw new HttpError(409, 'There is no pending decision to hint at.');
+    const spot: SpotContext = {
+      ...baseSpot(state, pending.node),
+      heroCards: pending.heroCards,
+      handClass: pending.handClass,
+      options: pending.options,
+      actionsBefore: state.actionLog,
+      priorDecisions: state.decisions,
+    };
+    const res = await teacher.hint(spot, req.ip);
+    if (res.status === 'ok') engine.markHintUsed(state);
+    return res;
+  });
+
   app.get<{ Params: { id: string; decisionId: string } }>(
     '/api/hands/:id/decisions/:decisionId/explanation',
-    async (req): Promise<ExplanationResponse> => {
-      const state = store.get(req.params.id);
-      const k = state.decisions.findIndex((d) => d.id === req.params.decisionId);
-      if (k < 0) throw new HttpError(404, 'Decision not found.');
-      const decision = state.decisions[k];
-      // The k-th hero entry in the log is this decision; everything before it is the context.
-      let heroSeen = 0;
-      const cut = state.actionLog.findIndex((a) => a.isHero && heroSeen++ === k);
-      const node = charts.getNode(decision.nodeKey);
-      const shares = charts.rangeSummary(node);
-      return teacher.explain(
-        {
-          decision,
-          actionsBefore: state.actionLog.slice(0, cut),
-          heroPosition: state.heroPosition,
-          stackDepthBb: state.config.stackDepthBb,
-          rangeSummary: node.actions.map((a, i) => ({ label: a.label, share: shares[i] })),
-          dataSource: charts.dataSource,
-        },
-        req.ip,
-      );
+    async (req): Promise<ExplanationResponse> => teacher.explain(decisionInput(store.get(req.params.id), req.params.decisionId), req.ip),
+  );
+
+  app.post<{ Params: { id: string; decisionId: string }; Body: ChatRequest }>(
+    '/api/hands/:id/decisions/:decisionId/chat',
+    { schema: { body: chatSchema } },
+    async (req): Promise<ChatResponse> => {
+      const { messages } = req.body;
+      if (messages.at(-1)!.role !== 'user') throw new HttpError(400, 'The last message must be from the user.');
+      if (messages.some((m) => m.role === 'user' && m.content.length > CHAT_LIMITS.maxUserChars)) {
+        throw new HttpError(400, `Questions are limited to ${CHAT_LIMITS.maxUserChars} characters.`);
+      }
+      return teacher.chat(decisionInput(store.get(req.params.id), req.params.decisionId), messages, req.ip);
+    },
+  );
+
+  app.get<{ Params: { sessionId: string } }>(
+    '/api/sessions/:sessionId/review',
+    { schema: { params: { type: 'object', properties: { sessionId: sessionIdSchema } } } },
+    async (req): Promise<SessionReviewResponse> => {
+      const hands = sessions.hands(req.params.sessionId);
+      const stats = computeSessionStats(hands, hands.some((h) => h.easyFoldsSkipped));
+      const coach =
+        stats.decisions < MIN_DECISIONS_FOR_REVIEW
+          ? ({ status: 'not_enough_data', needed: MIN_DECISIONS_FOR_REVIEW - stats.decisions } as const)
+          : await teacher.review(req.params.sessionId, stats, req.ip);
+      return { stats, coach };
     },
   );
 

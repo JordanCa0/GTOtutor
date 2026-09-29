@@ -32,6 +32,10 @@ export interface HandConfig {
 
 export interface StartHandRequest extends HandConfig {
   heroPosition: Position | 'random';
+  /** Anonymous per-browser session, used for the session review. */
+  sessionId?: string;
+  /** Mostly skip hands whose first decision is an obvious fold. Defaults to true. */
+  skipEasyFolds?: boolean;
 }
 
 export interface LegalAction {
@@ -75,6 +79,13 @@ export interface DecisionFeedback {
   chosenFrequency: number;
   bestAction: ActionType;
   grade: Grade;
+  hintUsed: boolean;
+}
+
+export interface PendingSpot {
+  nodeKey: string;
+  nodeLabel: string;
+  handClass: string;
 }
 
 export interface ShowdownEntry {
@@ -102,6 +113,7 @@ export interface HandView {
   potBb: number;
   actionLog: ActionLogEntry[];
   legalActions: LegalAction[];
+  pendingSpot: PendingSpot | null;
   status: 'awaiting_hero' | 'complete';
   decisions: DecisionFeedback[];
   result: HandResult | null;
@@ -129,9 +141,64 @@ export interface ChartNodeView {
 export type ExplanationResponse =
   | {
       status: 'ok';
-      explanationText: string;
-      keyFactors: string[];
+      /** At most ~15 words: the verdict plus the one deciding reason. */
+      tldr: string;
+      /** 2-3 short, distinct reasons. */
+      points: string[];
       cached: boolean;
       ungroundedNumbers: string[];
     }
   | { status: 'unavailable'; reason: string };
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatRequest {
+  messages: ChatMessage[];
+}
+
+export const CHAT_LIMITS = { maxUserTurns: 10, maxUserChars: 500 } as const;
+
+export type ChatResponse =
+  | { status: 'ok'; reply: string; ungroundedNumbers: string[] }
+  | { status: 'unavailable'; reason: string };
+
+export type HintResponse = { status: 'ok'; hint: string; cached: boolean } | { status: 'unavailable'; reason: string };
+
+export type SpotType = 'RFI' | 'VS_OPEN' | 'VS_3BET' | 'VS_4BET_PLUS';
+export type LeakType = 'over_fold' | 'over_call' | 'over_raise' | 'under_raise';
+
+export interface SessionMistake {
+  nodeLabel: string;
+  heroCards: string[];
+  handClass: string;
+  chosenLabel: string;
+  chosenFrequency: number;
+  bestLabel: string;
+  bestFrequency: number;
+}
+
+export interface SessionStats {
+  hands: number;
+  decisions: number;
+  grades: Record<Grade, number>;
+  hintsUsed: number;
+  bySpot: { spot: SpotType; label: string; decisions: number; best: number; mistakes: number }[];
+  leaks: { type: LeakType; label: string; count: number }[];
+  worstMistakes: SessionMistake[];
+  easyFoldsSkipped: boolean;
+}
+
+export const MIN_DECISIONS_FOR_REVIEW = 5;
+
+export type SessionCoachReview =
+  | { status: 'ok'; summary: string; leaks: { title: string; advice: string }[]; drill: string; ungroundedNumbers: string[] }
+  | { status: 'unavailable'; reason: string }
+  | { status: 'not_enough_data'; needed: number };
+
+export interface SessionReviewResponse {
+  stats: SessionStats;
+  coach: SessionCoachReview;
+}

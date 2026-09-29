@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   SIX_MAX_POSITIONS,
   type ActionLogEntry,
+  type ActionOption,
   type ActionType,
   type DecisionFeedback,
   type Grade,
@@ -13,6 +14,7 @@ import {
   type StartHandRequest,
 } from '@gtotutor/shared-types';
 import type { ChartService } from '../charts/chartService.js';
+import type { ChartNode } from '../charts/types.js';
 import { FACING_TYPES, makeNodeKey } from '../charts/nodeKeys.js';
 import { fullDeck, handClass, shuffle } from '../poker/cards.js';
 import type { Rng } from '../poker/rng.js';
@@ -39,6 +41,8 @@ interface Player {
 
 export interface HandState {
   id: string;
+  sessionId: string | null;
+  easyFoldsSkipped: boolean;
   config: HandConfig;
   heroPosition: Position;
   players: Player[];
@@ -50,6 +54,7 @@ export interface HandState {
   prevRaiser: Position | null;
   lastActorIndex: number;
   heroToAct: boolean;
+  hintUsedPending: boolean;
   actionLog: ActionLogEntry[];
   decisions: DecisionFeedback[];
   showdownPositions: Position[];
@@ -58,7 +63,17 @@ export interface HandState {
 
 const round2 = (x: number) => Math.round(x * 100) / 100;
 const MIXED_THRESHOLD = 0.1;
-const MAX_DEAL_ATTEMPTS = 20;
+const MAX_DEAL_ATTEMPTS = 200;
+const EASY_FOLD_THRESHOLD = 0.98;
+/** Share of deals that skip the filter, so easy folds still show up occasionally for folding discipline. */
+export const UNFILTERED_DEAL_RATE = 0.1;
+
+export interface PendingDecision {
+  node: ChartNode;
+  heroCards: string[];
+  handClass: string;
+  options: ActionOption[];
+}
 
 export class HandEngine {
   constructor(
@@ -74,58 +89,82 @@ export class HandEngine {
     if (req.heroPosition !== 'random' && !SIX_MAX_POSITIONS.includes(req.heroPosition)) {
       throw new HttpError(400, `Unknown position ${req.heroPosition}`);
     }
-    // A hand where everyone folds to hero in the BB has no decision to train on — redeal.
+    const skipEasyFolds = (req.skipEasyFolds ?? true) && this.rng.float() >= UNFILTERED_DEAL_RATE;
+    // Redeal hands with nothing to train on: walks in the BB, and (mostly) trivial folds.
     for (let attempt = 0; attempt < MAX_DEAL_ATTEMPTS; attempt++) {
       const state = this.deal(req);
       this.advance(state);
-      if (state.heroToAct) return state;
+      if (!state.heroToAct) continue;
+      if (skipEasyFolds && this.isEasyFold(state)) continue;
+      return state;
     }
     throw new HttpError(500, 'Could not deal a hand with a hero decision.');
   }
 
-  decide(state: HandState, action: ActionType): DecisionFeedback {
-    if (!state.heroToAct) throw new HttpError(409, 'It is not your turn — this hand is complete.');
+  /** The chart's answer for hero's pending decision, before hero chooses. */
+  pendingDecision(state: HandState): PendingDecision | null {
+    if (!state.heroToAct) return null;
     const hero = state.players[this.nextToActIndex(state)!];
     const node = this.charts.getNode(this.nodeKeyFor(state, hero));
-    const chosenIdx = node.actions.findIndex((a) => a.id === action);
-    if (chosenIdx < 0) throw new HttpError(400, `Illegal action "${action}" here.`);
-
     const hc = handClass(hero.cards[0], hero.cards[1]);
     const freqs = node.strategy.get(hc)!;
     const evs = node.ev.get(hc)!;
-    const maxFreq = Math.max(...freqs);
-    const chosenFrequency = freqs[chosenIdx];
+    const legal = this.legalActions(state, hero);
+    return {
+      node,
+      heroCards: [...hero.cards],
+      handClass: hc,
+      options: node.actions.map((a, i) => ({ actionId: a.id, label: legal[i].label, frequency: freqs[i], evBb: evs[i] })),
+    };
+  }
+
+  markHintUsed(state: HandState): void {
+    if (state.heroToAct) state.hintUsedPending = true;
+  }
+
+  decide(state: HandState, action: ActionType): DecisionFeedback {
+    const pending = this.pendingDecision(state);
+    if (!pending) throw new HttpError(409, 'It is not your turn — this hand is complete.');
+    const { node, options } = pending;
+    const chosenIdx = node.actions.findIndex((a) => a.id === action);
+    if (chosenIdx < 0) throw new HttpError(400, `Illegal action "${action}" here.`);
+
+    const maxFreq = Math.max(...options.map((o) => o.frequency));
+    const chosenFrequency = options[chosenIdx].frequency;
     const grade: Grade =
       chosenFrequency >= maxFreq - 1e-9 ? 'best' : chosenFrequency >= MIXED_THRESHOLD ? 'mixed' : 'mistake';
-    const legal = this.legalActions(state, hero);
 
     const feedback: DecisionFeedback = {
       id: `${state.id}-d${state.decisions.length + 1}`,
       nodeKey: node.nodeKey,
       nodeLabel: node.label,
-      heroCards: [...hero.cards],
-      handClass: hc,
+      heroCards: pending.heroCards,
+      handClass: pending.handClass,
       chosenAction: action,
-      options: node.actions.map((a, i) => ({
-        actionId: a.id,
-        label: legal[i].label,
-        frequency: freqs[i],
-        evBb: evs[i],
-      })),
+      options,
       chosenFrequency,
-      bestAction: node.actions[freqs.indexOf(maxFreq)].id,
+      bestAction: options.find((o) => o.frequency === maxFreq)!.actionId,
       grade,
+      hintUsed: state.hintUsedPending,
     };
+    state.hintUsedPending = false;
     state.decisions.push(feedback);
+    const hero = state.players[this.nextToActIndex(state)!];
     this.apply(state, hero, node.actions[chosenIdx]);
     this.advance(state);
     return feedback;
+  }
+
+  private isEasyFold(state: HandState): boolean {
+    const pending = this.pendingDecision(state)!;
+    return pending.options.some((o) => o.actionId === 'fold' && o.frequency >= EASY_FOLD_THRESHOLD);
   }
 
   view(state: HandState): HandView {
     const stack = state.config.stackDepthBb;
     const complete = state.result !== null;
     const heroIdx = state.heroToAct ? this.nextToActIndex(state) : null;
+    const pending = this.pendingDecision(state);
     return {
       id: state.id,
       config: state.config,
@@ -143,6 +182,7 @@ export class HandEngine {
       potBb: round2(state.players.reduce((s, p) => s + p.committed, 0)),
       actionLog: state.actionLog,
       legalActions: heroIdx === null ? [] : this.legalActions(state, state.players[heroIdx]),
+      pendingSpot: pending && { nodeKey: pending.node.nodeKey, nodeLabel: pending.node.label, handClass: pending.handClass },
       status: complete ? 'complete' : 'awaiting_hero',
       decisions: state.decisions,
       result: state.result,
@@ -164,6 +204,8 @@ export class HandEngine {
     }));
     return {
       id: randomUUID(),
+      sessionId: req.sessionId ?? null,
+      easyFoldsSkipped: req.skipEasyFolds ?? true,
       config: { tableSize: req.tableSize, stackDepthBb: req.stackDepthBb },
       heroPosition,
       players,
@@ -175,6 +217,7 @@ export class HandEngine {
       prevRaiser: null,
       lastActorIndex: players.length - 1,
       heroToAct: false,
+      hintUsedPending: false,
       actionLog: [],
       decisions: [],
       showdownPositions: [],

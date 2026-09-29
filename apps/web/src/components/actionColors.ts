@@ -1,10 +1,10 @@
 import type { ActionType } from '@gtotutor/shared-types';
 
 export const ACTION_COLORS: Record<ActionType, string> = {
-  fold: '#4a5b6e',
-  call: '#2f9e62',
-  raise: '#e0873a',
-  allin: '#c93c3c',
+  fold: '#3a4452',
+  call: '#2e9a68',
+  raise: '#d2a24c',
+  allin: '#b8393b',
 };
 
 /** Order stripes aggressive-first so ranges read left-to-right like standard charts. */

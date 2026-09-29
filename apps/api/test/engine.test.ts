@@ -58,7 +58,7 @@ describe('hand engine', () => {
     const rfi = charts.getNode('SIX_MAX|100|RFI|UTG');
     const grades = new Set<string>();
     for (let i = 0; i < 200 && grades.size < 2; i++) {
-      const state = engine.start({ ...req, heroPosition: 'UTG' });
+      const state = engine.start({ ...req, heroPosition: 'UTG', skipEasyFolds: false });
       const [c1, c2] = engine.view(state).heroCards;
       if (rfi.strategy.get(handClass(c1, c2))![0] !== 1) continue;
       const choice = i % 2 === 0 ? 'fold' : 'raise';
@@ -67,6 +67,24 @@ describe('hand engine', () => {
       grades.add(grade);
     }
     expect(grades).toEqual(new Set(['best', 'mistake']));
+  });
+
+  it('mostly skips hands whose first decision is an easy fold', () => {
+    const easyFoldShare = (skipEasyFolds: boolean) => {
+      const engine = newEngine(21);
+      let easy = 0;
+      const n = 1000;
+      for (let i = 0; i < n; i++) {
+        const pending = engine.pendingDecision(engine.start({ ...req, skipEasyFolds }))!;
+        if (pending.options.find((o) => o.actionId === 'fold')!.frequency >= 0.98) easy++;
+      }
+      return easy / n;
+    };
+    const unfiltered = easyFoldShare(false);
+    const filtered = easyFoldShare(true);
+    expect(unfiltered).toBeGreaterThan(0.5);
+    expect(filtered).toBeLessThan(0.15);
+    expect(filtered).toBeGreaterThan(0); // some folds are still dealt on purpose
   });
 
   it('rejects illegal and out-of-turn actions', () => {
