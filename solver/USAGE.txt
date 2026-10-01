@@ -1,0 +1,15 @@
+gtotutor-solver: batch flop solver (run from the solver/ folder)
+
+  cargo run --release -- [options]
+
+  --spot <file>          spot definition (default spots/btn_vs_bb_srp_100.json)
+  --out <dir>            output folder (default output/)
+  --limit <n>            solve only the first n flops of the fixed sample order
+  --flop <cards>         solve one flop only, e.g. Kh7d2c
+  --accuracy <pct>       stop at this exploitability, % of pot (default 1.0)
+  --max-iterations <n>   iteration cap per flop (default 1000)
+  --threads <n>          CPU threads (default: all)
+  --compress             16-bit storage: about half the memory, a bit slower
+  --status-port <port>   serve a live progress page, e.g. 7878 -> http://<pc-ip>:7878
+
+Finished flops are skipped, so you can stop (Ctrl+C) and re-run to resume.

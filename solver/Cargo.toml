@@ -1,0 +1,19 @@
+[package]
+name = "gtotutor-solver"
+version = "0.1.0"
+edition = "2021"
+publish = false
+# Links b-inary/postflop-solver (AGPL-3.0). This crate runs offline only; the app ships the
+# exported strategy data, never this binary. See README.md.
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+# Pinned: upstream development is suspended, so a fixed commit keeps builds reproducible.
+postflop-solver = { git = "https://github.com/b-inary/postflop-solver", rev = "9d1509fe5077d019825f833eed04b16d342dfda1", default-features = false, features = ["rayon"] }
+rayon = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+codegen-units = 1
+lto = true

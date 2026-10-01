@@ -1,0 +1,21 @@
+{
+  "name": "btn_vs_bb_srp_100",
+  "description": "BTN opens 2.5, BB calls; 100bb. Ranges from charts fixture-v2.",
+  "chips_per_bb": 20,
+  "pot_bb": 5.5,
+  "stack_bb": 97.5,
+  "oop_range": "A9s,A8s,A7s,A6s,A5s:0.400,A4s:0.500,A3s:0.700,A2s,K9s,K8s,K7s,K6s,K5s,K4s,K3s,K2s,KQo:0.590,Q9s,Q8s,Q7s,Q6s,Q5s,Q4s,Q3s,Q2s,AJo:0.290,KJo,QJo,J8s,J7s,J6s,J5s,J4s,J3s,J2s,ATo,KTo,QTo,JTo,T9s:0.090,T8s,T7s,T6s:0.930,A9o,K9o,Q9o,J9o,T9o,98s:0.790,97s,96s,A8o,K8o:0.630,J8o,T8o,98o,87s,86s,85s,A7o,K7o:0.330,97o,87o,77:0.920,76s,75s,74s,A6o,K6o:0.020,86o,76o,66,65s,64s,63s:0.830,A5o,75o,65o,55,54s,53s,A4o,54o,44,43s,42s,A3o,33,32s,A2o,22",
+  "ip_range": "AA,AKs,AQs,AJs,ATs,A9s,A8s,A7s,A6s,A5s,A4s,A3s,A2s,AKo,KK,KQs,KJs,KTs,K9s,K8s,K7s,K6s,K5s,K4s,K3s,K2s,AQo,KQo,QQ,QJs,QTs,Q9s,Q8s,Q7s:0.690,Q6s:0.590,Q5s:0.490,Q4s:0.390,Q3s:0.280,Q2s:0.180,AJo,KJo,QJo,JJ,JTs,J9s,J8s,J7s:0.080,ATo,KTo,QTo,JTo,TT,T9s,T8s,T7s,A9o,Q9o,J9o,T9o,99,98s,97s,96s,A8o,T8o,98o,88,87s,86s,A7o,97o,87o,77,76s,75s,A6o,76o:0.890,66,65s,64s,A5o,55,54s,53s,A4o,44,43s,A3o,33,32s,A2o,22",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    "3x"
+  ],
+  "river": [
+    "75%",
+    "3x"
+  ]
+}
