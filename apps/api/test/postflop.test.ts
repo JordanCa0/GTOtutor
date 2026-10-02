@@ -1,14 +1,19 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import type { HandView, SubmitDecisionResponse } from '@gtotutor/shared-types';
+import { afterAll, describe, expect, it } from 'vitest';
+import { buildApp } from '../src/app.js';
 import { ChartService } from '../src/charts/chartService.js';
 import { buildFixtureChartSet } from '../src/charts/fixtures.js';
-import { HandEngine } from '../src/engine/handEngine.js';
+import { HandEngine, HandStore } from '../src/engine/handEngine.js';
+import { SessionStore } from '../src/engine/sessionStore.js';
 import { runoutResolver } from '../src/engine/showdownResolver.js';
 import { CardMapper, cardStr, mapHand, nearestFlop, parseCards, shapeOf, handIndex } from '../src/postflop/flopMap.js';
 import { FlopStore, parseSolverAction, type FlopFile } from '../src/postflop/flopStore.js';
 import { seededRng } from '../src/poker/rng.js';
+import { LlmTeacher } from '../src/teacher/llmTeacher.js';
+import { fakeLlm } from './fakes.js';
 
 describe('flop shapes and nearest flop', () => {
   it('describes suit and pairing patterns independent of card order', () => {
@@ -117,6 +122,29 @@ describe('flop play from solver output', () => {
     expect(played).toBe(5);
   });
 
+  it('flop practice deals straight to hero\'s BTN vs BB flop decision', () => {
+    const engine = new HandEngine(charts, seededRng(9), runoutResolver, flops);
+    for (const heroPosition of ['BTN', 'BB', 'random'] as const) {
+      for (let i = 0; i < 5; i++) {
+        const state = engine.start({ tableSize: 'SIX_MAX', stackDepthBb: 100, heroPosition, flopPractice: true });
+        const view = engine.view(state);
+        expect(view.pendingSpot!.street).toBe('flop');
+        expect(['BTN', 'BB']).toContain(view.heroPosition);
+        if (heroPosition !== 'random') expect(view.heroPosition).toBe(heroPosition);
+        expect(view.decisions).toEqual([]);
+        expect(view.actionLog.filter((a) => a.street === 'preflop').map((a) => `${a.position} ${a.action}`)).toEqual([
+          'UTG fold',
+          'HJ fold',
+          'CO fold',
+          'BTN raise',
+          'SB fold',
+          'BB call',
+        ]);
+        expect(view.potBb).toBe(5.5);
+      }
+    }
+  });
+
   it('runs hands out after preflop when the spot has no solved flops', () => {
     const engine = new HandEngine(charts, seededRng(8), runoutResolver, flops);
     for (let i = 0; i < 300; i++) {
@@ -124,6 +152,36 @@ describe('flop play from solver output', () => {
       engine.decide(state, engine.pendingDecision(state)!.options[0].actionId);
       while (engine.pendingDecision(state)) engine.decide(state, engine.pendingDecision(state)!.options[0].actionId);
       expect(state.decisions.every((d) => d.street === 'preflop')).toBe(true);
+    }
+  });
+});
+
+describe('flop play over HTTP', () => {
+  process.env.LOG_LEVEL = 'silent';
+  const charts = new ChartService(buildFixtureChartSet());
+  const app = buildApp({
+    charts,
+    engine: new HandEngine(charts, seededRng(12), runoutResolver, new FlopStore(fakeSolverOutput())),
+    store: new HandStore(),
+    sessions: new SessionStore(),
+    teacher: new LlmTeacher(fakeLlm({ structured: () => ({ tldr: 'Correct: fine.', points: ['A.', 'B.'] }), text: 'Hint.' }), 'test', 50),
+  });
+  afterAll(() => app.close());
+
+  it('accepts every flop action, including bet, and serves the flop strategy and coach', async () => {
+    for (const action of ['bet', 'check'] as const) {
+      const start = await app.inject({ method: 'POST', url: '/api/hands', payload: { tableSize: 'SIX_MAX', stackDepthBb: 100, heroPosition: 'BTN', flopPractice: true } });
+      expect(start.statusCode).toBe(200);
+      const hand = start.json<HandView>();
+      expect(hand.legalActions.map((a) => a.id)).toContain(action);
+      const res = await app.inject({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action } });
+      expect(res.statusCode).toBe(200);
+      const { feedback } = res.json<SubmitDecisionResponse>();
+      expect(feedback.chosenAction).toBe(action);
+      const chart = await app.inject({ method: 'GET', url: `/api/charts/${encodeURIComponent(feedback.nodeKey)}` });
+      expect(chart.statusCode).toBe(200);
+      const coach = await app.inject({ method: 'GET', url: `/api/hands/${hand.id}/decisions/${feedback.id}/explanation` });
+      expect(coach.json()).toMatchObject({ status: 'ok' });
     }
   });
 });

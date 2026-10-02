@@ -44,6 +44,7 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
   const [stack, setStack] = useState<StackDepth>(initial?.stackDepthBb ?? 100);
   const [position, setPosition] = useState<Position | 'random'>(initial?.heroPosition ?? 'random');
   const [skipEasyFolds, setSkipEasyFolds] = useState(initial?.skipEasyFolds ?? true);
+  const [flopPractice, setFlopPractice] = useState(initial?.flopPractice ?? false);
 
   useEffect(() => {
     if (!onClose) return;
@@ -98,11 +99,18 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
             <small>Mostly deal spots with a real decision; an obvious fold still shows up now and then.</small>
           </span>
         </label>
+        <label className="toggle">
+          <input type="checkbox" checked={flopPractice} onChange={(e) => setFlopPractice(e.target.checked)} />
+          <span>
+            Flop practice (testing)
+            <small>Every hand starts at a BTN vs BB flop. You play BTN or BB (picked at random unless you chose one); preflop is skipped.</small>
+          </span>
+        </label>
       </fieldset>
 
       <p className="muted small">Cash game only for now. Tournament/ICM, other table sizes, and other stack depths come with the solver.</p>
 
-      <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, heroPosition: position, skipEasyFolds })}>
+      <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, heroPosition: position, skipEasyFolds, flopPractice })}>
         {starting ? 'Dealing…' : onClose ? 'Deal with these settings' : 'Deal a hand'}
       </button>
       {error && <p className="error">{error}</p>}

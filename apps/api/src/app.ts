@@ -39,6 +39,7 @@ const startHandSchema = {
     heroPosition: { enum: ['random', 'UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'] },
     sessionId: sessionIdSchema,
     skipEasyFolds: { type: 'boolean' },
+    flopPractice: { type: 'boolean' },
   },
 } as const;
 
@@ -46,7 +47,7 @@ const decisionSchema = {
   type: 'object',
   required: ['action'],
   additionalProperties: false,
-  properties: { action: { enum: ['fold', 'check', 'call', 'raise', 'allin'] } },
+  properties: { action: { enum: ['fold', 'check', 'call', 'bet', 'raise', 'allin'] } },
 } as const;
 
 const chatSchema = {
@@ -62,7 +63,7 @@ const chatSchema = {
         type: 'object',
         required: ['role', 'content'],
         additionalProperties: false,
-        properties: { role: { enum: ['user', 'assistant'] }, content: { type: 'string', minLength: 1, maxLength: 4000 } },
+        properties: { role: { enum: ['user', 'assistant'] }, content: { type: 'string', minLength: 1, maxLength: 4000 }, tldr: { type: 'string', maxLength: 500 } },
       },
     },
   },

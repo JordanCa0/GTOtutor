@@ -44,14 +44,20 @@ export function CoachThread({ handId, decisionId, messages, onMessages, variant 
     onSuccess: (res, question) => {
       if (res.status === 'unavailable') {
         setNotice(res.reason);
+        restoreDraft(question);
         return;
       }
       setNotice(res.ungroundedNumbers.length ? `This answer mentions ${res.ungroundedNumbers.join(', ')}, which isn't in the chart data.` : null);
-      onMessages([...messages, { role: 'user', content: question }, { role: 'assistant', content: res.reply }]);
-      setDraft('');
+      onMessages([...messages, { role: 'user', content: question }, { role: 'assistant', content: res.reply.trim(), ...(res.tldr ? { tldr: res.tldr } : {}) }]);
     },
-    onError: (err) => setNotice(err.message),
+    onError: (err, question) => {
+      setNotice(err.message);
+      restoreDraft(question);
+    },
   });
+
+  // A question that got no answer goes back in the box so it can be resent (unless something new was typed).
+  const restoreDraft = (question: string) => setDraft((d) => d || question);
 
   useEffect(() => {
     if (messages.length || send.isPending) endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
@@ -61,6 +67,8 @@ export function CoachThread({ handId, decisionId, messages, onMessages, variant 
     const question = q.trim();
     if (!question || send.isPending || atLimit) return;
     setNotice(null);
+    // The question shows in the conversation right away (see the pending bubble below), so clear the box.
+    setDraft('');
     send.mutate(question);
   };
 
@@ -114,15 +122,24 @@ export function CoachThread({ handId, decisionId, messages, onMessages, variant 
 
         {messages.map((m, i) => (
           <div key={i} className={`bubble ${m.role}`}>
+            {m.tldr && (
+              <p className="bubble-tldr">
+                <span className="tldr-label">TL;DR</span>
+                <strong>{m.tldr}</strong>
+              </p>
+            )}
             {m.content}
           </div>
         ))}
         {send.isPending && (
-          <div className="bubble assistant">
-            <CoachLoader label="Coach is thinking" />
-          </div>
+          <>
+            <div className="bubble user">{send.variables}</div>
+            <div className="bubble assistant thinking">
+              <CoachLoader label="Coach is thinking" />
+            </div>
+          </>
         )}
-        {messages.length === 0 && !explanation.isFetching && (
+        {messages.length === 0 && !explanation.isFetching && !send.isPending && (
           <div className="suggestions">
             {SUGGESTIONS.map((s) => (
               <button key={s} className="suggestion" onClick={() => ask(s)} disabled={send.isPending}>

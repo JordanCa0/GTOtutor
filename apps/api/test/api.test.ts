@@ -25,7 +25,7 @@ function makeApp(llm: CoachLlm) {
 
 const app = makeApp(
   fakeLlm({
-    structured: () => ({ tldr: 'Correct: grounded explanation.', points: ['Position.', 'Price.'], summary: 'Solid session.', leaks: [], drill: 'Play BB hands.' }),
+    structured: () => ({ tldr: 'Correct: grounded explanation.', points: ['Position.', 'Price.'], detail: 'Think about position and blockers.', summary: 'Solid session.', leaks: [], drill: 'Play BB hands.' }),
     text: 'Think about position and blockers.',
   }),
 );
@@ -74,7 +74,9 @@ describe('HTTP API', () => {
     const hand = await playHand();
     const url = `/api/hands/${hand.id}/decisions/${hand.decisions[0].id}/chat`;
     const ok = await app.inject({ method: 'POST', url, payload: { messages: [{ role: 'user', content: 'Why?' }] } });
-    expect(ok.json()).toMatchObject({ status: 'ok', reply: 'Think about position and blockers.' });
+    expect(ok.json()).toMatchObject({ status: 'ok', tldr: 'Correct: grounded explanation.', reply: 'Think about position and blockers.' });
+    const withTldr = await app.inject({ method: 'POST', url, payload: { messages: [{ role: 'user', content: 'Why?' }, { role: 'assistant', tldr: 'Short.', content: 'Long.' }, { role: 'user', content: 'And?' }] } });
+    expect(withTldr.statusCode).toBe(200);
     const tooLong = await app.inject({ method: 'POST', url, payload: { messages: [{ role: 'user', content: 'x'.repeat(501) }] } });
     expect(tooLong.statusCode).toBe(400);
     const endsWithAssistant = await app.inject({ method: 'POST', url, payload: { messages: [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }] } });

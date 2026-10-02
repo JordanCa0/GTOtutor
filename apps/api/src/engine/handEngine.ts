@@ -132,6 +132,7 @@ export class HandEngine {
     if (req.heroPosition !== 'random' && !SIX_MAX_POSITIONS.includes(req.heroPosition)) {
       throw new HttpError(400, `Unknown position ${req.heroPosition}`);
     }
+    if (req.flopPractice) return this.startFlopPractice(req);
     const skipEasyFolds = (req.skipEasyFolds ?? true) && this.rng.float() >= UNFILTERED_DEAL_RATE;
     // Redeal hands with nothing to train on: walks in the BB, and (mostly) trivial folds.
     for (let attempt = 0; attempt < MAX_DEAL_ATTEMPTS; attempt++) {
@@ -142,6 +143,39 @@ export class HandEngine {
       return state;
     }
     throw new HttpError(500, 'Could not deal a hand with a hero decision.');
+  }
+
+  /**
+   * Testing aid: a BTN-vs-BB single-raised pot (folds to the BTN, BTN opens, SB folds, BB calls)
+   * that starts at hero's flop decision. Hole cards are drawn so each player holds a hand the
+   * charts actually play this way, in proportion to how often they do.
+   */
+  private startFlopPractice(req: StartHandRequest): HandState {
+    if (!this.flops?.solvedFlops('btn_vs_bb_srp_100').length) throw new HttpError(400, 'Flop practice needs solved BTN vs BB flops in solver/output.');
+    const heroPosition: Position = req.heroPosition === 'BTN' || req.heroPosition === 'BB' ? req.heroPosition : this.rng.int(2) ? 'BTN' : 'BB';
+    const { tableSize, stackDepthBb } = req;
+    const line: [Position, ActionType, string][] = [
+      ['UTG', 'fold', makeNodeKey(tableSize, stackDepthBb, 'RFI', 'UTG')],
+      ['HJ', 'fold', makeNodeKey(tableSize, stackDepthBb, 'RFI', 'HJ')],
+      ['CO', 'fold', makeNodeKey(tableSize, stackDepthBb, 'RFI', 'CO')],
+      ['BTN', 'raise', makeNodeKey(tableSize, stackDepthBb, 'RFI', 'BTN')],
+      ['SB', 'fold', makeNodeKey(tableSize, stackDepthBb, 'VS_OPEN', 'SB', 'BTN')],
+      ['BB', 'call', makeNodeKey(tableSize, stackDepthBb, 'VS_OPEN', 'BB', 'BTN')],
+    ];
+    const freq = (p: Player, nodeKey: string, action: ActionType) => {
+      const node = this.charts.getNode(nodeKey);
+      return node.strategy.get(handClass(p.cards[0], p.cards[1]))![node.actions.findIndex((a) => a.id === action)];
+    };
+    for (let attempt = 0; attempt < MAX_DEAL_ATTEMPTS * 20; attempt++) {
+      const state = this.deal({ ...req, heroPosition });
+      const byPos = (pos: Position) => state.players.find((p) => p.position === pos)!;
+      // Keep the deal with the chance that BTN opens and BB calls with these exact hands.
+      if (this.rng.float() >= freq(byPos('BTN'), line[3][2], 'raise') * freq(byPos('BB'), line[5][2], 'call')) continue;
+      for (const [pos, action, nodeKey] of line) this.apply(state, byPos(pos), this.charts.getNode(nodeKey).actions.find((a) => a.id === action)!);
+      this.advance(state);
+      if (state.heroToAct) return state;
+    }
+    throw new HttpError(500, 'Could not deal a flop practice hand.');
   }
 
   /** The chart's answer for hero's pending decision, before hero chooses. */

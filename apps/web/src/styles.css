@@ -272,6 +272,18 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 480px; gap: 1rem; pa
 .range-row i { width: 10px; height: 10px; border-radius: 3px; }
 .range-row b { font-variant-numeric: tabular-nums; }
 .mini-bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: rgba(255, 255, 255, 0.05); }
+/* Hands not in the range at this point: hatched grey, so they read as "absent", not as an action. */
+.cell.out { background: repeating-linear-gradient(135deg, #1b2028 0 3px, #14181e 3px 6px); color: rgba(255, 255, 255, 0.28); text-shadow: none; }
+.range-row .out-swatch { background: repeating-linear-gradient(135deg, #2a313b 0 2px, #171b21 2px 4px); }
+.range-grid.clickable { cursor: zoom-in; transition: box-shadow 0.15s; }
+.range-grid.clickable:hover { box-shadow: 0 0 0 2px var(--gold-hi); }
+.range-hint { margin: 0.5rem 0 0; }
+.range-modal { position: relative; background: var(--panel-solid); border: 1px solid var(--line-2); border-radius: 14px; padding: 1.25rem; max-width: 96vw; max-height: 94dvh; overflow: auto; animation: verdict-in 0.3s var(--ease) both; }
+.range-close { position: absolute; top: 0.75rem; right: 0.75rem; }
+.range.large { grid-template-columns: auto minmax(180px, 260px); gap: 1.25rem; }
+.range.large .range-grid { width: min(78vh, 72vw); font-size: clamp(0.55rem, 1.5vh, 0.95rem); }
+.range.large .range-side { font-size: 0.95rem; padding-top: 2rem; }
+@media (max-width: 700px) { .range.large { grid-template-columns: 1fr; } .range.large .range-grid { width: 88vw; } .range.large .range-side { padding-top: 0; } }
 
 /* Coach */
 .coach-card { flex: none; min-height: 220px; display: flex; flex-direction: column; border-radius: 14px; border: 1px solid var(--line-2); background: linear-gradient(180deg, rgba(212, 175, 106, 0.05), rgba(255, 255, 255, 0.01) 30%), var(--panel-solid); animation: verdict-in 0.5s var(--ease) both; }
@@ -351,6 +363,8 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 480px; gap: 1rem; pa
 /* ---------- Coach answer: TL;DR + points ---------- */
 .tldr { font-size: 1.02rem; font-weight: 650; line-height: 1.5; color: var(--text); margin: 0 0 0.6rem; padding: 0.6rem 0.8rem; border-radius: 12px; background: linear-gradient(135deg, rgba(212, 175, 106, 0.14), rgba(212, 175, 106, 0.03)); border: 1px solid rgba(212, 175, 106, 0.35); }
 .tldr-label { display: inline-block; margin-right: 0.5rem; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.14em; color: #1b1307; background: var(--gold); border-radius: 5px; padding: 0.12rem 0.4rem; vertical-align: 2px; }
+.bubble-tldr { margin: 0 0 0.55rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--line-2); white-space: normal; line-height: 1.5; }
+.bubble-tldr strong { font-weight: 700; color: var(--text); }
 .points { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.45rem; }
 .points li { position: relative; padding-left: 1.1rem; font-size: 0.92rem; line-height: 1.55; color: #d9d6cf; }
 .points li::before { content: ''; position: absolute; left: 0.2rem; top: 0.62em; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); }

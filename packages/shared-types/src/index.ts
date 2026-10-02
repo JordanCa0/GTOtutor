@@ -37,6 +37,11 @@ export interface StartHandRequest extends HandConfig {
   sessionId?: string;
   /** Mostly skip hands whose first decision is an obvious fold. Defaults to true. */
   skipEasyFolds?: boolean;
+  /**
+   * Testing aid: deal straight into a solved BTN-vs-BB single-raised pot and start at hero's flop
+   * decision (hero is BTN or BB; preflop is played automatically and not graded).
+   */
+  flopPractice?: boolean;
 }
 
 export interface LegalAction {
@@ -166,6 +171,8 @@ export type ExplanationResponse =
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  /** Coach replies: the one-sentence answer shown bold above `content`. */
+  tldr?: string;
 }
 
 export interface ChatRequest {
@@ -175,7 +182,13 @@ export interface ChatRequest {
 export const CHAT_LIMITS = { maxUserTurns: 10, maxUserChars: 500 } as const;
 
 export type ChatResponse =
-  | { status: 'ok'; reply: string; ungroundedNumbers: string[] }
+  | {
+      status: 'ok';
+      /** One-sentence direct answer, shown bold above the reply; null for the fixed off-topic redirect. */
+      tldr: string | null;
+      reply: string;
+      ungroundedNumbers: string[];
+    }
   | { status: 'unavailable'; reason: string };
 
 export type HintResponse = { status: 'ok'; hint: string; cached: boolean } | { status: 'unavailable'; reason: string };
