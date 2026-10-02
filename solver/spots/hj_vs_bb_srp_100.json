@@ -1,0 +1,21 @@
+{
+  "name": "hj_vs_bb_srp_100",
+  "description": "HJ opens 2.5, BB calls; 100bb. Ranges from charts fixture-v2.",
+  "chips_per_bb": 20,
+  "pot_bb": 5.5,
+  "stack_bb": 97.5,
+  "oop_range": "ATs,A9s,A8s,A7s,A6s,A5s:0.400,A4s:0.500,A3s:0.700,A2s,AKo:0.380,KQs:0.090,KJs:0.880,KTs,K9s,AQo,KQo,QJs,QTs,Q9s,AJo,KJo,QJo,JTs,J9s,J8s,ATo,KTo,QTo,JTo,T9s,T8s,J9o,T9o,99:0.700,98s,97s,98o:0.510,88,87s,86s,77,76s,75s:0.820,66,65s,55:0.290,54s:0.720,44:0.140",
+  "ip_range": "AA,AKs,AQs,AJs,ATs,A9s,A8s,A7s,A6s,A5s,A4s,A3s,A2s,AKo,KK,KQs,KJs,KTs,K9s:0.700,AQo,KQo,QQ,QJs,QTs,Q9s,AJo,KJo,QJo,JJ,JTs,J9s,J8s:0.600,ATo:0.200,JTo,TT,T9s,T8s,99,98s,97s,88,87s,86s:0.500,77,76s:0.950,66:0.830,65s:0.400",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

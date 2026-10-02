@@ -1,0 +1,21 @@
+{
+  "name": "utg_vs_bb_srp_100",
+  "description": "UTG opens 2.5, BB calls; 100bb. Ranges from charts fixture-v2.",
+  "chips_per_bb": 20,
+  "pot_bb": 5.5,
+  "stack_bb": 97.5,
+  "oop_range": "AJs:0.330,ATs,A9s,A8s,A7s,A6s,A5s:0.400,A4s:0.500,A3s:0.700,A2s,AKo:0.880,KQs:0.510,KJs,KTs,K9s:0.970,AQo,KQo,QJs,QTs,Q9s,AJo,KJo,QJo,JTs,J9s,J8s:0.870,ATo:0.460,KTo:0.160,JTo,TT:0.100,T9s,T8s,99,98s,97s,88,87s,86s:0.770,77,76s,66,65s:0.660",
+  "ip_range": "AA,AKs,AQs,AJs,ATs,A9s,A8s,A7s,A6s,A5s,A4s,A3s,A2s,AKo,KK,KQs,KJs,KTs,AQo,KQo,QQ,QJs,QTs,Q9s:0.920,AJo,KJo:0.520,QJo:0.220,JJ,JTs,J9s,TT,T9s,T8s:0.820,99,98s,88,87s:0.720,77",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

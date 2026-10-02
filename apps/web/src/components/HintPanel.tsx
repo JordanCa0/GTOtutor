@@ -23,8 +23,18 @@ export function HintPanel({ hand }: { hand: HandView }) {
           <PlayingCard key={c} card={c} size="sm" />
         ))}
         <span className="muted">{spot.handClass}</span>
+        {spot.street !== 'preflop' && (
+          <>
+            <span className="muted">on</span>
+            {hand.board.map((c) => (
+              <PlayingCard key={c} card={c} size="sm" />
+            ))}
+          </>
+        )}
       </div>
-      <p className="muted small">Pick an action under the table. You'll see the chart's answer and the full range right after, and can ask the coach to analyze it.</p>
+      <p className="muted small">
+        Pick an action under the table. You'll see the {spot.street === 'preflop' ? "chart's" : "solver's"} answer and the full range right after, and can ask the coach to analyze it.
+      </p>
 
       {!asked ? (
         <button className="secondary" onClick={() => setAsked(true)}>

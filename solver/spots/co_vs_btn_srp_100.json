@@ -1,0 +1,21 @@
+{
+  "name": "co_vs_btn_srp_100",
+  "description": "CO opens 2.5, BTN calls; 100bb. Ranges from charts fixture-v2.",
+  "chips_per_bb": 20,
+  "pot_bb": 6.5,
+  "stack_bb": 97.5,
+  "oop_range": "AA,AKs,AQs,AJs,ATs,A9s,A8s,A7s,A6s,A5s,A4s,A3s,A2s,AKo,KK,KQs,KJs,KTs,K9s,K8s:0.350,K7s:0.250,K6s:0.150,K5s:0.050,AQo,KQo,QQ,QJs,QTs,Q9s,AJo,KJo,QJo,JJ,JTs,J9s,J8s,ATo,KTo,QTo,JTo,TT,T9s,T8s,J9o,T9o,99,98s,97s,98o,88,87s,86s,77,76s,75s,66,65s,55:0.930,54s,44:0.780,33:0.630,22:0.480",
+  "ip_range": "ATs,A9s,A8s,A7s,A6s,A5s:0.400,A4s:0.500,A3s:0.700,A2s:0.980,KJs:0.340,KTs,AQo:0.790,KQo,QJs:0.460,QTs,Q9s:0.870,AJo,KJo:0.470,QJo:0.170,JTs:0.570,J9s,T9s,T8s:0.770,99:0.200,98s,88,87s:0.670,77",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

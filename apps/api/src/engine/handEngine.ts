@@ -4,6 +4,7 @@ import {
   type ActionLogEntry,
   type ActionOption,
   type ActionType,
+  type ChartNodeView,
   type DecisionFeedback,
   type Grade,
   type HandConfig,
@@ -12,11 +13,13 @@ import {
   type LegalAction,
   type Position,
   type StartHandRequest,
+  type Street,
 } from '@gtotutor/shared-types';
 import type { ChartService } from '../charts/chartService.js';
 import type { ChartNode } from '../charts/types.js';
 import { FACING_TYPES, makeNodeKey } from '../charts/nodeKeys.js';
 import { fullDeck, handClass, shuffle } from '../poker/cards.js';
+import { flopClassStrategy, flopRangeSummary, historyKey, parseSolverAction, type FlopLookup, type FlopNode, type FlopStore, type LoadedFlop } from '../postflop/flopStore.js';
 import type { Rng } from '../poker/rng.js';
 import type { ShowdownResolver } from './showdownResolver.js';
 
@@ -61,7 +64,38 @@ export interface HandState {
   decisions: DecisionFeedback[];
   showdownPositions: Position[];
   result: HandResult | null;
+  /** Board cards dealt so far (the flop once postflop play starts). */
+  board: string[];
+  postflop: PostflopState | null;
 }
+
+/** A heads-up flop played from solver output (`solver/output/<spot>`). */
+interface PostflopState {
+  spot: string;
+  lookup: FlopLookup;
+  /** [OOP, IP]: solver player 0 and 1. */
+  seats: [Position, Position];
+  /** Each seat's hand, as an index into the solved file's hand list. */
+  hands: [number, number];
+  /** Action indexes taken so far on the flop. */
+  history: number[];
+  /** What each player had in when the flop came. */
+  base: number;
+  streetBets: Partial<Record<Position, number>>;
+}
+
+const FLOP_KEY = 'FLOP';
+export const isFlopNodeKey = (nodeKey: string) => nodeKey.startsWith(`${FLOP_KEY}|`);
+
+export function parseFlopNodeKey(nodeKey: string): { spot: string; flop: string; history: number[] } | null {
+  const [kind, spot, flop, history] = nodeKey.split('|');
+  if (kind !== FLOP_KEY || !spot || !flop || history === undefined) return null;
+  if (!/^[a-z0-9_]+$/.test(spot) || !/^([2-9TJQKA][cdhs]){3}$/.test(flop) || !/^(\d+(\.\d+)*)?$/.test(history)) return null;
+  return { spot, flop, history: history ? history.split('.').map(Number) : [] };
+}
+
+/** Postflop acting order: SB, BB, then UTG..BTN. */
+const postflopIndex = (p: Position) => ['SB', 'BB', 'UTG', 'HJ', 'CO', 'BTN'].indexOf(p);
 
 const round2 = (x: number) => Math.round(x * 100) / 100;
 const MIXED_THRESHOLD = 0.1;
@@ -71,10 +105,15 @@ const EASY_FOLD_THRESHOLD = 0.98;
 export const UNFILTERED_DEAL_RATE = 0.1;
 
 export interface PendingDecision {
-  node: ChartNode;
+  nodeKey: string;
+  nodeLabel: string;
+  street: Street;
+  /** Legal actions, aligned with `options`. */
+  actions: LegalAction[];
   heroCards: string[];
   handClass: string;
   options: ActionOption[];
+  approxFlop: string | null;
 }
 
 export class HandEngine {
@@ -82,6 +121,8 @@ export class HandEngine {
     private readonly charts: ChartService,
     private readonly rng: Rng,
     private readonly resolver: ShowdownResolver,
+    /** Solved flops; without it (or for unsolved spots) hands run out after preflop. */
+    private readonly flops: FlopStore | null = null,
   ) {}
 
   start(req: StartHandRequest): HandState {
@@ -106,18 +147,78 @@ export class HandEngine {
   /** The chart's answer for hero's pending decision, before hero chooses. */
   pendingDecision(state: HandState): PendingDecision | null {
     if (!state.heroToAct) return null;
-    const hero = state.players[this.nextToActIndex(state)!];
-    const node = this.charts.getNode(this.nodeKeyFor(state, hero));
+    const hero = state.players.find((p) => p.isHero)!;
     const hc = handClass(hero.cards[0], hero.cards[1]);
+    if (state.postflop) {
+      const pf = state.postflop;
+      const node = this.flopNode(pf)!;
+      const h = pf.hands[node.player];
+      const actions = this.flopActions(pf, node);
+      return {
+        nodeKey: [FLOP_KEY, pf.spot, pf.lookup.data.flop, historyKey(pf.history)].join('|'),
+        nodeLabel: this.flopLabel(state, hero.position),
+        street: 'flop',
+        actions,
+        heroCards: [...hero.cards],
+        handClass: hc,
+        options: actions.map((a, i) => ({
+          actionId: a.id,
+          label: a.label,
+          frequency: node.strategy[i][h] / 1000,
+          evBb: node.ev_bb ? node.ev_bb[i][h] : null,
+        })),
+        approxFlop: pf.lookup.approxFlop,
+      };
+    }
+    const node = this.charts.getNode(this.nodeKeyFor(state, hero));
     const freqs = node.strategy.get(hc)!;
     const evs = node.ev.get(hc)!;
     const legal = this.legalActions(state, hero);
     return {
-      node,
+      nodeKey: node.nodeKey,
+      nodeLabel: node.label,
+      street: 'preflop',
+      actions: node.actions,
       heroCards: [...hero.cards],
       handClass: hc,
       options: node.actions.map((a, i) => ({ actionId: a.id, label: legal[i].label, frequency: freqs[i], evBb: evs[i] })),
+      approxFlop: null,
     };
+  }
+
+  /** Share of the whole range taking each action at a node, for the coach. */
+  rangeSummary(nodeKey: string): { label: string; share: number }[] {
+    const flop = parseFlopNodeKey(nodeKey);
+    if (!flop) {
+      const node = this.charts.getNode(nodeKey);
+      const shares = this.charts.rangeSummary(node);
+      return node.actions.map((a, i) => ({ label: a.label, share: shares[i] }));
+    }
+    const { data, node } = this.solvedNode(flop);
+    const shares = flopRangeSummary(data, node);
+    return node.actions.map((a, i) => ({ label: parseSolverAction(a).label, share: shares[i] }));
+  }
+
+  /** A flop node as a 13x13 strategy view (averaged per hand class over the solved flop). */
+  flopChartView(nodeKey: string): ChartNodeView | null {
+    const flop = parseFlopNodeKey(nodeKey);
+    if (!flop || !this.flops?.solvedFlops(flop.spot).includes(flop.flop)) return null;
+    const { data, node } = this.solvedNode(flop);
+    return {
+      nodeKey,
+      label: `Flop ${flop.flop}${flop.history.length ? '' : ', first decision'} (solver, ${flop.spot.replaceAll('_', ' ')})`,
+      actions: node.actions.map(parseSolverAction),
+      strategy: flopClassStrategy(data, node),
+      dataSource: { kind: 'solver', note: 'Flop strategy from the offline solver.' },
+    };
+  }
+
+  private solvedNode(flop: { spot: string; flop: string; history: number[] }): { data: LoadedFlop; node: FlopNode } {
+    if (!this.flops) throw new HttpError(404, 'No solved flops are loaded.');
+    const data = this.flops.load(flop.spot, flop.flop);
+    const node = data.byHistory.get(historyKey(flop.history));
+    if (!node) throw new HttpError(404, 'Flop node not found.');
+    return { data, node };
   }
 
   markHintUsed(state: HandState): void {
@@ -127,8 +228,8 @@ export class HandEngine {
   decide(state: HandState, action: ActionType): DecisionFeedback {
     const pending = this.pendingDecision(state);
     if (!pending) throw new HttpError(409, 'It is not your turn — this hand is complete.');
-    const { node, options } = pending;
-    const chosenIdx = node.actions.findIndex((a) => a.id === action);
+    const { options } = pending;
+    const chosenIdx = pending.actions.findIndex((a) => a.id === action);
     if (chosenIdx < 0) throw new HttpError(400, `Illegal action "${action}" here.`);
 
     const maxFreq = Math.max(...options.map((o) => o.frequency));
@@ -138,8 +239,8 @@ export class HandEngine {
 
     const feedback: DecisionFeedback = {
       id: `${state.id}-d${state.decisions.length + 1}`,
-      nodeKey: node.nodeKey,
-      nodeLabel: node.label,
+      nodeKey: pending.nodeKey,
+      nodeLabel: pending.nodeLabel,
       heroCards: pending.heroCards,
       handClass: pending.handClass,
       chosenAction: action,
@@ -148,11 +249,18 @@ export class HandEngine {
       bestAction: options.find((o) => o.frequency === maxFreq)!.actionId,
       grade,
       hintUsed: state.hintUsedPending,
+      street: pending.street,
+      board: [...state.board],
+      approxFlop: pending.approxFlop,
     };
     state.hintUsedPending = false;
     state.decisions.push(feedback);
-    const hero = state.players[this.nextToActIndex(state)!];
-    this.apply(state, hero, node.actions[chosenIdx]);
+    if (state.postflop) {
+      this.applyFlop(state, this.flopNode(state.postflop)!, chosenIdx);
+    } else {
+      const hero = state.players[this.nextToActIndex(state)!];
+      this.apply(state, hero, pending.actions[chosenIdx]);
+    }
     this.advance(state);
     return feedback;
   }
@@ -165,7 +273,6 @@ export class HandEngine {
   view(state: HandState): HandView {
     const stack = state.config.stackDepthBb;
     const complete = state.result !== null;
-    const heroIdx = state.heroToAct ? this.nextToActIndex(state) : null;
     const pending = this.pendingDecision(state);
     return {
       id: state.id,
@@ -182,9 +289,10 @@ export class HandEngine {
         cards: p.isHero || (complete && state.showdownPositions.includes(p.position)) ? p.cards : null,
       })),
       potBb: round2(state.players.reduce((s, p) => s + p.committed, 0)),
+      board: state.board,
       actionLog: state.actionLog,
-      legalActions: heroIdx === null ? [] : this.legalActions(state, state.players[heroIdx]),
-      pendingSpot: pending && { nodeKey: pending.node.nodeKey, nodeLabel: pending.node.label, handClass: pending.handClass },
+      legalActions: pending ? pending.options.map((o, i) => ({ ...pending.actions[i], label: o.label })) : [],
+      pendingSpot: pending && { nodeKey: pending.nodeKey, nodeLabel: pending.nodeLabel, handClass: pending.handClass, street: pending.street },
       status: complete ? 'complete' : 'awaiting_hero',
       decisions: state.decisions,
       result: state.result,
@@ -225,6 +333,8 @@ export class HandEngine {
       decisions: [],
       showdownPositions: [],
       result: null,
+      board: [],
+      postflop: null,
     };
   }
 
@@ -277,7 +387,7 @@ export class HandEngine {
     if (player.committed >= stack) player.allIn = true;
     player.hasActed = true;
     state.lastActorIndex = state.players.indexOf(player);
-    state.actionLog.push({ position: player.position, action: action.id, toBb, isHero: player.isHero });
+    state.actionLog.push({ position: player.position, action: action.id, toBb, isHero: player.isHero, street: 'preflop' });
   }
 
   private nextToActIndex(state: HandState): number | null {
@@ -294,8 +404,12 @@ export class HandEngine {
     state.heroToAct = false;
     for (;;) {
       if (state.players.filter((p) => !p.folded).length === 1) return this.finish(state);
+      if (state.postflop) return this.advanceFlop(state);
       const idx = this.nextToActIndex(state);
-      if (idx === null) return this.finish(state);
+      if (idx === null) {
+        if (this.startFlop(state)) continue;
+        return this.finish(state);
+      }
       const player = state.players[idx];
       if (player.isHero) {
         state.heroToAct = true;
@@ -317,11 +431,107 @@ export class HandEngine {
     return freqs.length - 1;
   }
 
+  /** The solver spot a heads-up pot belongs to, named like the files in solver/spots. */
+  private spotName(state: HandState): string | null {
+    const live = state.players.filter((p) => !p.folded).map((p) => p.position);
+    if (live.length !== 2) return null;
+    const suffix = state.config.stackDepthBb;
+    if (state.limper) {
+      const kind = ['limp', 'iso', 'l3b'][state.raiseLevel];
+      return kind ? `sb_vs_bb_${kind}_${suffix}` : null;
+    }
+    const opener = state.opener;
+    if (!opener || !live.includes(opener)) return null;
+    const other = live.find((p) => p !== opener)!;
+    const name = (kind: string) => `${opener.toLowerCase()}_vs_${other.toLowerCase()}_${kind}_${suffix}`;
+    if (state.raiseLevel === 1) return name('srp');
+    if (state.raiseLevel === 2 && state.lastRaiser === other) return name('3bp');
+    if (state.raiseLevel === 3 && state.lastRaiser === opener && state.prevRaiser === other) return name('4bp');
+    return null;
+  }
+
+  /** Deals the flop and starts solver-driven flop play when this spot has solved flops. */
+  private startFlop(state: HandState): boolean {
+    if (!this.flops || state.postflop || state.board.length) return false;
+    const live = state.players.filter((p) => !p.folded);
+    if (live.some((p) => p.allIn)) return false;
+    const spot = this.spotName(state);
+    if (!spot || this.flops.solvedFlops(spot).length === 0) return false;
+    state.board = state.deck.splice(0, 3);
+    const lookup = this.flops.lookup(spot, state.board);
+    // A flop shape with no solved example: the board stays and the hand runs out as before.
+    if (!lookup) return false;
+    const seats = [...live].sort((a, b) => postflopIndex(a.position) - postflopIndex(b.position));
+    state.postflop = {
+      spot,
+      lookup,
+      seats: [seats[0].position, seats[1].position],
+      hands: [this.flops.handFor(lookup, 0, seats[0].cards), this.flops.handFor(lookup, 1, seats[1].cards)],
+      history: [],
+      base: live[0].committed,
+      streetBets: {},
+    };
+    return true;
+  }
+
+  private flopNode(pf: PostflopState): FlopNode | undefined {
+    return pf.lookup.data.byHistory.get(historyKey(pf.history));
+  }
+
+  /** The node's actions with amounts for the table (a call shows what it calls). */
+  private flopActions(pf: PostflopState, node: FlopNode): LegalAction[] {
+    const facing = pf.streetBets[pf.seats[1 - node.player]] ?? 0;
+    return node.actions.map(parseSolverAction).map((a) => (a.id === 'call' ? { ...a, label: `Call ${facing}`, toBb: facing } : a));
+  }
+
+  private flopLabel(state: HandState, pos: Position): string {
+    const prior = state.actionLog.filter((a) => a.street === 'flop');
+    const last = prior.at(-1);
+    if (!last) return `${pos} first to act on the flop`;
+    if (last.action === 'check') return `${pos} on the flop after ${last.position} checks`;
+    if (last.action === 'bet') return `${pos} facing a ${last.streetBb}bb flop bet`;
+    if (last.action === 'raise') return `${pos} facing a flop raise to ${last.streetBb}bb`;
+    return `${pos} facing a flop all-in`;
+  }
+
+  /** Plays villain flop actions until hero must act or the flop betting ends. */
+  private advanceFlop(state: HandState): void {
+    const pf = state.postflop!;
+    for (;;) {
+      const node = this.flopNode(pf);
+      // No node: the flop betting is over (call, check-check or fold).
+      if (!node) return this.finish(state);
+      const player = state.players.find((p) => p.position === pf.seats[node.player])!;
+      if (player.isHero) {
+        state.heroToAct = true;
+        return;
+      }
+      const h = pf.hands[node.player];
+      this.applyFlop(state, node, this.sample(node.strategy.map((row) => row[h])));
+      if (player.folded) return this.finish(state);
+    }
+  }
+
+  private applyFlop(state: HandState, node: FlopNode, idx: number): void {
+    const pf = state.postflop!;
+    const pos = pf.seats[node.player];
+    const player = state.players.find((p) => p.position === pos)!;
+    const action = this.flopActions(pf, node)[idx];
+    let street = pf.streetBets[pos] ?? 0;
+    if (action.id === 'fold') player.folded = true;
+    else if (action.id !== 'check') street = Math.min(action.toBb!, state.config.stackDepthBb - pf.base);
+    pf.streetBets[pos] = street;
+    player.committed = round2(pf.base + street);
+    if (player.committed >= state.config.stackDepthBb) player.allIn = true;
+    pf.history.push(idx);
+    state.actionLog.push({ position: pos, action: action.id, toBb: player.committed, isHero: player.isHero, street: 'flop', streetBb: street });
+  }
+
   private finish(state: HandState): void {
     const pot = round2(state.players.reduce((s, p) => s + p.committed, 0));
     const live = state.players.filter((p) => !p.folded);
     const hero = state.players.find((p) => p.isHero)!;
-    let board: string[] = [];
+    let board: string[] = [...state.board];
     let showdown: HandResult['showdown'] = null;
     let winners: Position[];
     let summary: string;
@@ -333,6 +543,7 @@ export class HandEngine {
       const outcome = this.resolver.resolve(
         live.map((p) => ({ position: p.position, cards: p.cards })),
         state.deck,
+        state.board,
       );
       board = outcome.board;
       showdown = outcome.entries;

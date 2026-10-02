@@ -16,6 +16,8 @@ export function RangeGrid({ nodeKey, highlight }: { nodeKey: string; highlight: 
 
   const background = (hc: string) => {
     const freqs = data.strategy[hc];
+    // Postflop, classes that never reach this spot have no strategy.
+    if (!freqs) return 'transparent';
     let at = 0;
     const stops: string[] = [];
     for (const id of STRIPE_ORDER) {
@@ -31,6 +33,7 @@ export function RangeGrid({ nodeKey, highlight }: { nodeKey: string; highlight: 
   const totals = data.actions.map(() => 0);
   let all = 0;
   for (const hc of GRID.flat()) {
+    if (!data.strategy[hc]) continue;
     all += combos(hc);
     data.strategy[hc].forEach((f, i) => (totals[i] += f * combos(hc)));
   }
@@ -43,29 +46,33 @@ export function RangeGrid({ nodeKey, highlight }: { nodeKey: string; highlight: 
             key={hc}
             className={`cell ${hc === highlight ? 'me' : ''}`}
             style={{ background: background(hc) }}
-            title={`${hc}: ${data.actions.map((a, i) => `${a.label} ${pct(data.strategy[hc][i])}`).join(', ')}`}
+            title={data.strategy[hc] ? `${hc}: ${data.actions.map((a, i) => `${a.label} ${pct(data.strategy[hc][i])}`).join(', ')}` : `${hc}: not in the range here`}
           >
             {hc}
           </div>
         ))}
       </div>
       <aside className="range-side">
-        <p className="eyebrow">Range chart</p>
+        <p className="eyebrow">{data.dataSource.kind === 'solver' ? 'Flop strategy' : 'Range chart'}</p>
         <p className="range-title">{data.label}</p>
         <p className="label">Whole range</p>
         {data.actions.map((a, i) => (
           <div key={a.id} className="range-row">
             <i style={{ background: ACTION_COLORS[a.id] }} />
             <span>{a.label}</span>
-            <b>{pct(totals[i] / all)}</b>
+            <b>{pct(totals[i] / (all || 1))}</b>
           </div>
         ))}
-        <p className="label">Your hand · {highlight}</p>
-        <div className="mini-bar">
-          {data.actions.map((a, i) => (
-            <span key={a.id} style={{ flex: data.strategy[highlight][i], background: ACTION_COLORS[a.id] }} />
-          ))}
-        </div>
+        {data.strategy[highlight] && (
+          <>
+            <p className="label">{data.dataSource.kind === 'solver' ? `${highlight} on average` : `Your hand · ${highlight}`}</p>
+            <div className="mini-bar">
+              {data.actions.map((a, i) => (
+                <span key={a.id} style={{ flex: data.strategy[highlight][i], background: ACTION_COLORS[a.id] }} />
+              ))}
+            </div>
+          </>
+        )}
       </aside>
     </section>
   );

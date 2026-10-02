@@ -1,0 +1,21 @@
+{
+  "name": "hj_vs_btn_srp_100",
+  "description": "HJ opens 2.5, BTN calls; 100bb. Ranges from charts fixture-v2.",
+  "chips_per_bb": 20,
+  "pot_bb": 6.5,
+  "stack_bb": 97.5,
+  "oop_range": "AA,AKs,AQs,AJs,ATs,A9s,A8s,A7s,A6s,A5s,A4s,A3s,A2s,AKo,KK,KQs,KJs,KTs,K9s:0.700,AQo,KQo,QQ,QJs,QTs,Q9s,AJo,KJo,QJo,JJ,JTs,J9s,J8s:0.600,ATo:0.200,JTo,TT,T9s,T8s,99,98s,97s,88,87s,86s:0.500,77,76s:0.950,66:0.830,65s:0.400",
+  "ip_range": "AJs:0.090,ATs,A9s:0.210,A8s:0.110,A7s:0.010,AKo:0.560,KQs:0.250,KJs,KTs,AQo,KQo:0.670,QJs,QTs,AJo:0.970,JTs,J9s,T9s,99:0.920,98s:0.460,88,77:0.340",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

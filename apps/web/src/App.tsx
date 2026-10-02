@@ -16,11 +16,11 @@ import { playSound } from './sound/soundEngine';
 import { useTableSounds } from './sound/useTableSounds';
 import { usePlayback } from './usePlayback';
 
-/** Buttons always sit in the same place with the same colour; all-in takes the raise slot. */
+/** Buttons always sit in the same place with the same colour; a bet or all-in takes the raise slot. */
 const ACTION_SLOTS: { key: 'fold' | 'call' | 'raise'; ids: ActionType[]; placeholder: string }[] = [
   { key: 'fold', ids: ['fold'], placeholder: 'Fold' },
   { key: 'call', ids: ['call', 'check'], placeholder: 'Call' },
-  { key: 'raise', ids: ['raise', 'allin'], placeholder: 'Raise' },
+  { key: 'raise', ids: ['raise', 'bet', 'allin'], placeholder: 'Raise' },
 ];
 
 export function App() {
@@ -172,6 +172,14 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
                   </button>
                 );
               })}
+              {/* A spot can offer two aggressive options (e.g. raise and all-in): the second gets its own button. */}
+              {hand.legalActions
+                .filter((a) => ACTION_SLOTS.every((slot) => hand.legalActions.find((b) => slot.ids.includes(b.id)) !== a))
+                .map((a) => (
+                  <button key={a.id} className="act act-raise" disabled={decide.isPending} onClick={() => decide.mutate(a.id)}>
+                    {a.label}
+                  </button>
+                ))}
             </div>
           ) : (
             result && (
@@ -188,7 +196,7 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
           {(decide.error || error) && <p className="error small">{decide.error?.message ?? error}</p>}
         </div>
 
-        <ActionLog entries={hand.actionLog.slice(0, playback.steps)} />
+        <ActionLog entries={hand.actionLog.slice(0, playback.steps)} board={hand.board} />
       </section>
 
       <aside className="right">

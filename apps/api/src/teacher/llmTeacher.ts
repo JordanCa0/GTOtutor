@@ -38,13 +38,17 @@ export interface SpotContext {
   stackDepthBb: number;
   rangeSummary: { label: string; share: number }[];
   dataSource: DataSource;
+  /** Board cards at the decision (empty preflop). */
+  board: string[];
+  /** Solved flop the strategy was borrowed from, when it isn't this exact flop. */
+  approxFlop: string | null;
 }
 
 export interface ExplainInput extends SpotContext {
   decision: DecisionFeedback;
 }
 
-const COACH_BASE = `You are the coach inside GTOtutor, a No-Limit Hold'em cash-game trainer, teaching an intermediate player about preflop decisions. You receive the strategy chart's numbers for the exact spot; treat them as ground truth and explain them rather than recomputing or second-guessing them.
+const COACH_BASE = `You are the coach inside GTOtutor, a No-Limit Hold'em cash-game trainer, teaching an intermediate player about preflop and flop decisions. You receive the strategy chart's numbers for the exact spot; treat them as ground truth and explain them rather than recomputing or second-guessing them.
 
 Reason about hand strength relative to the ranges involved, position, blockers, playability, the opponent's likely range, and stack depth. Only cite percentages that appear in the provided data, and never invent EVs, win rates, or equities. If the data source is described as placeholder ranges, call it "the chart", not solver output. Write plain language without headings or markdown.
 
@@ -82,12 +86,13 @@ const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
 const VERBS: Record<ActionLogEntry['action'], (a: ActionLogEntry) => string> = {
   fold: () => 'folds',
   check: () => 'checks',
-  // A call to exactly 1bb can only be the SB completing (limping).
-  call: (a) => (a.toBb === 1 ? 'limps (completes to 1)' : `calls ${a.toBb}`),
-  raise: (a) => `raises to ${a.toBb}`,
+  // A call to exactly 1bb preflop can only be the SB completing (limping).
+  call: (a) => (a.street === 'preflop' && a.toBb === 1 ? 'limps (completes to 1)' : `calls ${a.streetBb ?? a.toBb}`),
+  bet: (a) => `bets ${a.streetBb ?? a.toBb}`,
+  raise: (a) => `raises to ${a.streetBb ?? a.toBb}`,
   allin: (a) => `goes all-in for ${a.toBb}`,
 };
-const describeAction = (a: ActionLogEntry) => `${a.position} ${VERBS[a.action](a)}`;
+const describeAction = (a: ActionLogEntry) => `${a.street === 'preflop' ? '' : `[${a.street}] `}${a.position} ${VERBS[a.action](a)}`;
 
 const POSTFLOP_ORDER = ['SB', 'BB', 'UTG', 'HJ', 'CO', 'BTN'];
 
@@ -111,6 +116,11 @@ export function buildSpotContext(spot: SpotContext): string {
     `Game: 6-max cash, ${spot.stackDepthBb}bb effective stacks. Hero is ${spot.heroPosition}.`,
     `Action before hero: ${before}`,
     ...(position ? [position] : []),
+    ...(spot.board.length
+      ? [
+          `Board: ${spot.board.join(' ')}. Strategy numbers come from a solver run on ${spot.approxFlop ? `the similar flop ${spot.approxFlop} (this exact flop isn't solved, so treat the numbers as approximate)` : 'this flop'}; only flop strategy is available, and the turn and river are dealt out without betting.`,
+        ]
+      : []),
     `Spot: ${spot.nodeLabel}`,
     `Hero hand: ${spot.heroCards.join(' ')} (class ${spot.handClass})`,
     `Chart strategy for ${spot.handClass} here: ${spot.options.map((o) => `${o.label} ${pct(o.frequency)}`).join(', ')}. EV: ${hasEv ? spot.options.map((o) => `${o.label} ${o.evBb ?? 'n/a'}bb`).join(', ') : 'not available'}.`,

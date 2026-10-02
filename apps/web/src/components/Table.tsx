@@ -28,8 +28,9 @@ const at = (p: Point) => ({ left: `${p.x}%`, top: `${p.y}%` });
 const ACTION_TEXT: Record<ActionLogEntry['action'], (a: ActionLogEntry) => string> = {
   fold: () => 'Fold',
   check: () => 'Check',
-  call: (a) => (a.toBb === 1 ? 'Limp' : `Call ${a.toBb}`),
-  raise: (a) => `Raise ${a.toBb}`,
+  call: (a) => (a.street === 'preflop' && a.toBb === 1 ? 'Limp' : `Call ${a.streetBb ?? a.toBb}`),
+  bet: (a) => `Bet ${a.streetBb}`,
+  raise: (a) => `Raise ${a.streetBb ?? a.toBb}`,
   allin: () => 'All-in',
 };
 
@@ -67,8 +68,8 @@ export function Table({ hand, playback, onSkip }: Props) {
       </div>
 
       <div className="board" style={at({ x: 50, y: 54 })}>
-        {result && playback.board > 0 ? (
-          result.board.slice(0, playback.board).map((c) => <PlayingCard key={c} card={c} className="board-card" />)
+        {playback.board > 0 ? (
+          (result?.board.length ? result.board : hand.board).slice(0, playback.board).map((c) => <PlayingCard key={c} card={c} className="board-card" />)
         ) : (
           <span className="street">Preflop</span>
         )}
@@ -76,11 +77,11 @@ export function Table({ hand, playback, onSkip }: Props) {
 
       {hand.seats.map((seat) => {
         const d = display[seat.position];
-        if (d.committed <= 0) return null;
+        if (d.streetBet <= 0) return null;
         return (
           <div key={`bet-${seat.position}`} className={`bet ${playback.gathered ? 'in-pot' : ''}`} style={at(chipTarget(seat.position))}>
-            <ChipStack amount={d.committed} />
-            {!playback.gathered && <span className="bet-amount">{d.committed}</span>}
+            <ChipStack amount={d.streetBet} />
+            {!playback.gathered && <span className="bet-amount">{d.streetBet}</span>}
           </div>
         );
       })}

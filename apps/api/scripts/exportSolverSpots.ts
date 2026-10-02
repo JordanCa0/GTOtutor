@@ -1,39 +1,126 @@
 // Writes solver/spots/*.json from the current preflop charts: the ranges that reach each flop.
 // Run from the repo root: npx tsx apps/api/scripts/exportSolverSpots.ts
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { buildFixtureChartSet } from '../src/charts/fixtures.js';
+import { SIX_MAX_POSITIONS, type Position } from '@gtotutor/shared-types';
+import { buildFixtureChartSet, FOUR_BET_SIZE, ISO_RAISE_SIZE, openSize, SB_VS_ISO_3BET_SIZE, threeBetSize } from '../src/charts/fixtures.js';
 
 const charts = buildFixtureChartSet();
+const STACK = 100;
 
-/** "AKs,AQs:0.500,…" in postflop-solver's range format: the share of each class taking `action`. */
-function range(nodeKey: string, action: string): string {
-  const node = charts.nodes.get(nodeKey);
-  if (!node) throw new Error(`no chart node ${nodeKey}`);
-  const i = node.actions.findIndex((a) => a.id === action);
-  return [...node.strategy]
-    .filter(([, f]) => f[i] > 0.001)
-    .map(([hc, f]) => (f[i] >= 0.999 ? hc : `${hc}:${f[i].toFixed(3)}`))
+/** One preflop decision a player made on the way to the flop: chart node + the action taken. */
+type Step = [nodeKey: string, action: string];
+const key = (type: string, pos: Position, vs?: Position) => ['SIX_MAX', STACK, type, pos, vs].filter((p) => p !== undefined).join('|');
+
+/**
+ * "AKs,AQs:0.500,…" in postflop-solver's range format: the share of each class that took every
+ * step (frequencies multiply along the line).
+ */
+function range(...steps: Step[]): string {
+  const share = new Map<string, number>();
+  steps.forEach(([nodeKey, action], n) => {
+    const node = charts.nodes.get(nodeKey);
+    if (!node) throw new Error(`no chart node ${nodeKey}`);
+    const i = node.actions.findIndex((a) => a.id === action);
+    if (i < 0) throw new Error(`no action ${action} at ${nodeKey}`);
+    for (const [hc, f] of node.strategy) share.set(hc, (n === 0 ? 1 : (share.get(hc) ?? 0)) * f[i]);
+  });
+  return [...share]
+    .filter(([, f]) => f > 0.001)
+    .map(([hc, f]) => (f >= 0.999 ? hc : `${hc}:${f.toFixed(3)}`))
     .join(',');
 }
 
-const spots = [
-  {
-    name: 'btn_vs_bb_srp_100',
-    description: `BTN opens 2.5, BB calls; 100bb. Ranges from charts ${charts.version}.`,
+/** Postflop acting order: SB, BB, then UTG..BTN. */
+const postflopIndex = (p: Position) => ['SB', 'BB', 'UTG', 'HJ', 'CO', 'BTN'].indexOf(p);
+const deadBlinds = (a: Position, b: Position) => (a !== 'SB' && b !== 'SB' ? 0.5 : 0) + (a !== 'BB' && b !== 'BB' ? 1 : 0);
+const lc = (p: Position) => p.toLowerCase();
+
+interface Spot {
+  name: string;
+  description: string;
+  chips_per_bb: number;
+  pot_bb: number;
+  stack_bb: number;
+  oop_range: string;
+  ip_range: string;
+  flop: [string, string];
+  turn: [string, string];
+  river: [string, string];
+}
+
+/** Heads-up pot where each player put `invested` bb in preflop. */
+function spot(name: string, description: string, a: Position, aRange: string, b: Position, bRange: string, invested: number): Spot {
+  const aIsOop = postflopIndex(a) < postflopIndex(b);
+  return {
+    name,
+    description: `${description}; ${STACK}bb. Ranges from charts ${charts.version}.`,
     chips_per_bb: 20,
-    pot_bb: 5.5,
-    stack_bb: 97.5,
-    oop_range: range('SIX_MAX|100|VS_OPEN|BB|BTN', 'call'),
-    ip_range: range('SIX_MAX|100|RFI|BTN', 'raise'),
-    // Deliberately small tree (one size per street) to keep each solve cheap.
+    pot_bb: invested * 2 + deadBlinds(a, b),
+    stack_bb: STACK - invested,
+    oop_range: aIsOop ? aRange : bRange,
+    ip_range: aIsOop ? bRange : aRange,
+    // Deliberately small tree to keep each solve cheap: one size per street, and no raises on the
+    // turn and river. Only the flop strategy is kept (the browser re-solves later streets), and
+    // dropping those raises made solves 3x faster for ~0.005bb/hand of flop EV (docs/postflop-plan.md).
     flop: ['33%', '3x'],
-    turn: ['66%', '3x'],
-    river: ['75%', '3x'],
-  },
-];
+    turn: ['66%', ''],
+    river: ['75%', ''],
+  };
+}
+
+const spots: Spot[] = [];
+const order = SIX_MAX_POSITIONS; // preflop order: UTG, HJ, CO, BTN, SB, BB
+for (const [i, opener] of order.entries()) {
+  if (opener === 'BB') continue;
+  const open: Step = [key('RFI', opener), 'raise'];
+  for (const other of order.slice(i + 1)) {
+    const o = lc(opener);
+    const v = lc(other);
+    // Single-raised pot: opener raises, `other` calls.
+    spots.push(
+      spot(`${o}_vs_${v}_srp_${STACK}`, `${opener} opens ${openSize(opener)}, ${other} calls`, opener, range(open), other, range([key('VS_OPEN', other, opener), 'call']), openSize(opener)),
+    );
+    // 3-bet pot: `other` 3-bets, opener calls.
+    const tb = threeBetSize(other);
+    const threeBet: Step = [key('VS_OPEN', other, opener), 'raise'];
+    spots.push(
+      spot(`${o}_vs_${v}_3bp_${STACK}`, `${opener} opens ${openSize(opener)}, ${other} 3-bets ${tb}, ${opener} calls`, opener, range(open, [key('VS_3BET', opener, other), 'call']), other, range(threeBet), tb),
+    );
+    // 4-bet pot: opener 4-bets, `other` calls.
+    spots.push(
+      spot(
+        `${o}_vs_${v}_4bp_${STACK}`,
+        `${opener} opens, ${other} 3-bets ${tb}, ${opener} 4-bets ${FOUR_BET_SIZE}, ${other} calls`,
+        opener,
+        range(open, [key('VS_3BET', opener, other), 'raise']),
+        other,
+        range(threeBet, [key('VS_4BET', other, opener), 'call']),
+        FOUR_BET_SIZE,
+      ),
+    );
+  }
+}
+
+// Limped pots: only the SB can limp, so these are always SB vs BB.
+const limp: Step = [key('RFI', 'SB'), 'call'];
+const iso: Step = [key('VS_LIMP', 'BB', 'SB'), 'raise'];
+spots.push(spot('sb_vs_bb_limp_100', 'SB limps, BB checks', 'SB', range(limp), 'BB', range([key('VS_LIMP', 'BB', 'SB'), 'check']), 1));
+spots.push(spot('sb_vs_bb_iso_100', `SB limps, BB raises ${ISO_RAISE_SIZE}, SB calls`, 'SB', range(limp, [key('VS_ISO', 'SB', 'BB'), 'call']), 'BB', range(iso), ISO_RAISE_SIZE));
+spots.push(
+  spot(
+    'sb_vs_bb_l3b_100',
+    `SB limps, BB raises ${ISO_RAISE_SIZE}, SB 3-bets ${SB_VS_ISO_3BET_SIZE}, BB calls`,
+    'SB',
+    range(limp, [key('VS_ISO', 'SB', 'BB'), 'raise']),
+    'BB',
+    range(iso, [key('VS_3BET', 'BB', 'SB'), 'call']),
+    SB_VS_ISO_3BET_SIZE,
+  ),
+);
 
 mkdirSync('solver/spots', { recursive: true });
-for (const spot of spots) {
-  writeFileSync(`solver/spots/${spot.name}.json`, `${JSON.stringify(spot, null, 2)}\n`);
-  console.log(`wrote solver/spots/${spot.name}.json`);
-}
+// A line the charts never take (e.g. SB limp-3bets with the placeholder charts) has an empty range.
+const playable = spots.filter((s) => s.oop_range && s.ip_range);
+for (const s of playable) writeFileSync(`solver/spots/${s.name}.json`, `${JSON.stringify(s, null, 2)}\n`);
+const skipped = spots.filter((s) => !playable.includes(s)).map((s) => s.name);
+console.log(`wrote ${playable.length} spots to solver/spots/${skipped.length ? ` (skipped, empty range: ${skipped.join(', ')})` : ''}`);

@@ -1,0 +1,21 @@
+{
+  "name": "sb_vs_bb_4bp_100",
+  "description": "SB opens, BB 3-bets 10, SB 4-bets 22, BB calls; 100bb. Ranges from charts fixture-v2.",
+  "chips_per_bb": 20,
+  "pot_bb": 44,
+  "stack_bb": 78,
+  "oop_range": "AA,AKs:0.870,AQs:0.610,A5s:0.350,A4s:0.200,KK,QQ,JJ,TT:0.300",
+  "ip_range": "AKs:0.680,AQs,AJs:0.820,AKo:0.320,KQs:0.660,JJ:0.260,TT",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

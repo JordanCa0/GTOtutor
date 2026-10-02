@@ -14,8 +14,7 @@ import {
 } from '@gtotutor/shared-types';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { ChartService } from './charts/chartService.js';
-import type { ChartNode } from './charts/types.js';
-import { HttpError, type HandEngine, type HandState, type HandStore } from './engine/handEngine.js';
+import { HttpError, isFlopNodeKey, type HandEngine, type HandState, type HandStore } from './engine/handEngine.js';
 import type { SessionStore } from './engine/sessionStore.js';
 import type { ExplainInput, LlmTeacher, SpotContext } from './teacher/llmTeacher.js';
 import { computeSessionStats } from './teacher/sessionStats.js';
@@ -80,17 +79,14 @@ export function buildApp({ charts, engine, store, sessions, teacher }: AppDeps):
     return reply.status(500).send({ error: 'Internal error' });
   });
 
-  const rangeSummary = (node: ChartNode) => {
-    const shares = charts.rangeSummary(node);
-    return node.actions.map((a, i) => ({ label: a.label, share: shares[i] }));
-  };
-
-  const baseSpot = (state: HandState, node: ChartNode) => ({
-    nodeKey: node.nodeKey,
-    nodeLabel: node.label,
+  const baseSpot = (state: HandState, spot: { nodeKey: string; nodeLabel: string; board: string[]; approxFlop: string | null }) => ({
+    nodeKey: spot.nodeKey,
+    nodeLabel: spot.nodeLabel,
     heroPosition: state.heroPosition,
     stackDepthBb: state.config.stackDepthBb,
-    rangeSummary: rangeSummary(node),
+    rangeSummary: engine.rangeSummary(spot.nodeKey),
+    board: spot.board,
+    approxFlop: spot.approxFlop,
     dataSource: charts.dataSource,
   });
 
@@ -102,7 +98,7 @@ export function buildApp({ charts, engine, store, sessions, teacher }: AppDeps):
     let heroSeen = 0;
     const cut = state.actionLog.findIndex((a) => a.isHero && heroSeen++ === k);
     return {
-      ...baseSpot(state, charts.getNode(decision.nodeKey)),
+      ...baseSpot(state, decision),
       decision,
       heroCards: decision.heroCards,
       handClass: decision.handClass,
@@ -138,7 +134,7 @@ export function buildApp({ charts, engine, store, sessions, teacher }: AppDeps):
     const pending = engine.pendingDecision(state);
     if (!pending) throw new HttpError(409, 'There is no pending decision to hint at.');
     const spot: SpotContext = {
-      ...baseSpot(state, pending.node),
+      ...baseSpot(state, { ...pending, board: state.board }),
       heroCards: pending.heroCards,
       handClass: pending.handClass,
       options: pending.options,
@@ -183,6 +179,11 @@ export function buildApp({ charts, engine, store, sessions, teacher }: AppDeps):
   );
 
   app.get<{ Params: { nodeKey: string } }>('/api/charts/:nodeKey', async (req): Promise<ChartNodeView> => {
+    if (isFlopNodeKey(req.params.nodeKey)) {
+      const view = engine.flopChartView(req.params.nodeKey);
+      if (!view) throw new HttpError(404, 'Flop strategy not found.');
+      return view;
+    }
     if (!charts.hasNode(req.params.nodeKey)) throw new HttpError(404, 'Chart node not found.');
     return charts.toView(charts.getNode(req.params.nodeKey));
   });

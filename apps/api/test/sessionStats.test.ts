@@ -17,6 +17,9 @@ function decision(nodeKey: string, chosen: ActionType, freqs: Partial<Record<Act
     bestAction: best.actionId,
     grade,
     hintUsed: false,
+    street: 'preflop',
+    board: [],
+    approxFlop: null,
   };
 }
 

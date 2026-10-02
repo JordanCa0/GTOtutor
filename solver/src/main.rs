@@ -36,6 +36,13 @@ struct NodeOut {
     actions: Vec<String>,
     /// Per action, per hand of `player` (same order as `hands`): frequency in permille.
     strategy: Vec<Vec<u16>>,
+    /// Per hand of `player`: how much of it reaches this node, counted against the opponent's
+    /// hands that also reach it (0 = never gets here). Sums are equal for both players at a node.
+    weights: Vec<f32>,
+    /// Per hand of `player`: equity against the opponent's range at this node.
+    equity: Vec<f32>,
+    /// Per action, per hand of `player`: expected value in big blinds.
+    ev_bb: Vec<Vec<f32>>,
 }
 
 #[derive(Serialize)]
@@ -44,6 +51,8 @@ struct FlopOut {
     flop: String,
     /// How many of the 22,100 raw flops this canonical flop stands for.
     weight: u32,
+    /// [bet sizes, raise sizes] per street this flop was solved with ("" = no raises).
+    tree: [[String; 2]; 3],
     exploitability_pct_pot: f32,
     seconds: f64,
     hands: [Vec<String>; 2],
@@ -62,6 +71,7 @@ struct Args {
     compress: bool,
     threads: usize,
     only: Option<String>,
+    memory_only: bool,
     status_port: Option<u16>,
 }
 
@@ -75,6 +85,7 @@ fn parse_args() -> Args {
         compress: false,
         threads: 0,
         only: None,
+        memory_only: false,
         status_port: None,
     };
     let argv: Vec<String> = std::env::args().skip(1).collect();
@@ -89,6 +100,11 @@ fn parse_args() -> Args {
             "--max-iterations" => a.max_iterations = val().parse().unwrap_or_else(|_| die("--max-iterations must be a number")),
             "--threads" => a.threads = val().parse().unwrap_or_else(|_| die("--threads must be a number")),
             "--flop" => a.only = Some(val()),
+            "--memory" => {
+                a.memory_only = true;
+                i += 1;
+                continue;
+            }
             "--status-port" => a.status_port = Some(val().parse().unwrap_or_else(|_| die("--status-port must be a port number"))),
             "--compress" => {
                 a.compress = true;
@@ -189,12 +205,21 @@ fn walk_flop(game: &mut PostFlopGame, history: &mut Vec<usize>, chips_per_bb: i3
     let actions = game.available_actions();
     let n = game.private_cards(player).len();
     let strat = game.strategy();
+    game.cache_normalized_weights();
+    // Hands that never reach a node can come back as NaN; their weight is 0, so 0 is safe.
+    let round = |x: f32, scale: f32| if x.is_finite() { (x * scale).round() / scale } else { 0.0 };
+    let evs = game.expected_values_detail(player);
     out.push(NodeOut {
         history: history.clone(),
         player,
         actions: actions.iter().map(|a| action_label(a, chips_per_bb)).collect(),
         strategy: (0..actions.len())
             .map(|a| (0..n).map(|h| (strat[a * n + h] * 1000.0).round() as u16).collect())
+            .collect(),
+        weights: game.normalized_weights(player).iter().map(|&w| round(w, 1000.0)).collect(),
+        equity: game.equity(player).into_iter().map(|e| round(e, 1000.0)).collect(),
+        ev_bb: (0..actions.len())
+            .map(|a| (0..n).map(|h| round(evs[a * n + h] / chips_per_bb as f32, 100.0)).collect())
             .collect(),
     });
     for i in 0..actions.len() {
@@ -265,6 +290,7 @@ fn solve_flop(spot: &Spot, flop: &str, weight: u32, args: &Args, tracker: &mut s
         spot: spot.name.clone(),
         flop: flop.to_string(),
         weight,
+        tree: [spot.flop.clone(), spot.turn.clone(), spot.river.clone()],
         exploitability_pct_pot: exploitability / pot * 100.0,
         seconds: start.elapsed().as_secs_f64(),
         hands,
@@ -315,6 +341,9 @@ fn main() {
         flops.len(),
         if args.compress { "compressed" } else { "uncompressed" }
     );
+    if args.memory_only {
+        return;
+    }
     std::fs::write(dir.join("_spot.json"), serde_json::to_vec_pretty(&spot).unwrap()).ok();
 
     let already_done = flops.iter().filter(|(f, _)| dir.join(format!("{f}.json")).exists()).count();

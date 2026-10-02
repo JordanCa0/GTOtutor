@@ -18,15 +18,16 @@ function hand(overrides: Partial<HandView> = {}): HandView {
       cards: position === 'BB' ? ['As', 'Kd'] : null,
     })),
     potBb: 1.5,
+    board: [],
     actionLog: [
-      { position: 'UTG', action: 'fold', toBb: 0, isHero: false },
-      { position: 'HJ', action: 'fold', toBb: 0, isHero: false },
-      { position: 'CO', action: 'raise', toBb: 2.5, isHero: false },
-      { position: 'BTN', action: 'fold', toBb: 0, isHero: false },
-      { position: 'SB', action: 'fold', toBb: 0, isHero: false },
+      { position: 'UTG', action: 'fold', toBb: 0, isHero: false, street: 'preflop' },
+      { position: 'HJ', action: 'fold', toBb: 0, isHero: false, street: 'preflop' },
+      { position: 'CO', action: 'raise', toBb: 2.5, isHero: false, street: 'preflop' },
+      { position: 'BTN', action: 'fold', toBb: 0, isHero: false, street: 'preflop' },
+      { position: 'SB', action: 'fold', toBb: 0, isHero: false, street: 'preflop' },
     ],
     legalActions: [],
-    pendingSpot: { nodeKey: 'k', nodeLabel: 'BB facing CO open', handClass: 'AKo' },
+    pendingSpot: { nodeKey: 'k', nodeLabel: 'BB facing CO open', handClass: 'AKo', street: 'preflop' },
     status: 'awaiting_hero',
     decisions: [],
     result: null,
@@ -68,7 +69,7 @@ describe('playback', () => {
   it('after the hand ends: gather, flop, turn, river, showdown, award', () => {
     const h = hand({
       status: 'complete',
-      actionLog: [...hand().actionLog, { position: 'BB', action: 'call', toBb: 2.5, isHero: true }],
+      actionLog: [...hand().actionLog, { position: 'BB', action: 'call', toBb: 2.5, isHero: true, street: 'preflop' as const }],
       result: {
         board: ['2c', '7d', 'Jh', 'Qs', '3c'],
         showdown: [
@@ -92,11 +93,34 @@ describe('playback', () => {
   it('uncontested hands skip the board and showdown', () => {
     const h = hand({
       status: 'complete',
-      actionLog: [...hand().actionLog, { position: 'BB', action: 'fold', toBb: 1, isHero: true }],
+      actionLog: [...hand().actionLog, { position: 'BB', action: 'fold', toBb: 1, isHero: true, street: 'preflop' as const }],
       result: { board: [], showdown: null, winners: ['CO'], potBb: 4, heroNetBb: -1, summary: '' },
     });
     const last = runToEnd(h).at(-1)!;
     expect(last).toMatchObject({ gathered: true, board: 0, showdown: false, awarded: true });
     expect(last).toEqual(finalPlayback(h));
+  });
+
+  it('deals the flop before flop betting and shows only this street\'s bets', () => {
+    const h = hand({
+      actionLog: [
+        ...hand().actionLog,
+        { position: 'BB', action: 'call', toBb: 2.5, isHero: true, street: 'preflop' },
+        { position: 'BB', action: 'check', toBb: 2.5, isHero: true, street: 'flop', streetBb: 0 },
+        { position: 'CO', action: 'bet', toBb: 4.3, isHero: false, street: 'flop', streetBb: 1.8 },
+      ],
+      board: ['Kh', '7d', '2c'],
+      pendingSpot: { nodeKey: 'FLOP|x|Kh7d2c|0.1', nodeLabel: 'BB facing a 1.8bb flop bet', handClass: 'AKo', street: 'flop' },
+    });
+    const states = runToEnd(h);
+    const flopAt = states.findIndex((s) => s.board === 3);
+    // The flop comes after both preflop actions and before the first flop action.
+    expect(states[flopAt]).toMatchObject({ steps: 6, gathered: true });
+    expect(states.at(-1)).toMatchObject({ steps: 8, board: 3, gathered: false });
+    expect(states.at(-1)).toEqual(finalPlayback(h));
+    const seats = seatsAt(h, 8);
+    expect(seats.CO).toMatchObject({ committed: 4.3, streetBet: 1.8 });
+    expect(seats.BB).toMatchObject({ committed: 2.5, streetBet: 0 });
+    expect(potAt(seats)).toBe(6.8 + 0.5);
   });
 });

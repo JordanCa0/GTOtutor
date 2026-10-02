@@ -1,0 +1,21 @@
+{
+  "name": "co_vs_sb_srp_100",
+  "description": "CO opens 2.5, SB calls; 100bb. Ranges from charts fixture-v2.",
+  "chips_per_bb": 20,
+  "pot_bb": 6,
+  "stack_bb": 97.5,
+  "oop_range": "ATs:0.210,A9s:0.150,A8s:0.050,KTs:0.310,KQo:0.600,QTs:0.410,AJo:0.720,J9s:0.510,T9s:0.620,98s:0.400,88:0.090,77:0.270",
+  "ip_range": "AA,AKs,AQs,AJs,ATs,A9s,A8s,A7s,A6s,A5s,A4s,A3s,A2s,AKo,KK,KQs,KJs,KTs,K9s,K8s:0.350,K7s:0.250,K6s:0.150,K5s:0.050,AQo,KQo,QQ,QJs,QTs,Q9s,AJo,KJo,QJo,JJ,JTs,J9s,J8s,ATo,KTo,QTo,JTo,TT,T9s,T8s,J9o,T9o,99,98s,97s,98o,88,87s,86s,77,76s,75s,66,65s,55:0.930,54s,44:0.780,33:0.630,22:0.480",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

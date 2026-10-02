@@ -152,7 +152,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 480px; gap: 1rem; pa
 .seat.winner .seat-info { border-color: var(--good); box-shadow: 0 0 0 5px rgba(59, 182, 127, 0.18), 0 8px 20px rgba(0, 0, 0, 0.45); }
 .dealer { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 6px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #d9d4c8); color: #1a1a1a; font-family: var(--serif); font-size: 0.66rem; font-weight: 700; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
 .action-bubble { position: absolute; bottom: -21px; left: 50%; translate: -50% 0; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.03em; padding: 0.1rem 0.55rem; border-radius: 999px; background: #2b333e; border: 1px solid var(--line-2); animation: pop 0.3s var(--ease) both; white-space: nowrap; }
-.action-bubble.act-raise, .action-bubble.act-allin { background: linear-gradient(180deg, #3fbf84, #1f7d52); border-color: #7fdcb0; }
+.action-bubble.act-raise, .action-bubble.act-bet, .action-bubble.act-allin { background: linear-gradient(180deg, #3fbf84, #1f7d52); border-color: #7fdcb0; }
 .action-bubble.act-call, .action-bubble.act-check { background: linear-gradient(180deg, #e8c47e, #b98f47); color: #1b1307; border-color: #f2dca6; }
 @keyframes pop { from { opacity: 0; transform: scale(0.6) translateY(6px); } }
 .hand-name { font-size: 0.72rem; color: var(--muted); animation: pop 0.3s var(--ease) both; }

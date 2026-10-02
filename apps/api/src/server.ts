@@ -1,9 +1,11 @@
+import { fileURLToPath } from 'node:url';
 import { buildApp } from './app.js';
 import { ChartService } from './charts/chartService.js';
 import { buildFixtureChartSet } from './charts/fixtures.js';
 import { HandEngine, HandStore } from './engine/handEngine.js';
 import { SessionStore } from './engine/sessionStore.js';
 import { runoutResolver } from './engine/showdownResolver.js';
+import { FlopStore } from './postflop/flopStore.js';
 import { cryptoRng } from './poker/rng.js';
 import { LlmTeacher, claudeCoachLlm } from './teacher/llmTeacher.js';
 
@@ -14,10 +16,12 @@ try {
 }
 
 const charts = new ChartService(buildFixtureChartSet());
+// Solved flops, one folder per spot (see solver/README.md). Spots without a folder run out after preflop.
+const flops = new FlopStore(process.env.SOLVER_OUTPUT_DIR || fileURLToPath(new URL('../../../solver/output', import.meta.url)));
 const model = process.env.CLAUDE_MODEL || 'claude-opus-5';
 const app = buildApp({
   charts,
-  engine: new HandEngine(charts, cryptoRng, runoutResolver),
+  engine: new HandEngine(charts, cryptoRng, runoutResolver, flops),
   store: new HandStore(),
   sessions: new SessionStore(),
   teacher: new LlmTeacher(claudeCoachLlm(model), model, Number(process.env.EXPLANATION_MISS_LIMIT_PER_HOUR) || 50),

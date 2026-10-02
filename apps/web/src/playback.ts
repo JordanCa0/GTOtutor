@@ -40,22 +40,38 @@ export const initialPlayback = (handId: string): PlaybackState => ({
 
 export function finalPlayback(hand: HandView): PlaybackState {
   const complete = hand.status === 'complete';
+  const lastStreet = hand.actionLog.at(-1)?.street ?? 'preflop';
   return {
     handId: hand.id,
     steps: hand.actionLog.length,
-    gathered: complete,
-    board: hand.result?.board.length ?? 0,
+    // Mid-hand on the flop, preflop bets already sit in the pot.
+    gathered: complete || (hand.board.length > 0 && lastStreet === 'preflop'),
+    board: Math.max(hand.result?.board.length ?? 0, hand.board.length),
     showdown: complete && hand.result?.showdown !== null,
     awarded: complete,
   };
 }
 
+/** Sweeps the bets and deals the flop before the first flop action (or before hero's first flop decision). */
+function flopStep(p: PlaybackState, hand: HandView): { state: PlaybackState; delay: number } | null {
+  if (p.board >= 3 || hand.board.length < 3) return null;
+  const next = hand.actionLog[p.steps];
+  const flopNext = next ? next.street === 'flop' : hand.status === 'awaiting_hero';
+  if (!flopNext) return null;
+  if (!p.gathered) return { state: { ...p, gathered: true }, delay: TIMING.gather };
+  return { state: { ...p, board: 3 }, delay: TIMING.flop };
+}
+
 /** The next playback step and how long to wait before showing it, or null when caught up. */
 export function nextPlayback(p: PlaybackState, hand: HandView): { state: PlaybackState; delay: number } | null {
   const log = hand.actionLog;
+  const flop = flopStep(p, hand);
+  if (flop) return flop;
   if (p.steps < log.length) {
     const delay = p.steps === 0 ? TIMING.deal : log[p.steps].isHero ? TIMING.heroAction : TIMING.villainAction;
-    return { state: { ...p, steps: p.steps + 1 }, delay };
+    // New bets on a later street sit in front of the players again until swept.
+    const gathered = log[p.steps].street === 'preflop' ? p.gathered : false;
+    return { state: { ...p, steps: p.steps + 1, gathered }, delay };
   }
   const r = hand.result;
   if (hand.status !== 'complete' || !r) return null;
@@ -72,7 +88,10 @@ export function nextPlayback(p: PlaybackState, hand: HandView): { state: Playbac
 export const isPlaybackDone = (p: PlaybackState, hand: HandView) => nextPlayback(p, hand) === null;
 
 export interface SeatDisplay {
+  /** Total put in this hand. */
   committed: number;
+  /** Put in on the street shown (the chips in front of the seat). */
+  streetBet: number;
   folded: boolean;
   allIn: boolean;
   lastAction: ActionLogEntry | null;
@@ -81,18 +100,25 @@ export interface SeatDisplay {
 export function seatsAt(hand: HandView, steps: number): Record<Position, SeatDisplay> {
   const out = {} as Record<Position, SeatDisplay>;
   for (const s of hand.seats) {
-    out[s.position] = {
-      committed: s.position === 'SB' ? 0.5 : s.position === 'BB' ? 1 : 0,
-      folded: false,
-      allIn: false,
-      lastAction: null,
-    };
+    const blind = s.position === 'SB' ? 0.5 : s.position === 'BB' ? 1 : 0;
+    out[s.position] = { committed: blind, streetBet: blind, folded: false, allIn: false, lastAction: null };
   }
+  let street = 'preflop';
   for (const a of hand.actionLog.slice(0, steps)) {
+    if (a.street !== street) {
+      street = a.street;
+      for (const seat of Object.values(out)) {
+        seat.streetBet = 0;
+        seat.lastAction = null;
+      }
+    }
     const seat = out[a.position];
     seat.lastAction = a;
     if (a.action === 'fold') seat.folded = true;
-    else seat.committed = a.toBb;
+    else {
+      seat.committed = a.toBb;
+      seat.streetBet = a.streetBb ?? a.toBb;
+    }
     if (seat.committed >= hand.config.stackDepthBb) seat.allIn = true;
   }
   return out;

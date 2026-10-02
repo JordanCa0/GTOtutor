@@ -92,7 +92,7 @@ describe('hand engine', () => {
     const seen = new Set<string>();
     for (let i = 0; i < 600 && seen.size < 2; i++) {
       const state = engine.start({ ...req, heroPosition: 'SB', skipEasyFolds: false });
-      if (engine.pendingDecision(state)!.node.nodeKey !== 'SIX_MAX|100|RFI|SB') continue;
+      if (engine.pendingDecision(state)!.nodeKey !== 'SIX_MAX|100|RFI|SB') continue;
       expect(engine.view(state).legalActions.map((a) => a.label)).toEqual(['Fold', 'Limp', 'Raise to 3']);
       engine.decide(state, 'call');
       const view = engine.view(state);
@@ -117,7 +117,7 @@ describe('hand engine', () => {
     const engine = newEngine(32);
     for (let i = 0; i < 2000; i++) {
       const state = engine.start({ ...req, heroPosition: 'BB', skipEasyFolds: false });
-      if (engine.pendingDecision(state)!.node.nodeKey !== 'SIX_MAX|100|VS_LIMP|BB|SB') continue;
+      if (engine.pendingDecision(state)!.nodeKey !== 'SIX_MAX|100|VS_LIMP|BB|SB') continue;
       expect(engine.view(state).legalActions.map((a) => a.id)).toEqual(['check', 'raise']);
       engine.decide(state, 'check');
       const view = engine.view(state);

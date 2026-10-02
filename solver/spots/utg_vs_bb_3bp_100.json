@@ -1,0 +1,21 @@
+{
+  "name": "utg_vs_bb_3bp_100",
+  "description": "UTG opens 2.5, BB 3-bets 10, UTG calls; 100bb. Ranges from charts fixture-v2.",
+  "chips_per_bb": 20,
+  "pot_bb": 20.5,
+  "stack_bb": 90,
+  "oop_range": "AA,AKs,AQs,AJs:0.670,A5s:0.600,A4s:0.500,A3s:0.300,AKo:0.120,KK,KQs:0.490,QQ,JJ,TT:0.900",
+  "ip_range": "AKs:0.280,AQs:0.560,AJs,ATs:0.320,AKo,KQs,KJs,KTs:0.220,AQo:0.670,QJs:0.970,QTs:0.120,JTs:0.870,J9s:0.020,TT:0.900,99,88:0.450",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

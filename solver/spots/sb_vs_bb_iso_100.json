@@ -1,0 +1,21 @@
+{
+  "name": "sb_vs_bb_iso_100",
+  "description": "SB limps, BB raises 3.5, SB calls; 100bb. Ranges from charts fixture-v2.",
+  "chips_per_bb": 20,
+  "pot_bb": 7,
+  "stack_bb": 96.5,
+  "oop_range": "K8s:0.680,K7s:0.580,K6s:0.480,K5s:0.380,K4s:0.280,K3s:0.180,K2s:0.080,J9o:0.040,T9o:0.340,98o:0.850,75s:0.540,55,54s:0.640,44,33:0.960,22:0.810",
+  "ip_range": "AA,AKs,AQs,AJs,ATs,A9s,A8s,A7s,A6s,A5s,A4s,A3s,A2s,AKo,KK,KQs,KJs,KTs,K9s,K8s:0.680,K7s:0.580,K6s:0.480,K5s:0.380,K4s:0.280,K3s:0.180,K2s:0.080,AQo,KQo,QQ,QJs,QTs,Q9s,AJo,KJo,QJo,JJ,JTs,J9s,J8s,ATo,KTo,QTo,JTo,TT,T9s,T8s,J9o,T9o,99,98s,97s,98o,88,87s,86s,77,76s,75s,66,65s,55,54s,44,33:0.960,22:0.810",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

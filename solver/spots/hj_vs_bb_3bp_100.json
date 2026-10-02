@@ -1,0 +1,21 @@
+{
+  "name": "hj_vs_bb_3bp_100",
+  "description": "HJ opens 2.5, BB 3-bets 10, HJ calls; 100bb. Ranges from charts fixture-v2.",
+  "chips_per_bb": 20,
+  "pot_bb": 20.5,
+  "stack_bb": 90,
+  "oop_range": "AA,AKs,AQs,AJs,A5s:0.600,A4s:0.500,A3s:0.300,AKo:0.620,KK,KQs:0.910,KJs:0.120,QQ,JJ,TT,99:0.300",
+  "ip_range": "AKs:0.280,AQs:0.560,AJs,ATs:0.720,AKo,KQs,KJs,KTs:0.620,AQo,QJs,QTs:0.520,AJo:0.120,JTs,J9s:0.420,TT:0.900,T9s:0.320,99,88:0.850",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

@@ -6,16 +6,18 @@ const SPOT_LABELS: Record<SpotType, string> = {
   VS_OPEN: 'Facing an open',
   VS_3BET: 'Facing a 3-bet',
   VS_4BET_PLUS: 'Facing a 4-bet or all-in',
+  FLOP: 'Flop decisions',
 };
 
 const LEAK_LABELS: Record<LeakType, string> = {
   over_fold: 'Folding hands the chart plays',
   over_call: 'Calling hands the chart folds',
-  over_raise: 'Raising where the chart folds or calls',
-  under_raise: 'Calling or checking where the chart raises',
+  over_raise: 'Betting or raising where the chart folds, checks or calls',
+  under_raise: 'Calling or checking where the chart bets or raises',
 };
 
 export function spotTypeOf(nodeKey: string): SpotType {
+  if (nodeKey.startsWith('FLOP|')) return 'FLOP';
   const type = nodeKey.split('|')[2];
   if (type === 'RFI') return 'RFI';
   if (type === 'VS_LIMP' || type === 'VS_ISO') return 'LIMPED';
@@ -26,7 +28,7 @@ export function spotTypeOf(nodeKey: string): SpotType {
 
 export function leakTypeOf(d: DecisionFeedback): LeakType | null {
   if (d.grade !== 'mistake') return null;
-  const aggressive = (a: string) => a === 'raise' || a === 'allin';
+  const aggressive = (a: string) => a === 'bet' || a === 'raise' || a === 'allin';
   if (d.chosenAction === 'fold') return 'over_fold';
   if (d.chosenAction === 'call') return aggressive(d.bestAction) ? 'under_raise' : 'over_call';
   if (d.chosenAction === 'check') return aggressive(d.bestAction) ? 'under_raise' : null;

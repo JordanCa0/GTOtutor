@@ -10,6 +10,7 @@ gtotutor-solver: batch flop solver (run from the solver/ folder)
   --max-iterations <n>   iteration cap per flop (default 1000)
   --threads <n>          CPU threads (default: all)
   --compress             16-bit storage: about half the memory, a bit slower
+  --memory               print the memory one solve needs, then exit (nothing is solved)
   --status-port <port>   serve a live progress page, e.g. 7878 -> http://<pc-ip>:7878
 
 Finished flops are skipped, so you can stop (Ctrl+C) and re-run to resume.

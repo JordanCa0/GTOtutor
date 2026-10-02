@@ -1,0 +1,21 @@
+{
+  "name": "hj_vs_btn_4bp_100",
+  "description": "HJ opens, BTN 3-bets 7.5, HJ 4-bets 22, BTN calls; 100bb. Ranges from charts fixture-v2.",
+  "chips_per_bb": 20,
+  "pot_bb": 45.5,
+  "stack_bb": 78,
+  "oop_range": "AA,AKs:0.720,AQs:0.440,A5s:0.350,A4s:0.200,KK,QQ,JJ,TT:0.100",
+  "ip_range": "AKs:0.680,AQs,AJs:0.746,AKo:0.141,KQs:0.495,JJ:0.260,TT",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

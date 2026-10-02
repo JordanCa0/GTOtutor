@@ -16,7 +16,7 @@ const TOTAL_COMBOS = 1326;
 export const RFI_WIDTH_PCT: Record<Position, number> = { UTG: 15, HJ: 19, CO: 27, BTN: 44, SB: 24, BB: 0 };
 export const SB_LIMP_PCT = 36;
 export const ISO_RAISE_SIZE = 3.5;
-const SB_VS_ISO_3BET_SIZE = 11;
+export const SB_VS_ISO_3BET_SIZE = 11;
 export const openSize = (pos: Position) => (pos === 'SB' ? 3 : 2.5);
 export const threeBetSize = (pos: Position) => (pos === 'SB' || pos === 'BB' ? 10 : 7.5);
 export const FOUR_BET_SIZE = 22;

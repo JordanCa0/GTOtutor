@@ -21,6 +21,9 @@ const decision: DecisionFeedback = {
   bestAction: 'raise',
   grade: 'best',
   hintUsed: false,
+  street: 'preflop',
+  board: [],
+  approxFlop: null,
 };
 
 const input: ExplainInput = {
@@ -31,8 +34,8 @@ const input: ExplainInput = {
   handClass: decision.handClass,
   options: decision.options,
   actionsBefore: [
-    { position: 'UTG', action: 'fold', toBb: 0, isHero: false },
-    { position: 'CO', action: 'raise', toBb: 2.5, isHero: false },
+    { position: 'UTG', action: 'fold', toBb: 0, isHero: false, street: 'preflop' },
+    { position: 'CO', action: 'raise', toBb: 2.5, isHero: false, street: 'preflop' },
   ],
   priorDecisions: [],
   heroPosition: 'BTN',
@@ -43,6 +46,8 @@ const input: ExplainInput = {
     { label: '3-bet to 7.5', share: 0.08 },
   ],
   dataSource: { kind: 'fixture', note: 'Placeholder ranges.' },
+  board: [],
+  approxFlop: null,
 };
 
 const grounded = { tldr: 'Correct: the ace blocker makes A5s an ideal 3-bet bluff.', points: ['The chart 3-bets A5s 60% of the time.', 'It plays well when called.'] };
@@ -55,7 +60,7 @@ describe('grounding check', () => {
 });
 
 describe('position line', () => {
-  const raise = (position: 'SB' | 'BTN' | 'CO', isHero = false) => ({ position, action: 'raise' as const, toBb: 3, isHero });
+  const raise = (position: 'SB' | 'BTN' | 'CO', isHero = false) => ({ position, action: 'raise' as const, toBb: 3, isHero, street: 'preflop' as const });
   it('states in/out of position against the last villain raiser', () => {
     expect(positionLine('BTN', [raise('BTN', true), raise('SB')])).toMatch(/BTN\) will be IN POSITION .* against the SB/);
     expect(positionLine('SB', [raise('CO')])).toMatch(/OUT OF POSITION .* against the CO/);

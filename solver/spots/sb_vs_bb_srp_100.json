@@ -1,0 +1,21 @@
+{
+  "name": "sb_vs_bb_srp_100",
+  "description": "SB opens 3, BB calls; 100bb. Ranges from charts fixture-v2.",
+  "chips_per_bb": 20,
+  "pot_bb": 6,
+  "stack_bb": 97,
+  "oop_range": "AA,AKs,AQs,AJs,ATs,A9s,A8s,A7s,A6s,A5s,A4s,A3s,A2s,AKo,KK,KQs,KJs,KTs,K9s,AQo,KQo,QQ,QJs,QTs,Q9s,AJo,KJo,QJo,JJ,JTs,J9s,J8s,ATo,KTo,QTo,JTo,TT,T9s,T8s,J9o:0.960,T9o:0.660,99,98s,97s,98o:0.150,88,87s,86s,77,76s,75s:0.460,66,65s,54s:0.360",
+  "ip_range": "ATs,A9s,A8s,A7s,A6s,A5s:0.400,A4s:0.500,A3s:0.700,A2s,KJs:0.390,KTs,K9s,K8s,K7s,K6s,K5s,K4s,K3s,K2s,AQo:0.840,KQo,QJs:0.500,QTs,Q9s,Q8s,AJo,KJo,QJo,JTs:0.610,J9s,J8s,ATo,KTo,QTo,JTo,T9s,T8s,T7s,A9o:0.700,J9o,T9o,99:0.240,98s,97s,A8o:0.400,98o,88,87s,86s,A7o:0.100,77,76s,75s,66,65s,64s,55,54s,44,43s:0.900,33,22",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "sb_vs_bb_limp_100",
+  "description": "SB limps, BB checks; 100bb. Ranges from charts fixture-v2.",
+  "chips_per_bb": 20,
+  "pot_bb": 2,
+  "stack_bb": 99,
+  "oop_range": "K8s,K7s,K6s,K5s,K4s,K3s,K2s,Q8s,Q7s,Q6s,Q5s,Q4s,Q3s,Q2s,J7s,J6s,J5s,J4s,J3s,J2s,T7s,T6s,A9o,K9o,Q9o,J9o:0.040,T9o:0.340,96s,A8o,K8o,Q8o:0.290,J8o,T8o,98o:0.850,85s,A7o,K7o,97o,87o,75s:0.540,74s,A6o,K6o,86o,76o,64s,63s,A5o,K5o,75o,65o,55,54s:0.640,53s,A4o,K4o,54o,44,43s,42s,A3o,K3o:0.890,33,32s,A2o,K2o:0.590,22",
+  "ip_range": "K8s:0.320,K7s:0.420,K6s:0.520,K5s:0.620,K4s:0.720,K3s:0.820,K2s:0.920,Q8s,Q7s,Q6s,Q5s,Q4s,Q3s,Q2s,J7s,J6s,J5s,J4s,J3s,J2s,T7s,T6s,T5s,T4s,T3s,T2s,A9o,K9o,Q9o,96s,95s,94s,93s,92s,A8o,K8o,Q8o,J8o,T8o,85s,84s,83s,82s,A7o,K7o,Q7o,J7o,T7o,97o,87o,74s,73s,72s,A6o,K6o,Q6o,J6o,T6o,96o,86o,76o,64s,63s,62s,A5o,K5o,Q5o,J5o,T5o,95o,85o,75o,65o,53s,52s,A4o,K4o,Q4o,J4o,T4o,94o,84o,74o,64o,54o,43s,42s,A3o,K3o,Q3o,J3o,T3o,93o,83o,73o,63o,53o,43o,33:0.040,32s,A2o,K2o,Q2o,J2o,T2o,92o,82o,72o,62o,52o,42o,32o,22:0.190",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

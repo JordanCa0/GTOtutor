@@ -1,7 +1,8 @@
 export type TableSize = 'HU' | 'SIX_MAX' | 'NINE_MAX';
 export type StackDepth = 20 | 40 | 60 | 100 | 150;
 export type Position = 'UTG' | 'HJ' | 'CO' | 'BTN' | 'SB' | 'BB';
-export type ActionType = 'fold' | 'check' | 'call' | 'raise' | 'allin';
+export type ActionType = 'fold' | 'check' | 'call' | 'bet' | 'raise' | 'allin';
+export type Street = 'preflop' | 'flop' | 'turn' | 'river';
 export type Grade = 'best' | 'mixed' | 'mistake';
 
 export const TABLE_SIZES: { id: TableSize; label: string; available: boolean }[] = [
@@ -47,8 +48,12 @@ export interface LegalAction {
 export interface ActionLogEntry {
   position: Position;
   action: ActionType;
+  /** Total the player has put in this hand after the action. */
   toBb: number;
   isHero: boolean;
+  street: Street;
+  /** Postflop: the player's total bet on this street after the action (what "bets 1.8" refers to). */
+  streetBb?: number;
 }
 
 export interface SeatView {
@@ -80,12 +85,18 @@ export interface DecisionFeedback {
   bestAction: ActionType;
   grade: Grade;
   hintUsed: boolean;
+  street: Street;
+  /** Board cards when the decision was made (empty preflop). */
+  board: string[];
+  /** Set when the strategy comes from a similar solved flop rather than this exact one. */
+  approxFlop: string | null;
 }
 
 export interface PendingSpot {
   nodeKey: string;
   nodeLabel: string;
   handClass: string;
+  street: Street;
 }
 
 export interface ShowdownEntry {
@@ -111,6 +122,8 @@ export interface HandView {
   heroCards: string[];
   seats: SeatView[];
   potBb: number;
+  /** Board cards dealt so far while the hand is in play (the full board is in `result`). */
+  board: string[];
   actionLog: ActionLogEntry[];
   legalActions: LegalAction[];
   pendingSpot: PendingSpot | null;
@@ -167,7 +180,7 @@ export type ChatResponse =
 
 export type HintResponse = { status: 'ok'; hint: string; cached: boolean } | { status: 'unavailable'; reason: string };
 
-export type SpotType = 'RFI' | 'LIMPED' | 'VS_OPEN' | 'VS_3BET' | 'VS_4BET_PLUS';
+export type SpotType = 'RFI' | 'LIMPED' | 'VS_OPEN' | 'VS_3BET' | 'VS_4BET_PLUS' | 'FLOP';
 export type LeakType = 'over_fold' | 'over_call' | 'over_raise' | 'under_raise';
 
 export interface SessionMistake {

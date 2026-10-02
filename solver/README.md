@@ -28,7 +28,7 @@ Run all of these from `solver/`.
    ```powershell
    cargo run --release -- --flop Kh7d2c
    ```
-   The first line prints the memory needed per solve: about 6.4 GB for the default spot, or 3.2 GB with `--compress`. The last line prints the solve time.
+   The first line prints the memory needed per solve: about 2.5 GB for the default spot, or 1.3 GB with `--compress`. The last line prints the solve time (about 15–20s on the desktop). To check a spot's memory without solving, add `--memory`.
 2. **Start the batch with a 184-flop sample:**
    ```powershell
    cargo run --release -- --limit 184
@@ -58,7 +58,7 @@ Spot files live in `spots/`. They are generated from the app's preflop charts:
 npx tsx apps/api/scripts/exportSolverSpots.ts   # from the repo root
 ```
 
-Each spot sets the two ranges, the pot, the stacks, and one bet size and one raise size per street. Every extra size makes each solve slower and use more memory. Re-export the spots whenever the preflop charts change, and re-solve into a fresh `--out` folder.
+Each spot sets the two ranges, the pot, the stacks, and the bet and raise sizes per street: one of each on the flop, and one bet size with no raises on the turn and river (only the flop strategy is kept, and the raises cost 3x the time for almost no flop EV; see `docs/postflop-plan.md`). Every extra size makes each solve slower and use more memory. Re-export the spots whenever the preflop charts change, and re-solve into a fresh `--out` folder.
 
 ## Output format (`output/<spot>/<flop>.json`)
 
@@ -68,6 +68,7 @@ Each spot sets the two ranges, the pot, the stacks, and one bet size and one rai
 | `exploitability_pct_pot` | Accuracy reached; lower is closer to GTO |
 | `hands[p]` | Player p's hands (0 = OOP / BB, 1 = IP / BTN) |
 | `ev_bb[p]`, `equity[p]` | Per hand at the flop root |
-| `nodes[]` | Every flop decision: `history` (action indexes from the root), `player`, `actions`, and `strategy[action][hand]` in permille |
+| `tree` | Bet and raise sizes per street this flop was solved with (`""` = no raises) |
+| `nodes[]` | Every flop decision: `history` (action indexes from the root), `player`, `actions`, `strategy[action][hand]` in permille, and per hand of `player`: `weights` (how much of the hand reaches this decision; 0 = never), `equity`, and `ev_bb[action][hand]` |
 
-`output/` is gitignored. Move results to the Mac with a zip or cloud drive for now; later they go to cloud storage.
+`output/` is gitignored. The API reads it directly (`SOLVER_OUTPUT_DIR` overrides the path): heads-up pots whose spot folder exists get real flop betting. Move results to the Mac with a zip or cloud drive for now; later they go to cloud storage.
