@@ -33,7 +33,7 @@ export interface HandConfig {
 
 export interface StartHandRequest extends HandConfig {
   heroPosition: Position | 'random';
-  /** Anonymous per-browser session, used for the session review. */
+  /** The practice session (a sitting of hands) this hand belongs to; the API requires it. */
   sessionId?: string;
   /** Mostly skip hands whose first decision is an obvious fold. Defaults to true. */
   skipEasyFolds?: boolean;
@@ -192,6 +192,11 @@ export type ChatResponse =
   | { status: 'unavailable'; reason: string };
 
 export type HintResponse = { status: 'ok'; hint: string; cached: boolean } | { status: 'unavailable'; reason: string };
+
+/** GET /api/me: the signed-in account, or null for a guest. */
+export interface MeResponse {
+  user: { id: string; email: string | null; name: string | null } | null;
+}
 
 export type SpotType = 'RFI' | 'LIMPED' | 'VS_OPEN' | 'VS_3BET' | 'VS_4BET_PLUS' | 'FLOP';
 export type LeakType = 'over_fold' | 'over_call' | 'over_raise' | 'under_raise';

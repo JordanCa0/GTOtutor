@@ -6,11 +6,11 @@
 import { buildApp } from '../src/app.js';
 import { ChartService } from '../src/charts/chartService.js';
 import { buildFixtureChartSet } from '../src/charts/fixtures.js';
-import { HandEngine, HandStore } from '../src/engine/handEngine.js';
-import { SessionStore } from '../src/engine/sessionStore.js';
+import { HandEngine } from '../src/engine/handEngine.js';
 import { runoutResolver } from '../src/engine/showdownResolver.js';
 import { cryptoRng } from '../src/poker/rng.js';
 import { LlmTeacher, type CoachLlm } from '../src/teacher/llmTeacher.js';
+import { memoryDeps } from './fakes.js';
 
 const scripted: CoachLlm = {
   async structured(_system, messages) {
@@ -36,11 +36,11 @@ const scripted: CoachLlm = {
 };
 
 const charts = new ChartService(buildFixtureChartSet());
+const engine = new HandEngine(charts, cryptoRng, runoutResolver);
 const app = buildApp({
   charts,
-  engine: new HandEngine(charts, cryptoRng, runoutResolver),
-  store: new HandStore(),
-  sessions: new SessionStore(),
+  engine,
+  ...memoryDeps(engine),
   teacher: new LlmTeacher(scripted, 'scripted', 1000),
 });
 await app.listen({ port: 3002, host: '127.0.0.1' });

@@ -1,19 +1,15 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { HandView, SubmitDecisionResponse } from '@gtotutor/shared-types';
 import { afterAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { ChartService } from '../src/charts/chartService.js';
 import { buildFixtureChartSet } from '../src/charts/fixtures.js';
-import { HandEngine, HandStore } from '../src/engine/handEngine.js';
-import { SessionStore } from '../src/engine/sessionStore.js';
+import { HandEngine } from '../src/engine/handEngine.js';
 import { runoutResolver } from '../src/engine/showdownResolver.js';
 import { CardMapper, cardStr, mapHand, nearestFlop, parseCards, shapeOf, handIndex } from '../src/postflop/flopMap.js';
-import { FlopStore, parseSolverAction, type FlopFile } from '../src/postflop/flopStore.js';
+import { FlopStore, parseSolverAction } from '../src/postflop/flopStore.js';
 import { seededRng } from '../src/poker/rng.js';
 import { LlmTeacher } from '../src/teacher/llmTeacher.js';
-import { fakeLlm } from './fakes.js';
+import { client, fakeLlm, fakeSolverOutput, memoryDeps } from './fakes.js';
 
 describe('flop shapes and nearest flop', () => {
   it('describes suit and pairing patterns independent of card order', () => {
@@ -56,31 +52,6 @@ describe('flop shapes and nearest flop', () => {
   });
 });
 
-/** A tiny solved spot: one rainbow flop where BB always checks and BTN checks or bets 1.8 half the time. */
-function fakeSolverOutput(): string {
-  const root = mkdtempSync(join(tmpdir(), 'gtotutor-flops-'));
-  const dir = join(root, 'btn_vs_bb_srp_100');
-  mkdirSync(dir);
-  const board = new Set(['Kh', '7d', '2c']);
-  const cards = [...'23456789TJQKA'].flatMap((r) => [...'cdhs'].map((s) => r + s)).filter((c) => !board.has(c));
-  const hands: string[] = [];
-  for (let i = 0; i < cards.length; i++) for (let j = i + 1; j < cards.length; j++) hands.push(cards[j] + cards[i]);
-  const n = hands.length;
-  const fill = (v: number) => new Array<number>(n).fill(v);
-  const file: FlopFile = {
-    spot: 'btn_vs_bb_srp_100',
-    flop: 'Kh7d2c',
-    hands: [hands, hands],
-    nodes: [
-      { history: [], player: 0, actions: ['check', 'bet 1.8'], strategy: [fill(1000), fill(0)] },
-      { history: [0], player: 1, actions: ['check', 'bet 1.8'], strategy: [fill(500), fill(500)] },
-      { history: [0, 1], player: 0, actions: ['fold', 'call', 'raise 7.2'], strategy: [fill(0), fill(1000), fill(0)] },
-      { history: [1], player: 1, actions: ['fold', 'call', 'raise 7.2'], strategy: [fill(0), fill(1000), fill(0)] },
-    ],
-  };
-  writeFileSync(join(dir, 'Kh7d2c.json'), JSON.stringify(file));
-  return root;
-}
 
 describe('flop play from solver output', () => {
   const charts = new ChartService(buildFixtureChartSet());
@@ -159,28 +130,29 @@ describe('flop play from solver output', () => {
 describe('flop play over HTTP', () => {
   process.env.LOG_LEVEL = 'silent';
   const charts = new ChartService(buildFixtureChartSet());
+  const httpEngine = new HandEngine(charts, seededRng(12), runoutResolver, new FlopStore(fakeSolverOutput()));
   const app = buildApp({
     charts,
-    engine: new HandEngine(charts, seededRng(12), runoutResolver, new FlopStore(fakeSolverOutput())),
-    store: new HandStore(),
-    sessions: new SessionStore(),
+    engine: httpEngine,
+    ...memoryDeps(httpEngine),
     teacher: new LlmTeacher(fakeLlm({ structured: () => ({ tldr: 'Correct: fine.', points: ['A.', 'B.'] }), text: 'Hint.' }), 'test', 50),
   });
   afterAll(() => app.close());
+  const call = client(app);
 
   it('accepts every flop action, including bet, and serves the flop strategy and coach', async () => {
     for (const action of ['bet', 'check'] as const) {
-      const start = await app.inject({ method: 'POST', url: '/api/hands', payload: { tableSize: 'SIX_MAX', stackDepthBb: 100, heroPosition: 'BTN', flopPractice: true } });
+      const start = await call({ method: 'POST', url: '/api/hands', payload: { tableSize: 'SIX_MAX', stackDepthBb: 100, heroPosition: 'BTN', flopPractice: true } });
       expect(start.statusCode).toBe(200);
       const hand = start.json<HandView>();
       expect(hand.legalActions.map((a) => a.id)).toContain(action);
-      const res = await app.inject({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action } });
+      const res = await call({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action } });
       expect(res.statusCode).toBe(200);
       const { feedback } = res.json<SubmitDecisionResponse>();
       expect(feedback.chosenAction).toBe(action);
-      const chart = await app.inject({ method: 'GET', url: `/api/charts/${encodeURIComponent(feedback.nodeKey)}` });
+      const chart = await call({ method: 'GET', url: `/api/charts/${encodeURIComponent(feedback.nodeKey)}` });
       expect(chart.statusCode).toBe(200);
-      const coach = await app.inject({ method: 'GET', url: `/api/hands/${hand.id}/decisions/${feedback.id}/explanation` });
+      const coach = await call({ method: 'GET', url: `/api/hands/${hand.id}/decisions/${feedback.id}/explanation` });
       expect(coach.json()).toMatchObject({ status: 'ok' });
     }
   });

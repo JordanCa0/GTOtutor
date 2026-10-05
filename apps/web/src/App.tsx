@@ -1,15 +1,18 @@
 import type { ActionType, ChatMessage, HandView, StartHandRequest } from '@gtotutor/shared-types';
 import { useMutation } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api/client';
 import { ActionLog } from './components/ActionLog';
 import { DecisionPanel } from './components/DecisionPanel';
 import { SessionReview } from './components/SessionReview';
+import { AccountMenu } from './components/AccountMenu';
 import { SettingsMenu } from './components/SettingsMenu';
 import { SetupScreen } from './components/SetupScreen';
 import { Table } from './components/Table';
 import { TitleScreen } from './components/TitleScreen';
 import { actingAt } from './playback';
+import { useAuth } from './auth/auth';
+import { hasSeenTitle, markTitleSeen } from './onboarding';
 import { getSessionId, newSessionId } from './session';
 import { useSettings } from './settings';
 import { playSound } from './sound/soundEngine';
@@ -30,9 +33,22 @@ export function App() {
   const [decisionsPlayed, setDecisionsPlayed] = useState(0);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [chats, setChats] = useState<Record<string, ChatMessage[]>>({});
-  const [showTitle, setShowTitle] = useState(true);
+  const [showTitle, setShowTitle] = useState(() => !hasSeenTitle());
   const [configOpen, setConfigOpen] = useState(false);
   const { animations } = useSettings();
+  const { ready: authReady, session } = useAuth();
+  const userId = session?.user.id ?? null;
+  const prevUser = useRef(userId);
+  // Signing out: the hand on screen belongs to the account, so start over as a fresh guest.
+  useEffect(() => {
+    if (prevUser.current && !userId) {
+      setHand(null);
+      setChats({});
+      setDecisionsPlayed(0);
+      setSessionId(newSessionId());
+    }
+    prevUser.current = userId;
+  }, [userId]);
 
   const start = useMutation({
     mutationFn: (req: StartHandRequest) => api.startHand({ ...req, sessionId }),
@@ -43,16 +59,39 @@ export function App() {
   });
 
   const deal = (req: StartHandRequest) => {
+    markTitleSeen();
     setSettings(req);
     start.mutate(req);
   };
 
   const closeReview = useCallback(() => setReviewOpen(false), []);
 
-  if (!hand && showTitle) return <TitleScreen onStart={() => setShowTitle(false)} />;
+  // Before the first hand there's no header, so the account control sits in the corner.
+  const corner = (
+    <div className="corner-account">
+      <AccountMenu />
+    </div>
+  );
+  // First visit only, and never once signed in. Wait for the stored session so signed-in users don't see it flash.
+  if (!hand && showTitle && !userId) {
+    if (!authReady) return null;
+    return (
+      <TitleScreen
+        onGuest={() => {
+          markTitleSeen();
+          setShowTitle(false);
+        }}
+      />
+    );
+  }
 
   if (!hand) {
-    return <SetupScreen initial={settings} starting={start.isPending} error={start.error?.message ?? null} onStart={deal} />;
+    return (
+      <>
+        {corner}
+        <SetupScreen initial={settings} starting={start.isPending} error={start.error?.message ?? null} onStart={deal} />
+      </>
+    );
   }
 
   return (
@@ -66,6 +105,7 @@ export function App() {
         </span>
         <span className="spacer" />
         <SettingsMenu />
+        <AccountMenu />
         <button className="ghost" onClick={() => setReviewOpen(true)}>
           Session review
         </button>

@@ -3,6 +3,7 @@ import type {
   ChartNodeView,
   ChatMessage,
   ChatResponse,
+  MeResponse,
   ExplanationResponse,
   HandView,
   HintResponse,
@@ -10,11 +11,19 @@ import type {
   StartHandRequest,
   SubmitDecisionResponse,
 } from '@gtotutor/shared-types';
+import { accessToken } from '../auth/auth';
+import { getGuestId } from '../auth/identity';
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const token = accessToken();
   const res = await fetch(url, {
     ...init,
-    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
+    headers: {
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      // Who's asking: the signed-in account, else this browser's guest id.
+      'X-Guest-Id': getGuestId(),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
@@ -35,4 +44,6 @@ export const api = {
     request<ChatResponse>(`/api/hands/${handId}/decisions/${decisionId}/chat`, post({ messages })),
   review: (sessionId: string) => request<SessionReviewResponse>(`/api/sessions/${sessionId}/review`),
   chart: (nodeKey: string) => request<ChartNodeView>(`/api/charts/${encodeURIComponent(nodeKey)}`),
+  me: () => request<MeResponse>('/api/me'),
+  deleteAccount: () => request<{ ok: true }>('/api/me', { method: 'DELETE' }),
 };

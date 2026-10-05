@@ -67,7 +67,14 @@ export interface HandState {
   /** Board cards dealt so far (the flop once postflop play starts). */
   board: string[];
   postflop: PostflopState | null;
+  /** Dealt in flop practice mode (straight to a BTN vs BB flop). */
+  flopPractice: boolean;
 }
+
+/** A hand as stored in the database: the flop's solved data is looked up again on restore. */
+export type StoredHandState = Omit<HandState, 'postflop'> & {
+  postflop: Pick<PostflopState, 'spot' | 'seats' | 'history' | 'base' | 'streetBets'> | null;
+};
 
 /** A heads-up flop played from solver output (`solver/output/<spot>`). */
 interface PostflopState {
@@ -255,6 +262,30 @@ export class HandEngine {
     return { data, node };
   }
 
+  /**
+   * Plain-data copy of a hand for storage. The loaded solver data isn't stored: only the spot and
+   * board are, and `restore` looks the solved flop up again.
+   */
+  serialize(state: HandState): StoredHandState {
+    const { postflop, ...rest } = state;
+    return structuredClone({
+      ...rest,
+      postflop: postflop && { spot: postflop.spot, seats: postflop.seats, history: postflop.history, base: postflop.base, streetBets: postflop.streetBets },
+    });
+  }
+
+  restore(stored: StoredHandState): HandState {
+    const { postflop, ...rest } = structuredClone(stored);
+    if (!postflop) return { ...rest, postflop: null };
+    const lookup = this.flops?.lookup(postflop.spot, rest.board);
+    if (!lookup) throw new HttpError(410, 'The solved flop data for this hand is no longer available.');
+    const cards = (pos: Position) => rest.players.find((p) => p.position === pos)!.cards;
+    return {
+      ...rest,
+      postflop: { ...postflop, lookup, hands: [this.flops!.handFor(lookup, 0, cards(postflop.seats[0])), this.flops!.handFor(lookup, 1, cards(postflop.seats[1]))] },
+    };
+  }
+
   markHintUsed(state: HandState): void {
     if (state.heroToAct) state.hintUsedPending = true;
   }
@@ -350,6 +381,7 @@ export class HandEngine {
       id: randomUUID(),
       sessionId: req.sessionId ?? null,
       easyFoldsSkipped: req.skipEasyFolds ?? true,
+      flopPractice: req.flopPractice ?? false,
       config: { tableSize: req.tableSize, stackDepthBb: req.stackDepthBb },
       heroPosition,
       players,
@@ -600,22 +632,5 @@ export class HandEngine {
       summary,
     };
     state.heroToAct = false;
-  }
-}
-
-export class HandStore {
-  private readonly hands = new Map<string, HandState>();
-  constructor(private readonly maxHands = 5000) {}
-
-  save(state: HandState): void {
-    this.hands.delete(state.id);
-    this.hands.set(state.id, state);
-    if (this.hands.size > this.maxHands) this.hands.delete(this.hands.keys().next().value!);
-  }
-
-  get(id: string): HandState {
-    const state = this.hands.get(id);
-    if (!state) throw new HttpError(404, 'Hand not found (it may have expired).');
-    return state;
   }
 }

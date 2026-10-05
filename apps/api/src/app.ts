@@ -7,31 +7,37 @@ import {
   type ExplanationResponse,
   type HandView,
   type HintResponse,
+  type MeResponse,
   type SessionReviewResponse,
   type StartHandRequest,
   type SubmitDecisionRequest,
   type SubmitDecisionResponse,
 } from '@gtotutor/shared-types';
 import Fastify, { type FastifyInstance } from 'fastify';
+import type { AccountAdmin } from './auth/accounts.js';
+import type { PlayerResolver } from './auth/player.js';
 import type { ChartService } from './charts/chartService.js';
-import { HttpError, isFlopNodeKey, type HandEngine, type HandState, type HandStore } from './engine/handEngine.js';
-import type { SessionStore } from './engine/sessionStore.js';
+import { playerKey } from './db/repo.js';
+import { HttpError, isFlopNodeKey, type HandEngine } from './engine/handEngine.js';
+import type { HandContext, HandService } from './engine/handService.js';
 import type { ExplainInput, LlmTeacher, SpotContext } from './teacher/llmTeacher.js';
 import { computeSessionStats } from './teacher/sessionStats.js';
 
 export interface AppDeps {
   charts: ChartService;
   engine: HandEngine;
-  store: HandStore;
-  sessions: SessionStore;
+  hands: HandService;
+  players: PlayerResolver;
   teacher: LlmTeacher;
+  /** Deletes Supabase accounts; without it, DELETE /api/me answers 501. */
+  accounts?: AccountAdmin;
 }
 
 const sessionIdSchema = { type: 'string', pattern: '^[A-Za-z0-9-]{8,64}$' } as const;
 
 const startHandSchema = {
   type: 'object',
-  required: ['tableSize', 'stackDepthBb', 'heroPosition'],
+  required: ['tableSize', 'stackDepthBb', 'heroPosition', 'sessionId'],
   additionalProperties: false,
   properties: {
     tableSize: { enum: ['HU', 'SIX_MAX', 'NINE_MAX'] },
@@ -69,7 +75,7 @@ const chatSchema = {
   },
 } as const;
 
-export function buildApp({ charts, engine, store, sessions, teacher }: AppDeps): FastifyInstance {
+export function buildApp({ charts, engine, hands, players, teacher, accounts }: AppDeps): FastifyInstance {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
 
   app.setErrorHandler((err, _req, reply) => {
@@ -80,76 +86,77 @@ export function buildApp({ charts, engine, store, sessions, teacher }: AppDeps):
     return reply.status(500).send({ error: 'Internal error' });
   });
 
-  const baseSpot = (state: HandState, spot: { nodeKey: string; nodeLabel: string; board: string[]; approxFlop: string | null }) => ({
+  const baseSpot = (ctx: HandContext, spot: { nodeKey: string; nodeLabel: string; board: string[]; approxFlop: string | null }) => ({
     nodeKey: spot.nodeKey,
     nodeLabel: spot.nodeLabel,
-    heroPosition: state.heroPosition,
-    stackDepthBb: state.config.stackDepthBb,
+    heroPosition: ctx.heroPosition,
+    stackDepthBb: ctx.stackDepthBb,
     rangeSummary: engine.rangeSummary(spot.nodeKey),
     board: spot.board,
     approxFlop: spot.approxFlop,
     dataSource: charts.dataSource,
   });
 
-  const decisionInput = (state: HandState, decisionId: string): ExplainInput => {
-    const k = state.decisions.findIndex((d) => d.id === decisionId);
+  const decisionInput = (ctx: HandContext, decisionId: string): ExplainInput => {
+    const k = ctx.decisions.findIndex((d) => d.id === decisionId);
     if (k < 0) throw new HttpError(404, 'Decision not found.');
-    const decision = state.decisions[k];
+    const decision = ctx.decisions[k];
     // The k-th hero entry in the log is this decision; everything before it is the context.
     let heroSeen = 0;
-    const cut = state.actionLog.findIndex((a) => a.isHero && heroSeen++ === k);
+    const cut = ctx.actionLog.findIndex((a) => a.isHero && heroSeen++ === k);
     return {
-      ...baseSpot(state, decision),
+      ...baseSpot(ctx, decision),
       decision,
       heroCards: decision.heroCards,
       handClass: decision.handClass,
       options: decision.options,
-      actionsBefore: state.actionLog.slice(0, cut),
-      priorDecisions: state.decisions.slice(0, k),
+      actionsBefore: ctx.actionLog.slice(0, cut),
+      priorDecisions: ctx.decisions.slice(0, k),
     };
   };
 
   app.get('/api/health', async () => ({ ok: true }));
 
   app.post<{ Body: StartHandRequest }>('/api/hands', { schema: { body: startHandSchema } }, async (req): Promise<HandView> => {
-    const state = engine.start(req.body);
-    store.save(state);
-    sessions.add(state);
+    const state = await hands.start(await players.player(req), req.body);
     return engine.view(state);
   });
 
-  app.get<{ Params: { id: string } }>('/api/hands/:id', async (req): Promise<HandView> => engine.view(store.get(req.params.id)));
+  app.get<{ Params: { id: string } }>('/api/hands/:id', async (req): Promise<HandView> => engine.view(await hands.get(await players.player(req), req.params.id)));
 
   app.post<{ Params: { id: string }; Body: SubmitDecisionRequest }>(
     '/api/hands/:id/decisions',
     { schema: { body: decisionSchema } },
     async (req): Promise<SubmitDecisionResponse> => {
-      const state = store.get(req.params.id);
-      const feedback = engine.decide(state, req.body.action);
+      const { state, feedback } = await hands.decide(await players.player(req), req.params.id, req.body.action);
       return { feedback, hand: engine.view(state) };
     },
   );
 
   app.get<{ Params: { id: string } }>('/api/hands/:id/hint', async (req): Promise<HintResponse> => {
-    const state = store.get(req.params.id);
+    const player = await players.player(req);
+    const state = await hands.get(player, req.params.id);
     const pending = engine.pendingDecision(state);
     if (!pending) throw new HttpError(409, 'There is no pending decision to hint at.');
     const spot: SpotContext = {
-      ...baseSpot(state, { ...pending, board: state.board }),
+      ...baseSpot({ heroPosition: state.heroPosition, stackDepthBb: state.config.stackDepthBb, board: state.board, actionLog: state.actionLog, decisions: state.decisions }, { ...pending, board: state.board }),
       heroCards: pending.heroCards,
       handClass: pending.handClass,
       options: pending.options,
       actionsBefore: state.actionLog,
       priorDecisions: state.decisions,
     };
-    const res = await teacher.hint(spot, req.ip);
-    if (res.status === 'ok') engine.markHintUsed(state);
+    const res = await teacher.hint(spot, playerKey(player));
+    if (res.status === 'ok') await hands.markHintUsed(player, req.params.id);
     return res;
   });
 
   app.get<{ Params: { id: string; decisionId: string } }>(
     '/api/hands/:id/decisions/:decisionId/explanation',
-    async (req): Promise<ExplanationResponse> => teacher.explain(decisionInput(store.get(req.params.id), req.params.decisionId), req.ip),
+    async (req): Promise<ExplanationResponse> => {
+      const player = await players.player(req);
+      return teacher.explain(decisionInput(await hands.context(player, req.params.id), req.params.decisionId), playerKey(player));
+    },
   );
 
   app.post<{ Params: { id: string; decisionId: string }; Body: ChatRequest }>(
@@ -161,7 +168,8 @@ export function buildApp({ charts, engine, store, sessions, teacher }: AppDeps):
       if (messages.some((m) => m.role === 'user' && m.content.length > CHAT_LIMITS.maxUserChars)) {
         throw new HttpError(400, `Questions are limited to ${CHAT_LIMITS.maxUserChars} characters.`);
       }
-      return teacher.chat(decisionInput(store.get(req.params.id), req.params.decisionId), messages, req.ip);
+      const player = await players.player(req);
+      return teacher.chat(decisionInput(await hands.context(player, req.params.id), req.params.decisionId), messages, playerKey(player));
     },
   );
 
@@ -169,15 +177,43 @@ export function buildApp({ charts, engine, store, sessions, teacher }: AppDeps):
     '/api/sessions/:sessionId/review',
     { schema: { params: { type: 'object', properties: { sessionId: sessionIdSchema } } } },
     async (req): Promise<SessionReviewResponse> => {
-      const hands = sessions.hands(req.params.sessionId);
-      const stats = computeSessionStats(hands, hands.some((h) => h.easyFoldsSkipped));
+      const player = await players.player(req);
+      const records = await hands.sessionHands(player, req.params.sessionId);
+      const stats = computeSessionStats(records, records.some((h) => h.config.easyFoldsSkipped));
       const coach =
         stats.decisions < MIN_DECISIONS_FOR_REVIEW
           ? ({ status: 'not_enough_data', needed: MIN_DECISIONS_FOR_REVIEW - stats.decisions } as const)
-          : await teacher.review(req.params.sessionId, stats, req.ip);
+          : await teacher.review(req.params.sessionId, stats, playerKey(player));
       return { stats, coach };
     },
   );
+
+  /** The signed-in account (or null for guests). */
+  app.get('/api/me', async (req): Promise<MeResponse> => {
+    const user = await players.user(req);
+    return { user: user && { id: user.userId, email: user.email, name: user.name } };
+  });
+
+  /** After sign-in: move this browser's guest data into the account. */
+  app.post<{ Body: { guestId: string } }>(
+    '/api/me/claim-guest',
+    { schema: { body: { type: 'object', required: ['guestId'], additionalProperties: false, properties: { guestId: { type: 'string', format: 'uuid' } } } } },
+    async (req) => {
+      const user = await players.user(req);
+      if (!user) throw new HttpError(401, 'Sign in first.');
+      await hands.claimGuest(req.body.guestId.toLowerCase(), user.userId);
+      return { ok: true };
+    },
+  );
+
+  /** Deletes the account and, through the database's cascades, all of its data. */
+  app.delete('/api/me', async (req) => {
+    const user = await players.user(req);
+    if (!user) throw new HttpError(401, 'Sign in first.');
+    if (!accounts) throw new HttpError(501, 'Account deletion is not configured on this server.');
+    await accounts.deleteUser(user.userId);
+    return { ok: true };
+  });
 
   app.get<{ Params: { nodeKey: string } }>('/api/charts/:nodeKey', async (req): Promise<ChartNodeView> => {
     if (isFlopNodeKey(req.params.nodeKey)) {

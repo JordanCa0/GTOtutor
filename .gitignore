@@ -5,3 +5,5 @@ dist
 *.log
 solver/target
 solver/output
+.env.local
+.env.*.local
