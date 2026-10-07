@@ -7,3 +7,14 @@ solver/target
 solver/output
 .env.local
 .env.*.local
+preflop/target
+preflop/cache
+*.log.err
+# Intermediate preflop calibration rounds: only the frozen version (preflop/charts/FROZEN) is kept.
+preflop/charts/preflop-v[1-7].json
+preflop/compare-*.txt
+solver/spots/preflop-v[2-7]/
+# Realization files from before the rank-based model; the current solver rejects them.
+preflop/realization/avg-*.json
+preflop/realization/from-*.json
+preflop/realization/r0-*.json

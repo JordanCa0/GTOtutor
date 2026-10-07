@@ -1,0 +1,21 @@
+{
+  "name": "utg_vs_bb_4bp_100",
+  "description": "UTG opens, BB 3-bets 10, UTG 4-bets 22, BB calls; 100bb. Ranges from charts preflop-v8.",
+  "chips_per_bb": 20,
+  "pot_bb": 44.5,
+  "stack_bb": 78,
+  "oop_range": "99:0.468,54s:0.003,65s:0.943,76s:0.079,86s:0.116,87s:0.612,98s:0.973,A5s:0.018,AKo,AKs:0.993,AQs:0.244,JJ,JTs:0.051,KJs:0.001,KK:0.693,KQs:0.477,KTs:0.002,QJs:0.932,QQ,T8s:0.006,T9s:0.131,TT:0.967",
+  "ip_range": "44:0.045,55:0.004,77:0.029,88:0.112,99:0.109,65s:0.774,87s:0.010,98s:0.091,A5s:0.157,AA,AJs:0.055,AKo:0.183,AQs:0.400,ATs:0.005,JJ:0.002,JTs:0.019,KJs:0.009,KK,KQs:0.959,KTs:0.002,QJs:0.757,QQ:0.711,T9s:0.009,TT:0.005",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

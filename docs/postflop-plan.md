@@ -39,6 +39,24 @@ Desktop, one flop (Kh7d2c) unless noted:
 - **Dropping turn/river raises** (20 flops, `apps/api/scripts/compareSolves.ts`): flop strategy gives up 0.015 bb/hand against the full tree's EVs, versus 0.010 for the full tree's own strategy. That's about 0.005 bb/hand extra, for 3x less time.
 - **Nearest solved flop** (`apps/api/scripts/nearestFlopTest.ts`, BTN vs BB, tested on 400 unseen flops): a hand's first-decision strategy differs from the real solve by 4.5% with 184 solved flops (5.7% with 100, 6.8% with 50; a random flop of the same shape: 8.7%). Unweighted, because those files have no reach weights.
 - **4-bet pots** are small enough to solve live in the browser. 3-bet pots take ~1 minute on one thread, so precompute them (6s per flop).
+- **Solver noise floor** (2026-10-05, 20 flops):
+  - 1% solves vs 0.25% solves of the same flops lose ~0.003 bb/hand extra, about 0.05% of pot.
+  - Yet their root frequencies already differ by 3.5%. So most of the "4.5% strategy difference" above is solver noise, not mapping.
+- **Mapping EV loss** (`flopEvLoss.ts`, BTN vs BB on placeholder ranges, 300 held-out flops; the solve's own baseline is 0.27%):
+
+  | Solved flops | Nearest flop |
+  |---|---|
+  | 100 | 2.26% of pot |
+  | 184 | 1.97% |
+  | 400 | 1.50% |
+  | 700 | 1.30% |
+
+  - Blending the 3 nearest flops is worse than using one (2.15% vs 1.73% at 184, 150 test flops).
+  - Mapping alone can't reach a 1% budget, so the most-played spots need every flop solved.
+- **Realization** (`calibrateRealization.ts`, 40–60 flops per spot on charts preflop-v2):
+  - Single-raised pots: the BB caller realizes 0.74–0.75 out of position vs BTN/CO; the in-position raiser 1.18–1.19.
+  - SB as out-of-position raiser vs BB: 0.98.
+  - Realization depends on preflop role as well as position, so calibration keys on both.
 
 ## Data on disk
 
@@ -55,7 +73,17 @@ Planned: move this output to a private Supabase Storage bucket (gzipped, indexed
 5. [~] Engine: real flop betting from the solver for spots with solved flops; turn and river still run out automatically.
 6. [~] UI: board, flop decisions, verdict with EVs and the borrowed flop, flop strategy grid per hand class. The coach gets the board and an approximation note.
 7. [ ] Browser turn/river solving (WASM worker) with a fallback; 4-bet pot flops solved live too.
-8. [ ] When the real preflop charts land: re-export spots, solve 184 frequency-matched flops per single-raised and 3-bet spot (about 8 single-raised spots after merging near-duplicates), and all flops for the most-played spots.
+8. [~] Real preflop charts: the `preflop/` solver (see `preflop/README.md`), calibrated against flop solves.
+   - **Frozen: preflop-v8** (`preflop/charts/FROZEN`), on the rank-based realization model. v7→v8 changed 3.1% of decisions, weighted by how often they come up.
+   - Open doubts that need a reference solution:
+     - BB 3-bets small suited connectors and 44–99 against a BTN open.
+     - Early-position opens look 3–5 points wide.
+   - The engine now keeps pots heads-up (no calling after a call; `|nocall` chart nodes), so every flop has a spot.
+   - **Flop re-solve on v8:** `solver/queue-preflop-v8.txt`, resumable, progress on port 7878.
+     1. 150 flops each for SB/BTN/CO/HJ/UTG vs BB single-raised (43.6% of flops).
+     2. 100 flops for every other spot that's at least 1% of flops.
+     3. Every flop for the top five.
+   - Earlier versions' output (`solver/output/preflop-v2…v7`) is calibration data only.
 
 ## Cost estimates (projections, not measured)
 

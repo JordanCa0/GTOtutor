@@ -71,6 +71,8 @@ struct Args {
     compress: bool,
     threads: usize,
     only: Option<String>,
+    /// File listing the flops to solve (one per line or comma-separated), in that order.
+    flop_list: Option<PathBuf>,
     memory_only: bool,
     status_port: Option<u16>,
 }
@@ -85,6 +87,7 @@ fn parse_args() -> Args {
         compress: false,
         threads: 0,
         only: None,
+        flop_list: None,
         memory_only: false,
         status_port: None,
     };
@@ -100,6 +103,7 @@ fn parse_args() -> Args {
             "--max-iterations" => a.max_iterations = val().parse().unwrap_or_else(|_| die("--max-iterations must be a number")),
             "--threads" => a.threads = val().parse().unwrap_or_else(|_| die("--threads must be a number")),
             "--flop" => a.only = Some(val()),
+            "--flops" => a.flop_list = Some(val().into()),
             "--memory" => {
                 a.memory_only = true;
                 i += 1;
@@ -331,6 +335,20 @@ fn main() {
     if let Some(only) = &args.only {
         let target = flop_from_str(only).unwrap_or_else(|e| die(&e));
         flops = vec![(target.iter().map(|&c| card_str(c)).collect(), 0)];
+    }
+    if let Some(list) = &args.flop_list {
+        let text = std::fs::read_to_string(list).unwrap_or_else(|e| die(&format!("cannot read {}: {e}", list.display())));
+        let weights: std::collections::HashMap<String, u32> = flops.iter().cloned().collect();
+        flops = text
+            .split(|c: char| c == ',' || c.is_whitespace())
+            .filter(|f| !f.is_empty())
+            .map(|f| {
+                let w = *weights
+                    .get(f)
+                    .unwrap_or_else(|| die(&format!("{f} is not a canonical flop name (use the names the solver writes, e.g. Ks7h2d)")));
+                (f.to_string(), w)
+            })
+            .collect();
     }
     flops.truncate(args.limit);
 

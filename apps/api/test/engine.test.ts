@@ -128,6 +128,28 @@ describe('hand engine', () => {
     throw new Error('never dealt an SB limp to a BB hero');
   });
 
+  it('keeps every pot heads-up: nobody may call once someone has already called', () => {
+    const engine = newEngine(11);
+    const rng = seededRng(12);
+    let blocked = 0;
+    for (let i = 0; i < 3000; i++) {
+      const state = engine.start(req);
+      let view = engine.view(state);
+      while (view.status === 'awaiting_hero') {
+        if (view.pendingSpot?.nodeKey.endsWith('|nocall')) {
+          blocked++;
+          expect(view.legalActions.map((a) => a.id)).not.toContain('call');
+        }
+        engine.decide(state, view.legalActions[rng.int(view.legalActions.length)].id as ActionType);
+        view = engine.view(state);
+      }
+      const preflop = view.actionLog.filter((a) => a.street === 'preflop');
+      const folded = new Set(preflop.filter((a) => a.action === 'fold').map((a) => a.position));
+      expect(view.seats.filter((s) => !folded.has(s.position)).length).toBeLessThanOrEqual(2);
+    }
+    expect(blocked).toBeGreaterThan(0);
+  });
+
   it('rejects illegal and out-of-turn actions', () => {
     const engine = newEngine(8);
     const state = engine.start({ ...req, heroPosition: 'UTG' });

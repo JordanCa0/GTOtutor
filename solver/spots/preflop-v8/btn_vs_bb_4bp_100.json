@@ -1,0 +1,21 @@
+{
+  "name": "btn_vs_bb_4bp_100",
+  "description": "BTN opens, BB 3-bets 10, BTN 4-bets 22, BB calls; 100bb. Ranges from charts preflop-v8.",
+  "chips_per_bb": 20,
+  "pot_bb": 44.5,
+  "stack_bb": 78,
+  "oop_range": "44:0.650,55:0.354,77:0.988,88:0.714,99:0.712,65s:0.984,87s:0.358,98s:0.993,A5s:0.882,AJs:0.033,AKo:0.711,AQo:0.992,AQs,ATs:0.788,JJ,JTs:0.185,KQs,QJs,QQ:0.820,T9s:0.005,TT",
+  "ip_range": "44:0.097,55:0.013,53s:0.031,54s:0.778,65s:0.554,76s:0.118,84s:0.003,85s:0.002,86s:0.008,98s:0.569,AA,AJo:0.354,AKs:0.993,AQo:0.051,J9s:0.557,JJ:0.976,JTs:0.440,K6s:0.002,K8s:0.489,K9s:0.171,KJo:0.003,KK,KQo:0.179,KQs:0.002,KTs:0.006,QJo:0.012,QJs:0.297,QQ,T8s:0.055,T9s:0.545",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

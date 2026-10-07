@@ -17,7 +17,7 @@ import {
 } from '@gtotutor/shared-types';
 import type { ChartService } from '../charts/chartService.js';
 import type { ChartNode } from '../charts/types.js';
-import { FACING_TYPES, makeNodeKey } from '../charts/nodeKeys.js';
+import { FACING_TYPES, makeNodeKey, NOCALL_SUFFIX } from '../charts/nodeKeys.js';
 import { fullDeck, handClass, shuffle } from '../poker/cards.js';
 import { flopClassStrategy, flopRangeSummary, historyKey, parseSolverAction, type FlopLookup, type FlopNode, type FlopStore, type LoadedFlop } from '../postflop/flopStore.js';
 import type { Rng } from '../poker/rng.js';
@@ -404,8 +404,19 @@ export class HandEngine {
     };
   }
 
-  /** Normalizes the live action history into a chart lookup key (2-player subgame abstraction). */
+  /**
+   * Chart lookup key for `player`'s decision. Pots stay heads-up: once someone has called a bet,
+   * players behind may only fold or raise (the preflop solver plays the same rule), so those
+   * decisions use the chart's "|nocall" variant of the node.
+   */
   private nodeKeyFor(state: HandState, player: Player): string {
+    const key = this.baseNodeKeyFor(state, player);
+    const matched = state.players.filter((p) => p !== player && !p.folded && p.committed >= state.currentBet).length;
+    return matched >= 2 ? `${key}${NOCALL_SUFFIX}` : key;
+  }
+
+  /** Normalizes the live action history into a chart lookup key (2-player subgame abstraction). */
+  private baseNodeKeyFor(state: HandState, player: Player): string {
     const { tableSize, stackDepthBb } = state.config;
     const pos = player.position;
     if (state.raiseLevel === 0) {

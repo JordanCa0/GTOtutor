@@ -48,7 +48,19 @@ Run all of these from `solver/`.
   The solver prints a link like `http://192.168.x.x:7878`. Open it on any device on the same Wi-Fi; the page refreshes every 5 seconds. The first time, Windows asks whether to allow network access: allow it on **private networks** only. `/status.json` returns the same data as JSON.
 - **File:** `output/<spot>/_progress.json` is updated about every 15 seconds, even without the status page.
 
-Options are listed in `USAGE.txt` (`--accuracy`, `--threads`, `--compress`, …).
+Options are listed in `USAGE.txt` (`--accuracy`, `--threads`, `--compress`, `--flops <file>`, …).
+
+## Long unattended runs
+
+`run-queue.ps1` runs a list of solver jobs in order, one set of solver arguments per line, until a deadline. It keeps Windows awake while it runs, and nothing needs undoing afterwards. At the deadline it stops the current solve; the next run resumes from the finished flops.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File run-queue.ps1 -Queue queue.txt -Until 09:00 -Log queue.log
+```
+
+- `keep-awake.ps1` only keeps the PC awake until a given time.
+- `overnight.sh` is the 2026-10-05 pipeline: preflop calibration rounds, freezing the chart version, then flop solves.
+- `apps/api/scripts/pickFlops.ts` writes a coverage-picked flop list for `--flops`.
 
 ## Changing the spot
 

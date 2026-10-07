@@ -1,0 +1,3 @@
+# Calibration round 1, extra roles: OOP caller / IP raiser in 3-bet pots, OOP raiser / IP caller in 4-bet pots.
+--spot spots/preflop-v2/sb_vs_bb_4bp_100.json --out output/preflop-v2 --limit 60
+--spot spots/preflop-v2/co_vs_btn_3bp_100.json --out output/preflop-v2 --limit 60

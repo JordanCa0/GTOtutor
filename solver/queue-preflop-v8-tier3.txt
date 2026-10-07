@@ -1,0 +1,6 @@
+# Tier 3 of queue-preflop-v8.txt: every flop for the five most-played spots.
+--spot spots/preflop-v8/sb_vs_bb_srp_100.json --out output/preflop-v8 --status-port 7878
+--spot spots/preflop-v8/btn_vs_bb_srp_100.json --out output/preflop-v8 --status-port 7878
+--spot spots/preflop-v8/co_vs_bb_srp_100.json --out output/preflop-v8 --status-port 7878
+--spot spots/preflop-v8/hj_vs_bb_srp_100.json --out output/preflop-v8 --status-port 7878
+--spot spots/preflop-v8/utg_vs_bb_srp_100.json --out output/preflop-v8 --status-port 7878

@@ -1,0 +1,8 @@
+# Flop solves on frozen charts preflop-v4.
+--spot spots/preflop-v4/btn_vs_bb_srp_100.json --out output/preflop-v4 --flops flops-150.txt
+--spot spots/preflop-v4/co_vs_bb_srp_100.json --out output/preflop-v4 --flops flops-150.txt
+--spot spots/preflop-v4/sb_vs_bb_limp_100.json --out output/preflop-v4 --flops flops-150.txt
+--spot spots/preflop-v4/hj_vs_bb_srp_100.json --out output/preflop-v4 --flops flops-150.txt
+--spot spots/preflop-v4/utg_vs_bb_srp_100.json --out output/preflop-v4 --flops flops-150.txt
+--spot spots/preflop-v4/btn_vs_bb_srp_100.json --out output/preflop-v4
+--spot spots/preflop-v4/co_vs_bb_srp_100.json --out output/preflop-v4

@@ -41,6 +41,18 @@ describe('fixture charts', () => {
     expect(defend('BTN')).toBeGreaterThan(defend('UTG'));
   });
 
+  it('derives a no-overcall node: same node without the call, calls folded', () => {
+    const base = node('SIX_MAX|100|VS_OPEN|BB|BTN');
+    const nocall = node('SIX_MAX|100|VS_OPEN|BB|BTN|nocall');
+    expect(nocall.actions.map((a) => a.id)).toEqual(['fold', 'raise']);
+    for (const hc of ['AA', 'T9s', '72o']) {
+      const [f, c, r] = base.strategy.get(hc)!;
+      expect(nocall.strategy.get(hc)![0]).toBeCloseTo(f + c, 10);
+      expect(nocall.strategy.get(hc)![1]).toBeCloseTo(r, 10);
+    }
+    expect(charts.hasNode('SIX_MAX|100|VS_OPEN|BB|NOPE|nocall')).toBe(false);
+  });
+
   it('mixes some wheel-ace 3-bet bluffs', () => {
     const f = freq('SIX_MAX|100|VS_OPEN|BTN|CO', 'A5s', 'raise');
     expect(f).toBeGreaterThan(0.2);

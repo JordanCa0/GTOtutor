@@ -1,0 +1,8 @@
+# Phase 2 calibration round 1: a random sample of flops per pot type, solved on charts preflop-v2.
+--spot spots/preflop-v2/btn_vs_bb_4bp_100.json --out output/preflop-v2 --limit 60
+--spot spots/preflop-v2/btn_vs_bb_3bp_100.json --out output/preflop-v2 --limit 60
+--spot spots/preflop-v2/sb_vs_bb_srp_100.json --out output/preflop-v2 --limit 60
+--spot spots/preflop-v2/co_vs_bb_srp_100.json --out output/preflop-v2 --limit 60
+--spot spots/preflop-v2/btn_vs_bb_srp_100.json --out output/preflop-v2 --limit 60
+--spot spots/preflop-v2/sb_vs_bb_iso_100.json --out output/preflop-v2 --limit 40
+--spot spots/preflop-v2/sb_vs_bb_limp_100.json --out output/preflop-v2 --limit 40

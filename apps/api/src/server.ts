@@ -4,7 +4,7 @@ import { supabaseAccountAdmin } from './auth/accounts.js';
 import { PlayerResolver } from './auth/player.js';
 import { supabaseVerifier } from './auth/verify.js';
 import { ChartService } from './charts/chartService.js';
-import { buildFixtureChartSet } from './charts/fixtures.js';
+import { chartsFromEnv } from './charts/solvedCharts.js';
 import { createDb, PgRepo } from './db/pgRepo.js';
 import { MemoryRepo, type Repo } from './db/repo.js';
 import { HandEngine } from './engine/handEngine.js';
@@ -20,7 +20,8 @@ try {
   // No .env file — fine; the coach reports itself unavailable without credentials.
 }
 
-const charts = new ChartService(buildFixtureChartSet());
+// Preflop charts: solver output when PREFLOP_CHARTS names a file (preflop/charts/*.json), else the placeholders.
+const charts = new ChartService(chartsFromEnv());
 // Solved flops, one folder per spot (see solver/README.md). Spots without a folder run out after preflop.
 const flops = new FlopStore(process.env.SOLVER_OUTPUT_DIR || fileURLToPath(new URL('../../../solver/output', import.meta.url)));
 const engine = new HandEngine(charts, cryptoRng, runoutResolver, flops);

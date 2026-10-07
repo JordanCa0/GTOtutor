@@ -1,0 +1,21 @@
+{
+  "name": "hj_vs_sb_3bp_100",
+  "description": "HJ opens 2.5, SB 3-bets 10, HJ calls; 100bb. Ranges from charts preflop-v8.",
+  "chips_per_bb": 20,
+  "pot_bb": 21,
+  "stack_bb": 90,
+  "oop_range": "44:0.993,55:0.899,66:0.868,77:0.945,88:0.927,99,65s:0.691,87s:0.938,98s,A3s:0.046,A5s,A8s:0.019,AA,AJs:0.920,AKo,AKs,AQo:0.851,AQs,ATs,JJ,JTs,K9s:0.007,KJs:0.997,KK,KQo:0.137,KQs,KTs:0.998,Q9s:0.048,QJs,QQ,QTs:0.879,T8s:0.036,T9s:0.998,TT",
+  "ip_range": "44:0.853,55:0.987,66:0.994,77:0.436,88:0.998,99,65s:0.945,76s:0.612,86s:0.451,87s,98s:0.501,A3s:0.988,A4s:0.299,A5s:0.865,A8s:0.108,A9s:0.055,AJs,AKo,AKs:0.485,AQo,AQs:0.990,ATs:0.996,J8s:0.484,J9s,JJ,JTs:0.814,K6s:0.014,K8s:0.976,K9s:0.810,KJs:0.185,KQo:0.928,KQs:0.012,KTs:0.992,Q8s:0.972,Q9s,QJo:0.770,QJs:0.007,QQ:0.009,QTs,T8s:0.966,T9s,TT",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

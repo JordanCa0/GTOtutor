@@ -2,6 +2,8 @@
 
 A browser poker trainer: play preflop spots, get a verdict against range charts, and learn from a Claude-powered coach. Flop decisions are played and graded from offline solver output for spots that have it; turn and river still run out automatically. See `docs/postflop-plan.md`.
 
+Ideas planned for later (opponent archetypes, heads-up exploit mode, player style chart) are in `docs/future-ideas.md`.
+
 Accounts and a database run on Supabase: sign-in (Google, email + password), guest play that carries over on sign-up, and every hand and decision saved in Postgres. Saved coach chats, stars/tags, "My hands", and solver data in Storage are next. See `docs/accounts-and-data.md` and `docs/database-schema.md`.
 
 ## Layout
@@ -16,13 +18,26 @@ Accounts and a database run on Supabase: sign-in (Google, email + password), gue
 - `solver/`: Rust batch flop solver.
   - Offline only, because of the AGPL license.
   - See `solver/README.md`.
+- `preflop/`: Rust preflop solver (our own code, not AGPL).
+  - Writes `preflop/charts/<version>.json`. The API loads it with `PREFLOP_CHARTS=<file>`, otherwise it uses the placeholders.
+  - See `preflop/README.md`.
 
 ## Commands (repo root)
 
 - `npm run dev` starts both servers: web on :5173, API on :3001.
 - `npm test`, `npm run typecheck`, `npm run build`.
-- `npx tsx apps/api/scripts/exportSolverSpots.ts` regenerates `solver/spots/*.json` from the charts.
-- `npx tsx apps/api/scripts/nearestFlopTest.ts` and `compareSolves.ts` measure flop-mapping and tree accuracy.
+- `npx tsx apps/api/scripts/exportSolverSpots.ts` regenerates `solver/spots/*.json` from the placeholder charts.
+  - Add `--charts preflop/charts/<version>.json` to write `solver/spots/<version>/` instead.
+  - Solve those into `solver/output/<version>/` so solves from different charts never mix.
+- Flop accuracy scripts:
+  - `flopEvLoss.ts`: mapping EV loss, % of pot.
+  - `compareSolves.ts`: tree and solve-accuracy loss.
+  - `nearestFlopTest.ts`: strategy difference.
+- Preflop scripts:
+  - `calibrateRealization.ts`: realization factors from flop solves.
+  - `compareCharts.ts`: diff two chart versions.
+  - `spotFrequency.ts`: how often each flop spot comes up.
+  - `pickFlops.ts`: coverage-picked flop lists for `--flops`.
 - Database: change `apps/api/src/db/schema.ts`, then `npm run db:generate -w apps/api`, review the SQL in `apps/api/drizzle/`, then `npm run db:migrate -w apps/api`. Update `docs/database-schema.md` to match.
 - `RUN_DB_TESTS=1 npx vitest run test/persistence.test.ts` (in `apps/api`) runs the storage tests against Supabase too.
 
@@ -33,4 +48,6 @@ Accounts and a database run on Supabase: sign-in (Google, email + password), gue
 - Only the API reads or writes the database (RLS is on with no policies). Every route that touches player data must check the data belongs to the requesting player.
 - Guest data lasts one session; signed-in data is kept until the account is deleted.
 - Commit and push only when asked.
-- Charts are placeholders (`fixture-v2`) until the preflop solver lands. Preflop UI copy says "chart", not "solver". Flop strategies are real solver output (computed from the placeholder ranges), so flop copy may say "solver".
+- The app's default charts are still placeholders (`fixture-v2`). Solved charts (`preflop/charts/`) are opt-in through `PREFLOP_CHARTS` until they're reviewed.
+  - Preflop UI copy says "chart", not "solver".
+  - Flop strategies are real solver output (computed from the placeholder ranges, or the solved ones under `solver/output/<version>/`), so flop copy may say "solver".

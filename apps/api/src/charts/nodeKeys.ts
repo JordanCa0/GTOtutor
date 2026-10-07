@@ -27,3 +27,9 @@ export function makeNodeKey(
 ): string {
   return [tableSize, stackBb, type, pos, vs].filter((p) => p !== undefined).join('|');
 }
+
+/**
+ * Suffix for a node's variant where calling isn't allowed because someone has already called
+ * (pots stay heads-up). Fold and raise only.
+ */
+export const NOCALL_SUFFIX = '|nocall';

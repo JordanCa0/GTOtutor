@@ -6,6 +6,7 @@ gtotutor-solver: batch flop solver (run from the solver/ folder)
   --out <dir>            output folder (default output/)
   --limit <n>            solve only the first n flops of the fixed sample order
   --flop <cards>         solve one flop only, e.g. Kh7d2c
+  --flops <file>         solve only the canonical flops listed in <file> (names as the solver writes them), in that order
   --accuracy <pct>       stop at this exploitability, % of pot (default 1.0)
   --max-iterations <n>   iteration cap per flop (default 1000)
   --threads <n>          CPU threads (default: all)

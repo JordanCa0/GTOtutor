@@ -1,0 +1,21 @@
+{
+  "name": "hj_vs_btn_srp_100",
+  "description": "HJ opens 2.5, BTN calls; 100bb. Ranges from charts preflop-v8.",
+  "chips_per_bb": 20,
+  "pot_bb": 6.5,
+  "stack_bb": 97.5,
+  "oop_range": "22:0.998,44,55,66,77,88,99,32s:0.934,53s,54s,64s:0.009,65s,75s,76s,84s,85s:0.650,86s,87s,95s:0.002,97s,98s,A2s,A3s,A4s,A5o,A5s,A6s,A7s,A8o:0.647,A8s,A9s,AA,AJo,AJs,AKo,AKs,AQo,AQs,ATo,ATs,J8s,J9s,JJ,JTs,K3s:0.013,K4s,K5s,K6s,K7s,K8s,K9s,KJo:0.990,KJs,KK,KQo,KQs,KTo:0.616,KTs,Q4s,Q5s,Q7s,Q8s,Q9s,QJo,QJs,QQ,QTs,T7s,T8s,T9s,TT",
+  "ip_range": "44:0.970,55,66,77,88:0.998,99:0.023,65s:0.015,76s:0.004,86s:0.608,87s:0.922,98s:0.961,A2s:0.984,A3s:0.964,A4s:0.979,A5o:0.889,A5s:0.992,A6s:0.998,A7s,A8s,A9s,AA:0.299,AJo,AJs,AKo:0.978,AKs:0.879,AQo,AQs:0.974,ATo,ATs:0.979,J9s:0.992,JJ,JTs:0.927,K6s:0.007,K7s:0.110,K8s:0.962,K9s:0.973,KJs:0.998,KK,KQo,KQs:0.957,KTs:0.997,Q8s:0.952,Q9s,QJo:0.946,QJs:0.441,QQ,QTs:0.964,T8s:0.993,T9s:0.993,TT:0.918",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

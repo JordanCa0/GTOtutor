@@ -1,0 +1,30 @@
+# Flop solves on frozen charts preflop-v8 (2026-10-05).
+# 1) 150 coverage-picked flops for the five most-played spots (43.6% of flops).
+--spot spots/preflop-v8/sb_vs_bb_srp_100.json --out output/preflop-v8 --flops flops-150.txt --status-port 7878
+--spot spots/preflop-v8/btn_vs_bb_srp_100.json --out output/preflop-v8 --flops flops-150.txt --status-port 7878
+--spot spots/preflop-v8/co_vs_bb_srp_100.json --out output/preflop-v8 --flops flops-150.txt --status-port 7878
+--spot spots/preflop-v8/hj_vs_bb_srp_100.json --out output/preflop-v8 --flops flops-150.txt --status-port 7878
+--spot spots/preflop-v8/utg_vs_bb_srp_100.json --out output/preflop-v8 --flops flops-150.txt --status-port 7878
+# 2) 100 flops for every other spot that's at least 1% of flops.
+--spot spots/preflop-v8/hj_vs_btn_srp_100.json --out output/preflop-v8 --flops flops-100.txt --status-port 7878
+--spot spots/preflop-v8/utg_vs_btn_srp_100.json --out output/preflop-v8 --flops flops-100.txt --status-port 7878
+--spot spots/preflop-v8/sb_vs_bb_limp_100.json --out output/preflop-v8 --flops flops-100.txt --status-port 7878
+--spot spots/preflop-v8/co_vs_btn_srp_100.json --out output/preflop-v8 --flops flops-100.txt --status-port 7878
+--spot spots/preflop-v8/utg_vs_co_srp_100.json --out output/preflop-v8 --flops flops-100.txt --status-port 7878
+--spot spots/preflop-v8/hj_vs_co_srp_100.json --out output/preflop-v8 --flops flops-100.txt --status-port 7878
+--spot spots/preflop-v8/utg_vs_hj_srp_100.json --out output/preflop-v8 --flops flops-100.txt --status-port 7878
+--spot spots/preflop-v8/btn_vs_sb_3bp_100.json --out output/preflop-v8 --flops flops-100.txt --status-port 7878
+--spot spots/preflop-v8/co_vs_sb_3bp_100.json --out output/preflop-v8 --flops flops-100.txt --status-port 7878
+--spot spots/preflop-v8/hj_vs_sb_3bp_100.json --out output/preflop-v8 --flops flops-100.txt --status-port 7878
+--spot spots/preflop-v8/utg_vs_sb_3bp_100.json --out output/preflop-v8 --flops flops-100.txt --status-port 7878
+--spot spots/preflop-v8/hj_vs_bb_3bp_100.json --out output/preflop-v8 --flops flops-100.txt --status-port 7878
+--spot spots/preflop-v8/btn_vs_bb_3bp_100.json --out output/preflop-v8 --flops flops-100.txt --status-port 7878
+--spot spots/preflop-v8/co_vs_bb_3bp_100.json --out output/preflop-v8 --flops flops-100.txt --status-port 7878
+--spot spots/preflop-v8/co_vs_btn_3bp_100.json --out output/preflop-v8 --flops flops-100.txt --status-port 7878
+--spot spots/preflop-v8/hj_vs_co_3bp_100.json --out output/preflop-v8 --flops flops-100.txt --status-port 7878
+# 3) Every flop for the five most-played spots.
+--spot spots/preflop-v8/sb_vs_bb_srp_100.json --out output/preflop-v8 --status-port 7878
+--spot spots/preflop-v8/btn_vs_bb_srp_100.json --out output/preflop-v8 --status-port 7878
+--spot spots/preflop-v8/co_vs_bb_srp_100.json --out output/preflop-v8 --status-port 7878
+--spot spots/preflop-v8/hj_vs_bb_srp_100.json --out output/preflop-v8 --status-port 7878
+--spot spots/preflop-v8/utg_vs_bb_srp_100.json --out output/preflop-v8 --status-port 7878

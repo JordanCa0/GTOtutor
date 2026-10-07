@@ -1,0 +1,21 @@
+{
+  "name": "co_vs_sb_3bp_100",
+  "description": "CO opens 2.5, SB 3-bets 10, CO calls; 100bb. Ranges from charts preflop-v8.",
+  "chips_per_bb": 20,
+  "pot_bb": 21,
+  "stack_bb": 90,
+  "oop_range": "44,55,66:0.997,77:0.830,88:0.700,99,65s,87s,98s,A3s:0.662,A4s:0.656,A5s,A8s:0.543,AA,AJo:0.837,AJs:0.998,AKo,AKs,AQo,AQs,ATs,J9s:0.089,JJ,JTs,K9s:0.068,KJs,KK,KQo:0.508,KQs,KTs,Q9s:0.006,QJs,QQ,QTs:0.802,T8s:0.440,T9s,TT",
+  "ip_range": "44:0.941,55:0.095,66,77,88,99,54s:0.203,65s:0.984,76s,86s,87s,97s:0.994,98s:0.860,A2s:0.279,A3s,A4s:0.923,A5s:0.887,A8s,A9s,AJo:0.007,AJs,AKo,AKs:0.017,AQo,AQs,ATo:0.810,ATs:0.998,J8s,J9s:0.990,JJ:0.032,JTs:0.399,K5s:0.004,K6s:0.993,K7s:0.250,K8s:0.919,K9s:0.790,KJs:0.119,KQo:0.844,KQs:0.209,KTs:0.536,Q8s,Q9s,QJo,QJs:0.008,QTs:0.995,T7s:0.002,T8s,T9s:0.337,TT:0.961",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

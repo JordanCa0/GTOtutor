@@ -1,0 +1,21 @@
+{
+  "name": "co_vs_btn_4bp_100",
+  "description": "CO opens, BTN 3-bets 7.5, CO 4-bets 22, BTN calls; 100bb. Ranges from charts preflop-v8.",
+  "chips_per_bb": 20,
+  "pot_bb": 45.5,
+  "stack_bb": 78,
+  "oop_range": "22:0.256,32s:0.113,53s:0.012,64s:0.228,65o:0.427,75s:0.004,84s:0.031,85s:0.028,95s:0.004,96s:0.002,98o:0.003,A5o:0.047,A6s:0.005,A7s:0.002,A8o:0.016,A9o:0.013,AA,AJo:0.058,ATo:0.073,JJ:0.002,K3s:0.035,KJo:0.133,KK:0.307,KTo:0.173,Q3s:0.002,QTo:0.016",
+  "ip_range": "66:0.004,88:0.004,99:0.084,AKo:0.022,KQs:0.003",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

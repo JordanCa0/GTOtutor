@@ -1,10 +1,16 @@
-// Writes solver/spots/*.json from the current preflop charts: the ranges that reach each flop.
-// Run from the repo root: npx tsx apps/api/scripts/exportSolverSpots.ts
+// Writes solver spot files from the preflop charts: the ranges that reach each flop.
+// Run from the repo root:
+//   npx tsx apps/api/scripts/exportSolverSpots.ts                       placeholder charts -> solver/spots/
+//   npx tsx apps/api/scripts/exportSolverSpots.ts --charts <file.json>  solved charts -> solver/spots/<version>/
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { SIX_MAX_POSITIONS, type Position } from '@gtotutor/shared-types';
-import { buildFixtureChartSet, FOUR_BET_SIZE, ISO_RAISE_SIZE, openSize, SB_VS_ISO_3BET_SIZE, threeBetSize } from '../src/charts/fixtures.js';
+import { chartsFromEnv } from '../src/charts/solvedCharts.js';
+import { FOUR_BET_SIZE, ISO_RAISE_SIZE, openSize, SB_VS_ISO_3BET_SIZE, threeBetSize } from '../src/charts/fixtures.js';
 
-const charts = buildFixtureChartSet();
+const chartsArg = process.argv.indexOf('--charts');
+const chartsPath = chartsArg >= 0 ? process.argv[chartsArg + 1] : undefined;
+const charts = chartsFromEnv(chartsPath ?? '');
+const outDir = chartsPath ? `solver/spots/${charts.version}` : 'solver/spots';
 const STACK = 100;
 
 /** One preflop decision a player made on the way to the flop: chart node + the action taken. */
@@ -118,9 +124,9 @@ spots.push(
   ),
 );
 
-mkdirSync('solver/spots', { recursive: true });
+mkdirSync(outDir, { recursive: true });
 // A line the charts never take (e.g. SB limp-3bets with the placeholder charts) has an empty range.
 const playable = spots.filter((s) => s.oop_range && s.ip_range);
-for (const s of playable) writeFileSync(`solver/spots/${s.name}.json`, `${JSON.stringify(s, null, 2)}\n`);
+for (const s of playable) writeFileSync(`${outDir}/${s.name}.json`, `${JSON.stringify(s, null, 2)}\n`);
 const skipped = spots.filter((s) => !playable.includes(s)).map((s) => s.name);
-console.log(`wrote ${playable.length} spots to solver/spots/${skipped.length ? ` (skipped, empty range: ${skipped.join(', ')})` : ''}`);
+console.log(`wrote ${playable.length} spots to ${outDir}/${skipped.length ? ` (skipped, empty range: ${skipped.join(', ')})` : ''}`);

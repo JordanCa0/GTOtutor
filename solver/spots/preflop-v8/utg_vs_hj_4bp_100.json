@@ -1,0 +1,21 @@
+{
+  "name": "utg_vs_hj_4bp_100",
+  "description": "UTG opens, HJ 3-bets 7.5, UTG 4-bets 22, HJ calls; 100bb. Ranges from charts preflop-v8.",
+  "chips_per_bb": 20,
+  "pot_bb": 45.5,
+  "stack_bb": 78,
+  "oop_range": "AA,KK:0.149",
+  "ip_range": "AKs:0.005,KK:0.176,QQ:0.515",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "btn_vs_sb_3bp_100",
+  "description": "BTN opens 2.5, SB 3-bets 10, BTN calls; 100bb. Ranges from charts preflop-v8.",
+  "chips_per_bb": 20,
+  "pot_bb": 21,
+  "stack_bb": 90,
+  "oop_range": "44:0.996,55:0.955,66:0.913,77:0.986,88:0.923,99:0.992,65s,76s:0.003,86s:0.940,87s,98s,A3s,A4s,A5s,A7s:0.030,A8s,A9s:0.948,AA,AJo:0.987,AJs,AKo,AKs,AQo,AQs,ATo:0.395,ATs,J9s:0.815,JJ,JTs:0.995,K8s:0.691,K9s:0.993,KJs,KK,KQo,KQs,KTs,Q8s:0.004,Q9s:0.839,QJs:0.997,QQ,QTs:0.995,T8s:0.948,T9s:0.904,TT",
+  "ip_range": "44,55:0.005,66,77,88,99,53s,54s,65s:0.982,75s,76s,86s:0.995,87s,97s,98s:0.188,A2s,A3s:0.970,A4s,A5o:0.207,A5s:0.995,A6s,A7s,A8s,A9s:0.973,AJo,AJs,AKo:0.627,AQo,AQs,ATo,ATs:0.930,J7s:0.084,J8s,J9s:0.459,K4s,K5s,K6s:0.804,K7s,K8s:0.941,K9s:0.958,KQo:0.637,KQs:0.486,KTs:0.961,Q5s:0.824,Q6s:0.293,Q7s:0.996,Q8s,Q9s:0.778,QJo:0.908,QJs:0.323,QTs,T7s,T8s:0.798,T9s:0.010",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

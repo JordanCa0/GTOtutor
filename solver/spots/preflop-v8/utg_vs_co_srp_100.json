@@ -1,0 +1,21 @@
+{
+  "name": "utg_vs_co_srp_100",
+  "description": "UTG opens 2.5, CO calls; 100bb. Ranges from charts preflop-v8.",
+  "chips_per_bb": 20,
+  "pot_bb": 6.5,
+  "stack_bb": 97.5,
+  "oop_range": "22:0.081,44,55,66,77,88,99,32s:0.012,53s:0.967,54s:0.995,65s,75s:0.900,76s,84s:0.503,86s,87s,97s:0.997,98s,A2s:0.996,A3s,A4s,A5o:0.028,A5s,A6s:0.968,A7s:0.993,A8s,A9s:0.998,AA,AJo:0.997,AJs,AKo,AKs,AQo,AQs,ATo:0.998,ATs,J8s,J9s,JJ,JTs,K4s:0.849,K5s:0.995,K6s,K7s:0.906,K8s,K9s,KJs,KK,KQo,KQs,KTs,Q4s:0.024,Q5s:0.273,Q7s:0.216,Q8s,Q9s,QJo,QJs,QQ,QTs,T7s:0.985,T8s,T9s,TT",
+  "ip_range": "44,55,66,77,88,99:0.993,65s:0.063,87s:0.777,98s:0.966,A3s:0.896,A4s:0.565,A5s,A8s,A9s:0.998,AA:0.196,AJo:0.992,AJs,AKo:0.998,AKs:0.981,AQo,AQs,ATo:0.986,ATs:0.992,JJ,JTs,K8s:0.651,K9s:0.997,KJs,KK:0.954,KQo,KQs:0.952,KTs,Q9s:0.012,QJs:0.016,QQ:0.894,QTs,T8s:0.091,T9s:0.994,TT:0.003",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

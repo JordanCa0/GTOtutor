@@ -1,0 +1,10 @@
+# Calibration round on charts preflop-v5.
+--spot spots/preflop-v5/btn_vs_bb_4bp_100.json --out output/preflop-v5 --limit 60 --status-port 7878
+--spot spots/preflop-v5/sb_vs_bb_4bp_100.json --out output/preflop-v5 --limit 60 --status-port 7878
+--spot spots/preflop-v5/btn_vs_bb_3bp_100.json --out output/preflop-v5 --limit 60 --status-port 7878
+--spot spots/preflop-v5/co_vs_btn_3bp_100.json --out output/preflop-v5 --limit 60 --status-port 7878
+--spot spots/preflop-v5/sb_vs_bb_srp_100.json --out output/preflop-v5 --limit 60 --status-port 7878
+--spot spots/preflop-v5/co_vs_bb_srp_100.json --out output/preflop-v5 --limit 60 --status-port 7878
+--spot spots/preflop-v5/btn_vs_bb_srp_100.json --out output/preflop-v5 --limit 60 --status-port 7878
+--spot spots/preflop-v5/sb_vs_bb_iso_100.json --out output/preflop-v5 --limit 40 --status-port 7878
+--spot spots/preflop-v5/sb_vs_bb_limp_100.json --out output/preflop-v5 --limit 40 --status-port 7878

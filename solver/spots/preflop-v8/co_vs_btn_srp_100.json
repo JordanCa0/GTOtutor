@@ -1,0 +1,21 @@
+{
+  "name": "co_vs_btn_srp_100",
+  "description": "CO opens 2.5, BTN calls; 100bb. Ranges from charts preflop-v8.",
+  "chips_per_bb": 20,
+  "pot_bb": 6.5,
+  "stack_bb": 97.5,
+  "oop_range": "22,44,55,66,77,88,99,32s,53s,54s,63s:0.002,64s,65o,65s,75s,76s,84s,85s,86s,87s,95s,96s:0.995,97s,98o:0.416,98s,A2s,A3s,A4s,A5o,A5s,A6s,A7s,A8o,A8s,A9o,A9s,AA,AJo,AJs,AKo,AKs,AQo,AQs,ATo,ATs,J7s,J8s,J9s,JJ,JTo:0.111,JTs,K3s,K4s,K5s,K6s,K7s,K8s,K9s,KJo,KJs,KK,KQo,KQs,KTo,KTs,Q3s,Q4s,Q5s,Q6s,Q7s,Q8s,Q9s,QJo,QJs,QQ,QTo,QTs,T6s:0.974,T7s,T8o:0.027,T8s,T9s,TT",
+  "ip_range": "44:0.988,55:0.550,66:0.992,77,88:0.989,99:0.010,65s:0.006,87s:0.698,98s:0.989,A2s:0.646,A3s:0.997,A4s,A5s:0.955,A6s:0.896,A7s:0.993,A8s,A9s,AA:0.005,AJo,AJs,AKo:0.300,AKs,AQo,AQs:0.965,ATo,ATs,J9s:0.086,JJ,JTs,K6s:0.095,K8s:0.996,K9s,KJs,KK:0.998,KQo,KQs:0.494,KTs:0.985,Q8s:0.003,Q9s:0.994,QJo:0.952,QJs:0.018,QQ,QTs,T8s:0.905,T9s:0.996,TT",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

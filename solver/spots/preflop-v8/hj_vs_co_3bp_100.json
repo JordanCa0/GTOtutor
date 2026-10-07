@@ -1,0 +1,21 @@
+{
+  "name": "hj_vs_co_3bp_100",
+  "description": "HJ opens 2.5, CO 3-bets 7.5, HJ calls; 100bb. Ranges from charts preflop-v8.",
+  "chips_per_bb": 20,
+  "pot_bb": 16.5,
+  "stack_bb": 92.5,
+  "oop_range": "44,55,66,77,88,99,53s:0.278,54s:0.964,65s,75s:0.219,76s:0.983,84s:0.030,85s:0.008,86s:0.972,87s,97s:0.910,98s,A2s:0.975,A3s,A4s,A5o:0.022,A5s,A6s:0.270,A7s:0.423,A8s,A9s:0.608,AJo:0.934,AJs,AKo,AKs,AQo,AQs,ATo:0.092,ATs,J8s:0.997,J9s,JJ,JTs,K3s:0.009,K4s:0.965,K5s:0.992,K6s:0.996,K7s:0.991,K8s:0.998,K9s,KJo:0.636,KJs,KK:0.938,KQo,KQs,KTo:0.011,KTs,Q4s:0.873,Q5s:0.908,Q7s:0.962,Q8s,Q9s,QJo,QJs,QQ:0.995,QTs,T7s:0.869,T8s,T9s,TT",
+  "ip_range": "44:0.015,99:0.119,65s:0.846,87s:0.982,98s:0.074,A5s:0.216,AA,AKo:0.081,AKs:0.558,AQs:0.323,ATs:0.672,JTs:0.005,KJs:0.179,KQs:0.337,KTs:0.620,Q9s:0.003,QJs:0.175,T8s:0.004,T9s:0.016,TT:0.996",
+  "flop": [
+    "33%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}
