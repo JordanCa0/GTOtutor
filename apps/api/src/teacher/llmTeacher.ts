@@ -220,19 +220,26 @@ export class LlmTeacher {
   private readonly hints = new Map<string, string>();
   private readonly reviews = new Map<string, Extract<SessionCoachReview, { status: 'ok' }>>();
   private readonly limiter: HourlyRateLimiter;
+  /** Caps Claude calls across all players (guests can dodge the per-client limit with a new guest id). */
+  private readonly globalLimiter: HourlyRateLimiter | null;
 
   constructor(
     private readonly llm: CoachLlm,
     private readonly cacheNamespace: string,
     missLimitPerHour: number,
+    globalMissLimitPerHour?: number,
   ) {
     this.limiter = new HourlyRateLimiter(missLimitPerHour);
+    this.globalLimiter = globalMissLimitPerHour ? new HourlyRateLimiter(globalMissLimitPerHour) : null;
   }
 
-  /** Runs one uncached LLM call under the per-client hourly limit. */
+  /** Runs one uncached LLM call under the per-client and global hourly limits. */
   private async run<T>(clientKey: string, fn: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false; reason: string }> {
     if (!this.limiter.tryConsume(clientKey)) {
       return { ok: false, reason: 'Hourly limit for new AI coach answers reached — try again later.' };
+    }
+    if (this.globalLimiter && !this.globalLimiter.tryConsume('global')) {
+      return { ok: false, reason: 'The AI coach is busy right now — try again later.' };
     }
     try {
       return { ok: true, value: await fn() };

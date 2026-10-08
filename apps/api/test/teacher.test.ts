@@ -120,6 +120,13 @@ describe('explanations', () => {
     expect(await teacher.explain(other, 'ip')).toMatchObject({ status: 'unavailable' });
   });
 
+  it('caps cache misses across all clients when a global limit is set', async () => {
+    const teacher = new LlmTeacher(fakeLlm({ structured: grounded }), 'test', 10, 1);
+    await teacher.explain(input, 'ip');
+    const other = { ...input, decision: { ...decision, handClass: 'A4s' } };
+    expect(await teacher.explain(other, 'other-ip')).toMatchObject({ status: 'unavailable' });
+  });
+
   it('reports LLM failures as unavailable instead of throwing', async () => {
     const teacher = new LlmTeacher(unavailableLlm('no key'), 'test', 10);
     expect(await teacher.explain(input, 'ip')).toEqual({ status: 'unavailable', reason: 'no key' });

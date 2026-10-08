@@ -1,0 +1,9 @@
+# Every flop: finish UTG vs BB, then the next most common spots (charts preflop-v8).
+--spot spots/preflop-v8/utg_vs_bb_srp_100.json --out output/preflop-v8 --status-port 7878
+--spot spots/preflop-v8/hj_vs_btn_srp_100.json --out output/preflop-v8 --status-port 7878
+--spot spots/preflop-v8/utg_vs_btn_srp_100.json --out output/preflop-v8 --status-port 7878
+--spot spots/preflop-v8/sb_vs_bb_limp_100.json --out output/preflop-v8 --status-port 7878
+--spot spots/preflop-v8/co_vs_btn_srp_100.json --out output/preflop-v8 --status-port 7878
+--spot spots/preflop-v8/utg_vs_co_srp_100.json --out output/preflop-v8 --status-port 7878
+--spot spots/preflop-v8/hj_vs_co_srp_100.json --out output/preflop-v8 --status-port 7878
+--spot spots/preflop-v8/utg_vs_hj_srp_100.json --out output/preflop-v8 --status-port 7878

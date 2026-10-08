@@ -36,7 +36,12 @@ const app = buildApp({
   engine,
   hands: new HandService(engine, repo),
   players: new PlayerResolver(supabaseUrl ? supabaseVerifier(supabaseUrl) : null, repo),
-  teacher: new LlmTeacher(claudeCoachLlm(model), model, Number(process.env.EXPLANATION_MISS_LIMIT_PER_HOUR) || 50),
+  teacher: new LlmTeacher(
+    claudeCoachLlm(model),
+    model,
+    Number(process.env.EXPLANATION_MISS_LIMIT_PER_HOUR) || 50,
+    Number(process.env.COACH_GLOBAL_LIMIT_PER_HOUR) || undefined,
+  ),
   accounts: supabaseUrl && serviceKey ? supabaseAccountAdmin(supabaseUrl, serviceKey) : undefined,
 });
 if (!process.env.DATABASE_URL) app.log.warn('DATABASE_URL is not set: player data is kept in memory only.');
@@ -53,4 +58,5 @@ void purgeGuests();
 setInterval(purgeGuests, 60 * 60 * 1000).unref();
 
 const port = Number(process.env.PORT) || 3001;
-await app.listen({ port, host: '127.0.0.1' });
+// Containers need HOST=0.0.0.0; locally the API stays on loopback.
+await app.listen({ port, host: process.env.HOST || '127.0.0.1' });

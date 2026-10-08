@@ -58,7 +58,7 @@ Every player-owned row has either `user_id` (→ `auth.users`, deleted with the 
    - Measure the gzipped size of one spot first. The free tier allows 1 GB of storage and a 500 MB database: 184 flops × 47 spots should fit, while all 1,755 flops for every spot needs the Pro plan (about $25/month).
 5. **Docs:** finish this file and update `CLAUDE.md`, both `.env.example` files, `solver/README.md`, and `docs/postflop-plan.md`.
 
-Out of scope for now: hosting the app itself, other sign-in providers, separate dev and prod projects.
+Out of scope for now: other sign-in providers, separate dev and prod projects. Hosting is in `docs/deployment.md`.
 
 **Guest data is temporary** (decided 2026-10-04): a guest's session and everything in it is deleted when they start a new session or after 24 hours with no new hand, unless they sign up during it. Details in `docs/database-schema.md`.
 

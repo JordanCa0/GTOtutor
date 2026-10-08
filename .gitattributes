@@ -1,0 +1,4 @@
+# Deploy scripts run on Linux; keep LF endings even with core.autocrlf on Windows.
+*.sh text eol=lf
+deploy/** text eol=lf
+apps/api/Dockerfile text eol=lf

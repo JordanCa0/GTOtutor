@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+.git
+solver
+preflop/target
+preflop/cache
+preflop/realization
+docs
+deploy
+*.log

@@ -1,0 +1,41 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadSolverOutput",
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": "arn:aws:s3:::SOLVER_BUCKET"
+    },
+    {
+      "Sid": "ReadSolverOutputObjects",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": "arn:aws:s3:::SOLVER_BUCKET/solver-output/*"
+    },
+    {
+      "Sid": "ReadAppSecrets",
+      "Effect": "Allow",
+      "Action": ["ssm:GetParametersByPath", "ssm:GetParameters"],
+      "Resource": "arn:aws:ssm:REGION:ACCOUNT_ID:parameter/gtotutor*"
+    },
+    {
+      "Sid": "PullApiImage",
+      "Effect": "Allow",
+      "Action": ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"],
+      "Resource": "arn:aws:ecr:REGION:ACCOUNT_ID:repository/gtotutor-api"
+    },
+    {
+      "Sid": "EcrLogin",
+      "Effect": "Allow",
+      "Action": ["ecr:GetAuthorizationToken"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ApiLogs",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:REGION:ACCOUNT_ID:log-group:/gtotutor/*"
+    }
+  ]
+}
