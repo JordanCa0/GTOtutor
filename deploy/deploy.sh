@@ -20,4 +20,7 @@ aws ecr get-login-password --region "$AWS_REGION" \
   | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 docker compose pull
 docker compose up -d
+# Always restart the API, even with an unchanged image: it caches the list of solved flops, so new solves
+# and changed settings only show up after a restart.
+docker compose up -d --force-recreate --no-deps api
 docker image prune -f

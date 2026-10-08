@@ -1,0 +1,27 @@
+/* Shared styles for the static legal pages (privacy.html, terms.html). Colors match the app's tokens in src/styles.css. */
+:root {
+  --bg: #0a0c10;
+  --text: #ece9e2;
+  --muted: #8e97a3;
+  --gold: #d4af6a;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-3: rgba(255, 255, 255, 0.28);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+main { max-width: 720px; margin: 0 auto; padding: 3rem 16px 4rem; }
+.home { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--gold); text-decoration: none; font: 700 1.25rem Georgia, 'Times New Roman', serif; }
+.home em { font-weight: 600; }
+.home img { border-radius: 7px; }
+h1 { font: 700 2.25rem/1.2 Georgia, 'Times New Roman', serif; margin: 2rem 0 0.25rem; }
+h2 { font-size: 1.15rem; margin: 2.25rem 0 0.5rem; }
+.updated { color: var(--muted); margin: 0 0 1.5rem; font-size: 0.9rem; }
+p, li { color: var(--text); }
+ul { padding-left: 1.25rem; }
+li { margin: 0.4rem 0; }
+strong { font-weight: 600; }
+a { color: var(--text); text-decoration-color: var(--line-3); text-underline-offset: 3px; }
+a:hover { text-decoration-color: currentColor; }
+footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; }
+footer a { color: var(--muted); }
