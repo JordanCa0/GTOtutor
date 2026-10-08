@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { api } from '../api/client';
 import { dismissAuthError, displayName, finishRecovery, signInWithGoogle, useAuth } from '../auth/auth';
 import { supabase } from '../auth/supabase';
+import { XIcon } from './icons';
+import { Backdrop, Presence } from './Presence';
 
 /** Header control: "Sign in" for guests, the account menu when signed in. Hidden when sign-in isn't configured. */
 export function AccountMenu() {
@@ -61,9 +63,15 @@ export function AccountMenu() {
           Sign in
         </button>
       )}
-      {dialog === 'auth' && !session && <AuthDialog onClose={() => setDialog(null)} />}
-      {dialog === 'delete' && session && <DeleteAccountDialog onClose={() => setDialog(null)} />}
-      {recovering && <NewPasswordDialog />}
+      <Presence show={dialog === 'auth' && !session}>
+        <AuthDialog onClose={() => setDialog(null)} />
+      </Presence>
+      <Presence show={dialog === 'delete' && !!session}>
+        <DeleteAccountDialog onClose={() => setDialog(null)} />
+      </Presence>
+      <Presence show={recovering}>
+        <NewPasswordDialog />
+      </Presence>
       {failure}
     </>
   );
@@ -76,8 +84,8 @@ function Modal({ title, eyebrow, onClose, children }: { title: string; eyebrow: 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
-  return createPortal(
-    <div className="modal-backdrop" onClick={onClose}>
+  return (
+    <Backdrop onClose={onClose}>
       <div className="auth-card" role="dialog" aria-modal aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="auth-head">
           <div>
@@ -85,15 +93,14 @@ function Modal({ title, eyebrow, onClose, children }: { title: string; eyebrow: 
             <h2>{title}</h2>
           </div>
           {onClose && (
-            <button className="ghost" onClick={onClose} aria-label="Close">
-              ✕
+            <button className="icon-btn" onClick={onClose} aria-label="Close">
+              <XIcon />
             </button>
           )}
         </div>
         {children}
       </div>
-    </div>,
-    document.body,
+    </Backdrop>
   );
 }
 

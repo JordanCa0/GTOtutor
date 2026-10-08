@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { api } from '../api/client';
 import { CoachLoader } from './CoachLoader';
 import { PlayingCard } from './PlayingCard';
+import { Backdrop } from './Presence';
 
 const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : '—');
 
@@ -27,7 +28,7 @@ export function SessionReview({ sessionId, decisionsPlayed, onClose, onNewSessio
   }, [onClose]);
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <Backdrop onClose={onClose}>
       <div className="modal" role="dialog" aria-modal="true" aria-label="Session review" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>Session review</h2>
@@ -42,7 +43,7 @@ export function SessionReview({ sessionId, decisionsPlayed, onClose, onNewSessio
           </button>
         </div>
       </div>
-    </div>
+    </Backdrop>
   );
 }
 

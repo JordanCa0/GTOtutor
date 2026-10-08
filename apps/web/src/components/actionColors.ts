@@ -2,8 +2,8 @@ import type { ActionType } from '@gtotutor/shared-types';
 
 export const ACTION_COLORS: Record<ActionType, string> = {
   fold: '#3a4452',
-  check: '#d2a24c',
-  call: '#d2a24c',
+  check: '#4a86c5',
+  call: '#4a86c5',
   bet: '#3aa877',
   raise: '#2e9a68',
   allin: '#1f7a4f',

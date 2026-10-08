@@ -10,7 +10,8 @@ const VERBS: Record<ActionLogEntry['action'], (a: ActionLogEntry) => string> = {
   raise: (a) => `raises ${a.streetBb ?? a.toBb}`,
   allin: (a) => `all-in ${a.toBb}`,
 };
-const describe = (a: ActionLogEntry) => VERBS[a.action](a);
+// Your own actions read in the second person: "You call 2.5", not "You calls 2.5".
+const describe = (a: ActionLogEntry) => (a.isHero ? VERBS[a.action](a).replace(/^(\w+)s\b/, '$1') : VERBS[a.action](a));
 const STREET_NAMES = { preflop: 'Preflop', flop: 'Flop', turn: 'Turn', river: 'River' } as const;
 
 export function ActionLog({ entries, board }: { entries: ActionLogEntry[]; board: string[] }) {

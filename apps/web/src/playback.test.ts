@@ -27,7 +27,7 @@ function hand(overrides: Partial<HandView> = {}): HandView {
       { position: 'SB', action: 'fold', toBb: 0, isHero: false, street: 'preflop' },
     ],
     legalActions: [],
-    pendingSpot: { nodeKey: 'k', nodeLabel: 'BB facing CO open', handClass: 'AKo', street: 'preflop' },
+    pendingSpot: { nodeKey: 'k', nodeLabel: 'BB facing CO open', handClass: 'AKo', street: 'preflop', villainRange: null },
     status: 'awaiting_hero',
     decisions: [],
     result: null,
@@ -110,7 +110,7 @@ describe('playback', () => {
         { position: 'CO', action: 'bet', toBb: 4.3, isHero: false, street: 'flop', streetBb: 1.8 },
       ],
       board: ['Kh', '7d', '2c'],
-      pendingSpot: { nodeKey: 'FLOP|x|Kh7d2c|0.1', nodeLabel: 'BB facing a 1.8bb flop bet', handClass: 'AKo', street: 'flop' },
+      pendingSpot: { nodeKey: 'FLOP|x|Kh7d2c|0.1', nodeLabel: 'BB facing a 1.8bb flop bet', handClass: 'AKo', street: 'flop', villainRange: null },
     });
     const states = runToEnd(h);
     const flopAt = states.findIndex((s) => s.board === 3);

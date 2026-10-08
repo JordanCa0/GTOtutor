@@ -8,7 +8,7 @@ import {
   type TableSize,
 } from '@gtotutor/shared-types';
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { Backdrop } from './Presence';
 import JellyRadio, { type JellyItem } from './reactbits/JellyRadio';
 
 interface Props {
@@ -22,9 +22,9 @@ interface Props {
 
 const JELLY_THEME = {
   chipColor: '#1a212b',
-  activeColor: '#d4af6a',
+  activeColor: '#ece7dc',
   textColor: '#e2ddd2',
-  activeTextColor: '#1b1307',
+  activeTextColor: '#0b0e12',
   size: 'md' as const,
 };
 
@@ -67,7 +67,7 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
         </div>
       ) : (
         <>
-          <p className="eyebrow">Preflop trainer · 6-max cash</p>
+          <p className="eyebrow">Preflop trainer for 6-max cash</p>
           <h1 className="brand">
             GTO<span>tutor</span>
           </h1>
@@ -118,10 +118,5 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
   );
 
   if (!onClose) return card;
-  return createPortal(
-    <div className="modal-backdrop" onClick={onClose}>
-      {card}
-    </div>,
-    document.body,
-  );
+  return <Backdrop onClose={onClose}>{card}</Backdrop>;
 }

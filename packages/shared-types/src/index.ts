@@ -102,6 +102,14 @@ export interface PendingSpot {
   nodeLabel: string;
   handClass: string;
   street: Street;
+  /** Preflop, facing a raise: the chart node the last raiser played from and the action they took, so the UI can show their range. */
+  villainRange: VillainRange | null;
+}
+
+export interface VillainRange {
+  position: Position;
+  nodeKey: string;
+  actionId: ActionType;
 }
 
 export interface ShowdownEntry {

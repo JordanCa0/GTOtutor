@@ -18,3 +18,5 @@ solver/spots/preflop-v[2-7]/
 preflop/realization/avg-*.json
 preflop/realization/from-*.json
 preflop/realization/r0-*.json
+# Archify diagram builds (local)
+.archify/

@@ -78,8 +78,12 @@ export function Table({ hand, playback, onSkip }: Props) {
       {hand.seats.map((seat) => {
         const d = display[seat.position];
         if (d.streetBet <= 0) return null;
+        // Anchored at the seat's bet spot and slid to the pot or winner with `translate`, which the GPU animates.
+        const home = betSpot(slotOf(seat.position));
+        const to = chipTarget(seat.position);
+        const slide = { translate: `calc(-50% + ${to.x - home.x}cqw) calc(-50% + ${to.y - home.y}cqh)` };
         return (
-          <div key={`bet-${seat.position}`} className={`bet ${playback.gathered ? 'in-pot' : ''}`} style={at(chipTarget(seat.position))}>
+          <div key={`bet-${seat.position}`} className={`bet ${playback.gathered ? 'in-pot' : ''}`} style={{ ...at(home), ...slide }}>
             <ChipStack amount={d.streetBet} />
             {!playback.gathered && <span className="bet-amount">{d.streetBet}</span>}
           </div>
@@ -114,7 +118,7 @@ export function Table({ hand, playback, onSkip }: Props) {
                   card={cards ? cards[k] : null}
                   size={seat.isHero ? 'md' : 'sm'}
                   className={`dealt ${sd && !seat.isHero ? 'flip' : ''}`}
-                  style={{ ['--deal-delay' as string]: `${(k * n + dealOrder) * 45}ms` }}
+                  style={{ ['--deal-delay' as string]: `${(k * n + dealOrder) * 32}ms` }}
                 />
               ))}
             </div>

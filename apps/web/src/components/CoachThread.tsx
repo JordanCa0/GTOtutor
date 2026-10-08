@@ -176,7 +176,7 @@ export function CoachThread({ handId, decisionId, messages, onMessages, variant 
           disabled={atLimit}
           aria-label="Ask the coach a follow-up question"
         />
-        <button className="primary" disabled={!draft.trim() || send.isPending || atLimit}>
+        <button className="secondary" disabled={!draft.trim() || send.isPending || atLimit}>
           Ask
         </button>
       </form>

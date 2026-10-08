@@ -14,6 +14,7 @@ import {
   type Position,
   type StartHandRequest,
   type Street,
+  type VillainRange,
 } from '@gtotutor/shared-types';
 import type { ChartService } from '../charts/chartService.js';
 import type { ChartNode } from '../charts/types.js';
@@ -54,6 +55,8 @@ export interface HandState {
   raiseLevel: number;
   opener: Position | null;
   lastRaiser: Position | null;
+  /** The chart node the last raiser played from. Optional: hands saved before it existed lack it. */
+  lastRaiseNode?: VillainRange | null;
   prevRaiser: Position | null;
   /** Set when the SB completes instead of raising (the only limp in the tree). */
   limper: Position | null;
@@ -357,7 +360,13 @@ export class HandEngine {
       board: state.board,
       actionLog: state.actionLog,
       legalActions: pending ? pending.options.map((o, i) => ({ ...pending.actions[i], label: o.label })) : [],
-      pendingSpot: pending && { nodeKey: pending.nodeKey, nodeLabel: pending.nodeLabel, handClass: pending.handClass, street: pending.street },
+      pendingSpot: pending && {
+        nodeKey: pending.nodeKey,
+        nodeLabel: pending.nodeLabel,
+        handClass: pending.handClass,
+        street: pending.street,
+        villainRange: pending.street === 'preflop' && state.lastRaiseNode?.position !== state.heroPosition ? (state.lastRaiseNode ?? null) : null,
+      },
       status: complete ? 'complete' : 'awaiting_hero',
       decisions: state.decisions,
       result: state.result,
@@ -453,6 +462,7 @@ export class HandEngine {
       toBb = Math.min(state.currentBet, stack);
       player.committed = toBb;
     } else {
+      state.lastRaiseNode = { position: player.position, nodeKey: this.nodeKeyFor(state, player), actionId: action.id };
       toBb = action.id === 'allin' ? stack : Math.min(action.toBb!, stack);
       player.committed = toBb;
       state.currentBet = toBb;

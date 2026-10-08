@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { signInWithGoogle, useAuth } from '../auth/auth';
+import { ACTION_COLORS } from './actionColors';
 import { AuthDialog, GoogleMark } from './AccountMenu';
+import { ApproxIcon, SparklesIcon, StarIcon } from './icons';
 import { PlayingCard } from './PlayingCard';
+import { Presence } from './Presence';
 
 export function TitleScreen({ onGuest }: { onGuest: () => void }) {
   const { enabled } = useAuth();
@@ -24,50 +27,103 @@ export function TitleScreen({ onGuest }: { onGuest: () => void }) {
     <div className="title-screen">
       <div className="title-hero">
         <div className="title-copy">
-          <p className="eyebrow">AI poker coach</p>
           <h1 className="brand title-brand">
             GTO<span>tutor</span>
           </h1>
-          <p className="title-headline">Sharpen every decision.</p>
-          <p className="title-lede">
-            Solvers tell you what to do. Our AI coach tells you why. Play real spots, see the right play, and get the reasoning behind every action.
-          </p>
-          {enabled ? (
-            <div className="title-cta">
-              <button className="google-btn big" disabled={busy} onClick={() => void google()} autoFocus>
-                <GoogleMark /> Continue with Google
-              </button>
-              {error && <p className="error small">{error}</p>}
-              <button className="link" onClick={onGuest}>
-                Continue as guest
-              </button>
-              <p className="muted small">
-                Sign up anytime; your hands come with you. Prefer email?{' '}
-                <button className="link" onClick={() => setEmailOpen(true)}>
-                  Use email instead
+          <p className="title-headline">Learn the play, not just the answer.</p>
+          <p className="title-lede">Play real spots, get graded against the chart, and ask the coach about any hand.</p>
+          <div className="title-cta">
+            <button className="primary big" onClick={onGuest}>
+              Start a hand
+            </button>
+            {enabled && (
+              <div className="title-save">
+                <p className="label">Save your progress</p>
+                <button className="google-btn" disabled={busy} onClick={() => void google()}>
+                  <GoogleMark /> Continue with Google
                 </button>
-              </p>
-            </div>
-          ) : (
-            <div className="title-cta">
-              <button className="primary big" onClick={onGuest} autoFocus>
-                Start training
-              </button>
-            </div>
-          )}
+                {error && <p className="error small">{error}</p>}
+                <p className="muted small">
+                  Sign up anytime; your hands come with you.{' '}
+                  <button className="link" onClick={() => setEmailOpen(true)}>
+                    Or use email
+                  </button>
+                </p>
+              </div>
+            )}
+          </div>
           <p className="title-review">
-            <span className="stars" aria-label="5 stars">
-              ★★★★★
+            <span className="stars" role="img" aria-label="5 stars">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <StarIcon key={i} size={14} />
+              ))}
             </span>
             “Used by at least one guy.”
           </p>
         </div>
-        <div className="title-art" aria-hidden>
-          <PlayingCard card="As" className="gold fan fan-1" />
-          <PlayingCard card="Ks" className="gold fan fan-2" />
+        <SpotPreview />
+      </div>
+      <footer className="title-footer">
+        <a href="/privacy.html">Privacy</a>
+        <a href="/terms.html">Terms</a>
+      </footer>
+      <Presence show={emailOpen}>
+        <AuthDialog onClose={() => setEmailOpen(false)} />
+      </Presence>
+    </div>
+  );
+}
+
+const PREVIEW_OPTIONS = [
+  { id: 'raise', label: '3-bet', pct: 54 },
+  { id: 'call', label: 'Call', pct: 38, chosen: true },
+  { id: 'fold', label: 'Fold', pct: 8 },
+] as const;
+
+/** A static, made-up graded spot: what a hand in the trainer looks like. */
+function SpotPreview() {
+  return (
+    <div className="title-preview" aria-hidden>
+      <div className="preview-spot">
+        <div className="spot-hand">
+          <PlayingCard card="Kh" />
+          <PlayingCard card="Jh" />
+        </div>
+        <div>
+          <p className="preview-situation">CO opens to 2.5bb.</p>
+          <p className="muted small">You're on the button with KJs.</p>
         </div>
       </div>
-      {emailOpen && <AuthDialog onClose={() => setEmailOpen(false)} />}
+
+      <div className="verdict verdict-mixed">
+        <span className="verdict-icon">
+          <ApproxIcon size={18} />
+        </span>
+        <div className="verdict-body">
+          <div className="verdict-title">
+            <h2>Fine. The chart mixes here.</h2>
+          </div>
+          <div className="pills">
+            {PREVIEW_OPTIONS.map((o) => (
+              <span key={o.id} className={`pill ${'chosen' in o ? 'chosen' : ''}`} style={{ ['--c' as string]: ACTION_COLORS[o.id] }}>
+                {'chosen' in o && <em>You</em>}
+                {o.label} <b>{o.pct}%</b>
+              </span>
+            ))}
+          </div>
+          <p className="verdict-detail">The chart prefers 3-bet (54%) but plays Call 38% of the time.</p>
+        </div>
+      </div>
+
+      <div className="preview-coach">
+        <span className="coach-avatar">
+          <SparklesIcon size={15} />
+        </span>
+        <p className="bubble-tldr">
+          <span className="tldr-label">TL;DR</span>
+          <strong>KJs blocks CO's best broadways and takes the initiative, so 3-betting earns a little more.</strong>
+        </p>
+      </div>
     </div>
   );
 }

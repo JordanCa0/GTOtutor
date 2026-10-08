@@ -38,7 +38,7 @@ export function DecisionPanel({ hand, playbackDone, chats, onChat }: Props) {
       {complete && hand.decisions.length > 1 && (
         <div className={`hand-verdict ${mistakes ? 'bad' : matched === hand.decisions.length ? 'good' : 'ok'}`}>
           {matched} of {hand.decisions.length} decision{hand.decisions.length > 1 ? 's' : ''} matched the chart
-          {mistakes > 0 && ` · ${mistakes} mistake${mistakes > 1 ? 's' : ''}`}
+          {mistakes > 0 && `, ${mistakes} mistake${mistakes > 1 ? 's' : ''}`}
         </div>
       )}
       {itemCount > 1 && (

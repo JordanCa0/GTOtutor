@@ -1,15 +1,15 @@
 import type { ChartNodeView } from '@gtotutor/shared-types';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { api } from '../api/client';
 import { ACTION_COLORS, STRIPE_ORDER } from './actionColors';
+import { Backdrop, Presence } from './Presence';
 
 const DESC = 'AKQJT98765432';
-const GRID: string[][] = [...DESC].map((r1, row) =>
+export const GRID: string[][] = [...DESC].map((r1, row) =>
   [...DESC].map((r2, col) => (row === col ? r1 + r2 : col > row ? r1 + r2 + 's' : r2 + r1 + 'o')),
 );
-const combos = (hc: string) => (hc.length === 2 ? 6 : hc[2] === 's' ? 4 : 12);
+export const combos = (hc: string) => (hc.length === 2 ? 6 : hc[2] === 's' ? 4 : 12);
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
 export function RangeGrid({ nodeKey, highlight }: { nodeKey: string; highlight: string }) {
@@ -29,18 +29,16 @@ export function RangeGrid({ nodeKey, highlight }: { nodeKey: string; highlight: 
   return (
     <>
       <RangeView data={data} highlight={highlight} onGridClick={() => setExpanded(true)} />
-      {expanded &&
-        createPortal(
-          <div className="modal-backdrop" onClick={() => setExpanded(false)}>
-            <div className="range-modal" role="dialog" aria-modal aria-label={`Range chart: ${data.label}`} onClick={(e) => e.stopPropagation()}>
-              <button className="ghost range-close" onClick={() => setExpanded(false)}>
-                Close
-              </button>
-              <RangeView data={data} highlight={highlight} large />
-            </div>
-          </div>,
-          document.body,
-        )}
+      <Presence show={expanded}>
+        <Backdrop onClose={() => setExpanded(false)}>
+          <div className="range-modal" role="dialog" aria-modal aria-label={`Range chart: ${data.label}`} onClick={(e) => e.stopPropagation()}>
+            <button className="ghost range-close" onClick={() => setExpanded(false)}>
+              Close
+            </button>
+            <RangeView data={data} highlight={highlight} large />
+          </div>
+        </Backdrop>
+      </Presence>
     </>
   );
 }
@@ -91,13 +89,13 @@ function RangeView({ data, highlight, large, onGridClick }: { data: ChartNodeVie
               style={freqs ? { background: background(hc) } : undefined}
               title={freqs ? `${hc}: ${data.actions.map((a, i) => `${a.label} ${pct(freqs[i])}`).join(', ')}` : `${hc}: not in the range here`}
             >
-              {hc}
+              {/* Labels only in the enlarged view: at panel size they're unreadable, so the small grid is read by colour. */}
+              {large && hc}
             </div>
           );
         })}
       </div>
       <aside className="range-side">
-        <p className="eyebrow">{data.dataSource.kind === 'solver' ? 'Flop strategy' : 'Range chart'}</p>
         <p className="range-title">{data.label}</p>
         <p className="label">Whole range</p>
         {data.actions.map((a, i) => (
@@ -115,7 +113,7 @@ function RangeView({ data, highlight, large, onGridClick }: { data: ChartNodeVie
         )}
         {data.strategy[highlight] && (
           <>
-            <p className="label">{data.dataSource.kind === 'solver' ? `${highlight} on average` : `Your hand · ${highlight}`}</p>
+            <p className="label">{data.dataSource.kind === 'solver' ? `${highlight} on average` : `Your hand (${highlight})`}</p>
             <div className="mini-bar">
               {data.actions.map((a, i) => (
                 <span key={a.id} style={{ flex: data.strategy[highlight][i], background: ACTION_COLORS[a.id] }} />

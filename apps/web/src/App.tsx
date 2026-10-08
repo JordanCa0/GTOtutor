@@ -6,13 +6,17 @@ import { ActionLog } from './components/ActionLog';
 import { DecisionPanel } from './components/DecisionPanel';
 import { SessionReview } from './components/SessionReview';
 import { AccountMenu } from './components/AccountMenu';
+import { HelpIcon, SlidersIcon } from './components/icons';
+import { Presence } from './components/Presence';
 import { SettingsMenu } from './components/SettingsMenu';
 import { SetupScreen } from './components/SetupScreen';
 import { Table } from './components/Table';
 import { TitleScreen } from './components/TitleScreen';
+import { Tour, type TourStep } from './components/Tour';
+import { PLAY_STEPS, VERDICT_STEPS } from './components/tourSteps';
 import { actingAt } from './playback';
 import { useAuth } from './auth/auth';
-import { hasSeenTitle, markTitleSeen } from './onboarding';
+import { hasSeenTitle, hasSeenTour, markTitleSeen, markTourSeen, type TourPart } from './onboarding';
 import { getSessionId, newSessionId } from './session';
 import { useSettings } from './settings';
 import { playSound } from './sound/soundEngine';
@@ -35,10 +39,15 @@ export function App() {
   const [chats, setChats] = useState<Record<string, ChatMessage[]>>({});
   const [showTitle, setShowTitle] = useState(() => !hasSeenTitle());
   const [configOpen, setConfigOpen] = useState(false);
+  const [helpRequest, setHelpRequest] = useState(0);
   const { animations } = useSettings();
   const { ready: authReady, session } = useAuth();
   const userId = session?.user.id ?? null;
   const prevUser = useRef(userId);
+  // On <html> rather than .app so portaled modals and the title page follow the setting too.
+  useEffect(() => {
+    document.documentElement.classList.toggle('no-anim', !animations);
+  }, [animations]);
   // Signing out: the hand on screen belongs to the account, so start over as a fresh guest.
   useEffect(() => {
     if (prevUser.current && !userId) {
@@ -95,29 +104,27 @@ export function App() {
   }
 
   return (
-    <div className={`app ${animations ? '' : 'no-anim'}`}>
+    <div className="app">
       <header>
         <strong className="brand">
           GTO<span>tutor</span>
         </strong>
         <span className="muted">
-          6-max cash · {hand.config.stackDepthBb}bb · you are <b>{hand.heroPosition}</b>
+          {hand.config.stackDepthBb}bb 6-max cash, you're in the <b>{hand.heroPosition}</b>
         </span>
         <span className="spacer" />
-        <SettingsMenu />
-        <AccountMenu />
-        <button className="ghost" onClick={() => setReviewOpen(true)}>
-          Session review
-        </button>
         <button className="ghost configure-btn" onClick={() => setConfigOpen(true)}>
-          <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden>
-            <path d="M3 5h8M15 5h2M3 10h2M9 10h8M3 15h10M17 15h0" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-            <circle cx="13" cy="5" r="2" fill="none" stroke="currentColor" strokeWidth="1.6" />
-            <circle cx="7" cy="10" r="2" fill="none" stroke="currentColor" strokeWidth="1.6" />
-            <circle cx="15" cy="15" r="2" fill="none" stroke="currentColor" strokeWidth="1.6" />
-          </svg>
+          <SlidersIcon size={15} />
           Configure game
         </button>
+        <button className="ghost review-btn" onClick={() => setReviewOpen(true)}>
+          Session review
+        </button>
+        <button className="icon-btn" onClick={() => setHelpRequest((n) => n + 1)} aria-label="How it works" title="How it works">
+          <HelpIcon size={17} />
+        </button>
+        <SettingsMenu />
+        <AccountMenu />
       </header>
 
       {hand.dataSource.kind === 'fixture' && <div className="banner">Chart numbers come from placeholder ranges, not a solver yet. EVs arrive with the solver.</div>}
@@ -133,13 +140,14 @@ export function App() {
         chats={chats}
         onChat={(id, messages) => setChats((c) => ({ ...c, [id]: messages }))}
         animate={animations}
+        helpRequest={helpRequest}
       />
 
-      {configOpen && (
+      <Presence show={configOpen}>
         <SetupScreen initial={settings} starting={start.isPending} error={start.error?.message ?? null} onStart={deal} onClose={() => setConfigOpen(false)} />
-      )}
+      </Presence>
 
-      {reviewOpen && (
+      <Presence show={reviewOpen}>
         <SessionReview
           sessionId={sessionId}
           decisionsPlayed={decisionsPlayed}
@@ -150,7 +158,7 @@ export function App() {
             setReviewOpen(false);
           }}
         />
-      )}
+      </Presence>
     </div>
   );
 }
@@ -165,9 +173,11 @@ interface PlayAreaProps {
   chats: Record<string, ChatMessage[]>;
   onChat: (decisionId: string, messages: ChatMessage[]) => void;
   animate: boolean;
+  /** Bumped by the header's ? button to replay the tour. */
+  helpRequest: number;
 }
 
-function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onChat, animate }: PlayAreaProps) {
+function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onChat, animate, helpRequest }: PlayAreaProps) {
   const { playback, done, skip } = usePlayback(hand, animate);
   useTableSounds(hand, playback, animate);
   const decide = useMutation({
@@ -183,8 +193,71 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
   const result = hand.result;
   const complete = hand.status === 'complete';
 
+  // One entry per button, in display order. A spot can offer two aggressive options (e.g. raise and all-in):
+  // the slot takes the first, and the other gets its own button after the three fixed ones.
+  const slotted = ACTION_SLOTS.map((slot) => ({ slot, action: hand.legalActions.find((a) => slot.ids.includes(a.id)) }));
+  const extras = hand.legalActions.filter((a) => slotted.every((s) => s.action !== a));
+  const shortcuts = new Map<string, ActionType>();
+  for (const { slot, action } of slotted) if (action) shortcuts.set(slot.key[0], action.id);
+  for (const a of extras) if (a.id === 'allin' && !shortcuts.has('a')) shortcuts.set('a', a.id);
+  const keyFor = (id: ActionType) => [...shortcuts].find(([, v]) => v === id)?.[0];
+
+  const canAct = done && !complete && !decide.isPending;
+  const canDeal = done && complete && !dealing;
+  useEffect(() => {
+    if (!canAct && !canDeal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement;
+      if (t.isContentEditable || t.closest('input, textarea, select')) return;
+      if (document.querySelector('.modal-backdrop, .tour')) return;
+      const k = e.key.toLowerCase();
+      if (canAct && shortcuts.has(k)) {
+        e.preventDefault();
+        decide.mutate(shortcuts.get(k)!);
+      } else if (canDeal && k === 'n') {
+        e.preventDefault();
+        onNext();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  // First-run tour: part one once the first hand waits on you, part two after your first grade.
+  const [tour, setTour] = useState<{ steps: TourStep[]; part: TourPart | null } | null>(null);
+  const graded = hand.decisions.length > 0;
+  useEffect(() => {
+    if (tour) return;
+    if (canAct && !hasSeenTour('play')) {
+      setTour({ steps: PLAY_STEPS, part: 'play' });
+      return;
+    }
+    if (graded && !hasSeenTour('verdict')) {
+      // Let the verdict and chart finish animating in first. If the panel has already moved on to a
+      // later decision, wait for the next grade instead.
+      const t = setTimeout(() => document.querySelector('.verdict') && setTour({ steps: VERDICT_STEPS, part: 'verdict' }), 700);
+      return () => clearTimeout(t);
+    }
+  }, [canAct, graded, tour]);
+  // The ? button replays both parts (steps for things not on screen yet are skipped). PlayArea remounts
+  // every hand, so only react to presses made while this hand is up.
+  const helpSeen = useRef(helpRequest);
+  useEffect(() => {
+    if (helpRequest === helpSeen.current) return;
+    helpSeen.current = helpRequest;
+    setTour({ steps: [...PLAY_STEPS, ...VERDICT_STEPS], part: null });
+  }, [helpRequest]);
+  const endTour = useCallback(() => {
+    setTour((t) => {
+      if (t?.part) markTourSeen(t.part);
+      return null;
+    });
+  }, []);
+
   return (
     <main>
+      {tour && <Tour key={tour.part ?? 'all'} steps={tour.steps} onDone={endTour} />}
       <section className="left">
         <div className="table-area">
           <Table hand={hand} playback={playback} onSkip={skip} />
@@ -200,35 +273,34 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
             </div>
           ) : !complete ? (
             <div className="actions">
-              {ACTION_SLOTS.map((slot) => {
-                const action = hand.legalActions.find((a) => slot.ids.includes(a.id));
-                return action ? (
+              {slotted.map(({ slot, action }) =>
+                action ? (
                   <button key={slot.key} className={`act act-${slot.key}`} disabled={decide.isPending} onClick={() => decide.mutate(action.id)}>
                     {action.label}
+                    <ShortcutKey k={keyFor(action.id)} />
                   </button>
                 ) : (
                   <button key={slot.key} className={`act act-${slot.key} unavailable`} disabled title="Not an option in this spot">
                     {slot.placeholder}
                   </button>
-                );
-              })}
-              {/* A spot can offer two aggressive options (e.g. raise and all-in): the second gets its own button. */}
-              {hand.legalActions
-                .filter((a) => ACTION_SLOTS.every((slot) => hand.legalActions.find((b) => slot.ids.includes(b.id)) !== a))
-                .map((a) => (
-                  <button key={a.id} className="act act-raise" disabled={decide.isPending} onClick={() => decide.mutate(a.id)}>
-                    {a.label}
-                  </button>
-                ))}
+                ),
+              )}
+              {extras.map((a) => (
+                <button key={a.id} className="act act-raise" disabled={decide.isPending} onClick={() => decide.mutate(a.id)}>
+                  {a.label}
+                  <ShortcutKey k={keyFor(a.id)} />
+                </button>
+              ))}
             </div>
           ) : (
             result && (
               <div className="result-strip">
                 <span className="muted small">
-                  Result <b className={result.heroNetBb > 0 ? 'up' : result.heroNetBb < 0 ? 'down' : ''}>{result.heroNetBb > 0 ? '+' : ''}{result.heroNetBb}bb</b> · {result.summary}
+                  Result <b className={result.heroNetBb > 0 ? 'up' : result.heroNetBb < 0 ? 'down' : ''}>{result.heroNetBb > 0 ? '+' : ''}{result.heroNetBb}bb</b>. {result.summary}
                 </span>
                 <button className="primary" onClick={onNext} disabled={dealing} autoFocus>
                   {dealing ? 'Dealing…' : 'Deal next hand'}
+                  <ShortcutKey k="n" />
                 </button>
               </div>
             )
@@ -244,4 +316,13 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
       </aside>
     </main>
   );
+}
+
+/** Keyboard hint on an action button; hidden on touch screens by CSS. */
+function ShortcutKey({ k }: { k?: string }) {
+  return k ? (
+    <kbd className="key" aria-hidden>
+      {k.toUpperCase()}
+    </kbd>
+  ) : null;
 }
