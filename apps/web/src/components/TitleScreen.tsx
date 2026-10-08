@@ -1,14 +1,12 @@
 import { useState } from 'react';
 import { signInWithGoogle, useAuth } from '../auth/auth';
 import { ACTION_COLORS } from './actionColors';
-import { AuthDialog, GoogleMark } from './AccountMenu';
+import { GoogleMark } from './AccountMenu';
 import { ApproxIcon, SparklesIcon, StarIcon } from './icons';
 import { PlayingCard } from './PlayingCard';
-import { Presence } from './Presence';
 
 export function TitleScreen({ onGuest }: { onGuest: () => void }) {
   const { enabled } = useAuth();
-  const [emailOpen, setEmailOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,12 +41,7 @@ export function TitleScreen({ onGuest }: { onGuest: () => void }) {
                   <GoogleMark /> Continue with Google
                 </button>
                 {error && <p className="error small">{error}</p>}
-                <p className="muted small">
-                  Sign up anytime; your hands come with you.{' '}
-                  <button className="link" onClick={() => setEmailOpen(true)}>
-                    Or use email
-                  </button>
-                </p>
+                <p className="muted small">Sign up anytime; your hands come with you.</p>
               </div>
             )}
           </div>
@@ -67,9 +60,6 @@ export function TitleScreen({ onGuest }: { onGuest: () => void }) {
         <a href="/privacy.html">Privacy</a>
         <a href="/terms.html">Terms</a>
       </footer>
-      <Presence show={emailOpen}>
-        <AuthDialog onClose={() => setEmailOpen(false)} />
-      </Presence>
     </div>
   );
 }

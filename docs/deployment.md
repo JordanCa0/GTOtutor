@@ -110,7 +110,7 @@ Keep migrations additive (new columns or tables) so the running API keeps workin
 After changing `deploy/docker-compose.yml`, `deploy.sh` or `Caddyfile`, push to GitHub, then on the server:
 ```sh
 cd /opt/gtotutor
-for f in docker-compose.yml Caddyfile deploy.sh; do curl -fsSLO https://raw.githubusercontent.com/JordanCa0/GTOtutor/preflop-solver/deploy/$f; done
+for f in docker-compose.yml Caddyfile deploy.sh; do curl -fsSLO https://raw.githubusercontent.com/JordanCa0/GTOtutor/main/deploy/$f; done
 bash deploy.sh
 ```
 GitHub can serve the old copy for a few minutes after a push. Check with `grep` that the change arrived before running `deploy.sh`.
@@ -207,10 +207,10 @@ To list the names (no values): `aws ssm get-parameters-by-path --path /gtotutor/
 5. In Session Manager:
    ```sh
    sudo -i
-   cd /tmp && curl -fsSLO https://raw.githubusercontent.com/JordanCa0/GTOtutor/preflop-solver/deploy/bootstrap.sh
+   cd /tmp && curl -fsSLO https://raw.githubusercontent.com/JordanCa0/GTOtutor/main/deploy/bootstrap.sh
    bash bootstrap.sh
    cd /opt/gtotutor
-   for f in docker-compose.yml Caddyfile deploy.sh deploy.env.example; do curl -fsSLO https://raw.githubusercontent.com/JordanCa0/GTOtutor/preflop-solver/deploy/$f; done
+   for f in docker-compose.yml Caddyfile deploy.sh deploy.env.example; do curl -fsSLO https://raw.githubusercontent.com/JordanCa0/GTOtutor/main/deploy/$f; done
    cp deploy.env.example deploy.env && nano deploy.env   # fill in account, image, API_DOMAIN=api.gtotutor.app, bucket
    bash deploy.sh
    ```

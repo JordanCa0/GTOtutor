@@ -1,6 +1,6 @@
 # Accounts and data
 
-**Status (2026-10-04): steps 1 (database and guest persistence) and 2 (sign-in) are built and live; steps 3–4 are next.** Decided with Jordan: Supabase (Postgres + Auth + Storage), sign-in with Google and email/password, guest play that carries over on sign-up, and storing hands, decisions, coach conversations, settings, session reviews/progress, and starred decisions. The column-by-column schema is in `docs/database-schema.md`.
+**Status (2026-10-04): steps 1 (database and guest persistence) and 2 (sign-in) are built and live; steps 3–4 are next.** Decided with Jordan: Supabase (Postgres + Auth + Storage), sign-in with Google (email/password was dropped on 2026-10-08, see below), guest play that carries over on sign-up, and storing hands, decisions, coach conversations, settings, session reviews/progress, and starred decisions. The column-by-column schema is in `docs/database-schema.md`.
 
 ## Why
 
@@ -11,7 +11,7 @@ Nothing survives a restart today:
 
 ## Architecture
 
-- **Web** uses `@supabase/supabase-js` only for sign-in: Google, email/password, verification, password reset, and session refresh. It sends the access token to our API as `Authorization: Bearer …`; guests send `X-Guest-Id`.
+- **Web** uses `@supabase/supabase-js` only for sign-in: Google OAuth and session refresh. It sends the access token to our API as `Authorization: Bearer …`; guests send `X-Guest-Id`.
 - **API** is the only thing that reads or writes data. It verifies Supabase JWTs (`jose` + the project's JWKS) and uses Postgres through **Drizzle ORM**; schema and migrations live in the repo.
 - **Row Level Security** is on for every table with **no policies**, so the public (publishable) key can't read anything directly. Only the API's server-side connection can.
 - **Solver output** lives in a private Storage bucket as `<spot>/<flop>.json.gz`, indexed by a table. The API downloads on demand and caches on disk and in memory. The solver itself still runs only offline (AGPL).
@@ -41,7 +41,7 @@ Every player-owned row has either `user_id` (→ `auth.users`, deleted with the 
    - Ownership checks on every hand, decision, coach, and review route (today any hand id works for anyone).
    - Coach rate limits per player instead of per IP.
 2. **Sign-in.** ✅ Done.
-   - Auth modal (Google button, email/password, forgot password), set-new-password on the recovery link, account menu.
+   - Auth modal (Google button) and account menu.
    - The API verifies tokens and creates the profile row.
    - `POST /api/me/claim-guest` moves a guest's history to the new account.
    - `DELETE /api/me` deletes the account and its data.
@@ -62,6 +62,8 @@ Out of scope for now: other sign-in providers, separate dev and prod projects. H
 
 **Guest data is temporary** (decided 2026-10-04): a guest's session and everything in it is deleted when they start a new session or after 24 hours with no new hand, unless they sign up during it. Details in `docs/database-schema.md`.
 
+**Google is the only sign-in** (decided 2026-10-08): email/password sign-up, verification and password reset were removed. Supabase's built-in email sender only reaches project team members, and Google-only sign-in avoids running an SMTP provider. The Email provider is turned off in Supabase (Authentication → Sign In / Providers), so it can't be used directly with the public key either.
+
 ## One-time Supabase setup (Jordan)
 
 1. **Create a project** at supabase.com. Pick the region closest to you and save the database password somewhere safe.
@@ -81,7 +83,7 @@ Out of scope for now: other sign-in providers, separate dev and prod projects. H
 - **Unit tests** run on the in-memory repo: ownership 404s, guest claim, stars, settings, saved coach messages, progress stats.
 - **Database tests** run only when `DATABASE_URL` is set: migrations apply, and the Postgres repo passes the same tests as the in-memory one.
 - **RLS check:** the publishable key can't read `hands`.
-- **End to end in a browser:** play as a guest and star a decision, sign up, see that history under the account, restart the API, and confirm everything (including a hand in progress) is still there. Then try Google sign-in and a password reset.
+- **End to end in a browser:** play as a guest and star a decision, sign up, see that history under the account, restart the API, and confirm everything (including a hand in progress) is still there. Then try Google sign-in.
 - **Solver from Storage:** with `SOLVER_SOURCE=remote` and no local `solver/output`, flop practice still works.
 
 ## How it works now (steps 1–2)
@@ -89,7 +91,7 @@ Out of scope for now: other sign-in providers, separate dev and prod projects. H
 - **Who's asking:** every API request carries `X-Guest-Id` (a random id in localStorage, `apps/web/src/auth/identity.ts`). A signed-in browser also sends `Authorization: Bearer <Supabase token>`, which wins. `apps/api/src/auth/player.ts` resolves the player; tokens are checked locally against the project's public signing keys (`src/auth/verify.ts`). Hand, coach and review routes answer 401 without an identity and 404 for someone else's data.
 - **Storage:** `src/db/repo.ts` defines the `Repo` interface plus an in-memory version (tests, or running without `DATABASE_URL`); `src/db/pgRepo.ts` is the Supabase Postgres version. `src/engine/handService.ts` keeps hands being played in memory and writes every change through, so a restart continues from the database. A finished hand drops the engine state (deck, every hole card) and keeps a replay (action log + result).
 - **Guests:** starting a hand in a new session deletes the guest's previous sessions; the API deletes guest sessions idle for 24 hours (hourly check in `src/server.ts`).
-- **Sign-in (web):** `apps/web/src/components/AccountMenu.tsx` has the sign-in/sign-up dialog (Google, email + password, forgot password), the new-password dialog for reset links, and the account menu (sign out, delete account). On sign-in, `POST /api/me/claim-guest` moves the guest's session to the account and the browser starts a fresh guest id. Signing out resets the table.
+- **Sign-in (web):** `apps/web/src/components/AccountMenu.tsx` has the sign-in dialog (Google only) and the account menu (sign out, delete account). On sign-in, `POST /api/me/claim-guest` moves the guest's session to the account and the browser starts a fresh guest id. Signing out resets the table.
 - **Deleting an account:** `DELETE /api/me` deletes the Supabase user with the secret key (`src/auth/accounts.ts`); foreign keys delete everything it owned.
 - **Tests:** `npm test` uses the in-memory repo. `RUN_DB_TESTS=1 npx vitest run test/persistence.test.ts` (in `apps/api`) also runs the storage checks against Supabase, cleaning up after itself.
 - **Not yet:** the stored coach conversations, stars and tags, settings sync, "My hands", and solver data in Storage (steps 3–4).

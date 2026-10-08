@@ -49,3 +49,33 @@ Show which well-known professionals have a similar style on the same chart.
 
 - Needs a source of public stats for named players, and permission to use it. Licensing and the right to use names need checking before building this.
 - A safer first version compares against anonymous style profiles ("typical online reg", "typical live pro") rather than named people.
+
+## Glossary and beginner section
+
+A glossary of the poker and solver terms the app uses, plus a beginner path for players new to poker strategy.
+
+- **Glossary:** short plain-language definitions. Examples:
+  - positions (UTG … BB), open, 3-bet, 4-bet, limp, iso-raise
+  - range, combo, equity, realization, EV, bb/hand
+  - GTO, mixed strategy, exploitability
+  - stat names such as VPIP and PFR
+- **Linked from where terms appear:** hover or tap a term in the verdict, chart, coach answers or settings to see its definition. The coach can link glossary entries in its answers.
+- **Beginner path:** a short guided sequence. It starts with what positions and ranges are and why position matters, then moves to easy spots (clear opens and folds) before mixed and close decisions.
+- **Beginner mode:** optionally simpler verdicts (e.g. "good / OK / mistake" without EV numbers) and a coach told to avoid jargon or define it inline.
+
+## Hand replayer
+
+Recreate a hand, from a real game or a hypothetical one, and have it solved and explained.
+
+- **Two ways in:**
+  - **Describe it to the coach:** "I was on the button with AJs, CO opened 2.5, I 3-bet to 7.5…". Claude turns the description into a structured hand: seats, stacks, hole cards, board and the action on each street. The coach already uses structured output (`apps/api/src/teacher/llmTeacher.ts`).
+  - **Build it in settings:** pick positions, stacks, cards, board and actions directly. This is also where a described hand opens for checking and correcting, so a misunderstood description never gets solved as-is.
+- **Replay:** step through the hand street by street in the normal table view, with the solver's strategy and the coach's explanation at each of hero's decisions.
+- **What "solved" can mean today:**
+  - Preflop decisions come from the solved charts.
+  - Flop decisions use the stored flop solves when the hand matches a solved spot: same preflop line, 100bb, standard sizes. Other flops borrow the nearest solved flop, as in play.
+- **What needs new solving:** custom stack depths, bet sizes, preflop lines outside the charts, and turn and river.
+  - The flop solver is AGPL and can't run on the live server.
+  - So this depends on the planned browser (WASM) solving in `docs/postflop-plan.md`, or on a solver we write ourselves.
+  - Until then, the replayer should say clearly which decisions are solved, approximated or unsolved.
+- **Saving:** replayed hands could live with saved hands ("My hands" in `docs/accounts-and-data.md`) and be shared by link.

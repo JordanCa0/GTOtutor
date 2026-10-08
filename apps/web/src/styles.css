@@ -509,15 +509,6 @@ button.primary.danger { background: #c25a4b; color: #fff; }
 .google-btn { display: flex; align-items: center; justify-content: center; gap: 0.6rem; width: 100%; padding: 0.65rem 1rem; border-radius: var(--r-md); border: 1px solid #dadce0; background: #fff; color: #1f1f1f; font: inherit; font-weight: 600; cursor: pointer; transition: transform 160ms var(--ease), background-color 150ms ease; }
 @media (hover: hover) and (pointer: fine) { .google-btn:hover:not(:disabled) { background: #f3f4f6; } }
 .google-btn:disabled { opacity: 0.6; cursor: default; }
-.auth-or { display: flex; align-items: center; gap: 0.6rem; color: var(--muted); font-size: var(--fs-xs); }
-.auth-or::before, .auth-or::after { content: ''; flex: 1; height: 1px; background: var(--line-2); }
-.auth-form { display: flex; flex-direction: column; gap: 0.7rem; }
-.auth-form label { display: flex; flex-direction: column; gap: 0.3rem; font-size: var(--fs-sm); font-weight: 600; }
-.auth-form input { padding: 0.6rem 0.75rem; border-radius: var(--r-md); border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.04); color: var(--text); font: inherit; font-weight: 400; }
-.auth-form input:focus { outline: none; border-color: var(--line-3); }
-.auth-form small { font-weight: 400; }
-.auth-form p { margin: 0; }
-.auth-switch { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; flex-wrap: wrap; color: var(--muted); }
 .auth-actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
 /* `translate` for centering so the entry animation's `transform` doesn't knock it off-center. */
 .auth-toast { position: fixed; left: 50%; bottom: 1.2rem; translate: -50% 0; z-index: 30; width: min(560px, calc(100vw - 2rem)); display: flex; align-items: flex-start; gap: 0.8rem; padding: 0.8rem 1rem; border-radius: var(--r-md); border: 1px solid rgba(224, 122, 107, 0.55); background: #2a1716; box-shadow: var(--shadow-float); animation: pop 0.2s var(--ease) both; }

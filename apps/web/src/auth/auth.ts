@@ -9,13 +9,11 @@ export interface AuthState {
   /** False until the stored session (if any) has been read. */
   ready: boolean;
   session: Session | null;
-  /** Opened from a password-reset email: the user should choose a new password. */
-  recovering: boolean;
   /** Why the last sign-in attempt failed (shown until dismissed). */
   error: string | null;
 }
 
-let state: AuthState = { enabled: !!supabase, ready: !supabase, session: null, recovering: false, error: initialAuthError };
+let state: AuthState = { enabled: !!supabase, ready: !supabase, session: null, error: initialAuthError };
 const listeners = new Set<() => void>();
 const set = (patch: Partial<AuthState>) => {
   state = { ...state, ...patch };
@@ -39,7 +37,7 @@ async function claimGuestData(token: string): Promise<void> {
 if (supabase) {
   supabase.auth.onAuthStateChange((event, session) => {
     const wasSignedIn = !!state.session;
-    set({ session, ready: true, recovering: event === 'PASSWORD_RECOVERY' ? true : state.recovering });
+    set({ session, ready: true });
     if (event === 'INITIAL_SESSION' && !session && initialHadCode && !state.error) {
       set({ error: "Sign-in didn't finish: the code from Google couldn't be exchanged for a session. Try again in the same browser tab." });
     }
@@ -56,10 +54,6 @@ export function signInWithGoogle() {
 
 export function dismissAuthError(): void {
   set({ error: null });
-}
-
-export function finishRecovery(): void {
-  set({ recovering: false });
 }
 
 export function useAuth(): AuthState {

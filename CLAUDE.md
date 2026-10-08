@@ -2,9 +2,9 @@
 
 A browser poker trainer: play preflop spots, get a verdict against range charts, and learn from a Claude-powered coach. Flop decisions are played and graded from offline solver output for spots that have it; turn and river still run out automatically. See `docs/postflop-plan.md`.
 
-Ideas planned for later (opponent archetypes, heads-up exploit mode, player style chart) are in `docs/future-ideas.md`.
+Ideas planned for later (opponent archetypes, heads-up exploit mode, player style chart, glossary and beginner section, hand replayer) are in `docs/future-ideas.md`.
 
-Accounts and a database run on Supabase: sign-in (Google, email + password), guest play that carries over on sign-up, and every hand and decision saved in Postgres. Saved coach chats, stars/tags, "My hands", and solver data in Storage are next. See `docs/accounts-and-data.md` and `docs/database-schema.md`.
+Accounts and a database run on Supabase: sign-in with Google only, guest play that carries over on sign-up, and every hand and decision saved in Postgres. Saved coach chats, stars/tags, "My hands", and solver data in Storage are next. See `docs/accounts-and-data.md` and `docs/database-schema.md`.
 
 Hosting is on AWS: web on S3 + CloudFront, the API in Docker on one EC2 instance (it keeps live hands in memory, so never more than one), flop files synced from S3. Runbook in `docs/deployment.md`; files in `deploy/` and `apps/api/Dockerfile`.
 

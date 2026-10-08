@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../api/client';
-import { dismissAuthError, displayName, finishRecovery, signInWithGoogle, useAuth } from '../auth/auth';
+import { dismissAuthError, displayName, signInWithGoogle, useAuth } from '../auth/auth';
 import { supabase } from '../auth/supabase';
 import { XIcon } from './icons';
 import { Backdrop, Presence } from './Presence';
 
 /** Header control: "Sign in" for guests, the account menu when signed in. Hidden when sign-in isn't configured. */
 export function AccountMenu() {
-  const { enabled, ready, session, recovering, error } = useAuth();
+  const { enabled, ready, session, error } = useAuth();
   const [dialog, setDialog] = useState<'auth' | 'delete' | null>(null);
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -69,9 +69,6 @@ export function AccountMenu() {
       <Presence show={dialog === 'delete' && !!session}>
         <DeleteAccountDialog onClose={() => setDialog(null)} />
       </Presence>
-      <Presence show={recovering}>
-        <NewPasswordDialog />
-      </Presence>
       {failure}
     </>
   );
@@ -104,127 +101,29 @@ function Modal({ title, eyebrow, onClose, children }: { title: string; eyebrow: 
   );
 }
 
-const redirectTo = () => window.location.origin;
-
-export function AuthDialog({ onClose }: { onClose: () => void }) {
-  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+/** Sign-in is Google only. */
+function AuthDialog({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
-  const run = async (task: () => Promise<{ error: { message: string } | null }>, done?: string) => {
+  const google = async () => {
     setBusy(true);
     setError(null);
-    setNotice(null);
-    const { error } = await task();
-    setBusy(false);
-    if (error) setError(error.message);
-    else if (done) setNotice(done);
+    const { error } = await signInWithGoogle();
+    // On success the browser leaves for Google, so only a failure lands here.
+    if (error) {
+      setError(error.message);
+      setBusy(false);
+    }
   };
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    const auth = supabase!.auth;
-    if (mode === 'signin') void run(() => auth.signInWithPassword({ email, password }));
-    else if (mode === 'signup')
-      void run(
-        () => auth.signUp({ email, password, options: { emailRedirectTo: redirectTo() } }),
-        `Almost done: we sent a confirmation link to ${email}. Open it to finish creating your account.`,
-      );
-    else void run(() => auth.resetPasswordForEmail(email, { redirectTo: redirectTo() }), `If ${email} has an account, a reset link is on its way.`);
-  };
-
-  const title = mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create your account' : 'Reset your password';
   return (
-    <Modal eyebrow="Account" title={title} onClose={onClose}>
+    <Modal eyebrow="Account" title="Sign in" onClose={onClose}>
       <p className="muted small">Your hands, decisions, and coach chats are saved to your account. Anything you played as a guest this session comes with you.</p>
-      {mode !== 'forgot' && (
-        <>
-          <button className="google-btn" disabled={busy} onClick={() => void run(signInWithGoogle)}>
-            <GoogleMark /> Continue with Google
-          </button>
-          <div className="auth-or">
-            <span>or with email</span>
-          </div>
-        </>
-      )}
-      <form className="auth-form" onSubmit={submit}>
-        <label>
-          Email
-          <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
-        </label>
-        {mode !== 'forgot' && (
-          <label>
-            Password
-            <input
-              type="password"
-              required
-              minLength={mode === 'signup' ? 8 : undefined}
-              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            {mode === 'signup' && <small className="muted">At least 8 characters.</small>}
-          </label>
-        )}
-        {error && <p className="error small">{error}</p>}
-        {notice && <p className="notice small">{notice}</p>}
-        <button className="primary" disabled={busy}>
-          {busy ? 'Working…' : mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send reset link'}
-        </button>
-      </form>
-      <div className="auth-switch small">
-        {mode === 'signin' && (
-          <>
-            <button className="link" onClick={() => setMode('forgot')}>
-              Forgot password?
-            </button>
-            <span>
-              New here?{' '}
-              <button className="link" onClick={() => setMode('signup')}>
-                Create an account
-              </button>
-            </span>
-          </>
-        )}
-        {mode !== 'signin' && (
-          <button className="link" onClick={() => setMode('signin')}>
-            Back to sign in
-          </button>
-        )}
-      </div>
-    </Modal>
-  );
-}
-
-/** Shown after following a password-reset link. */
-function NewPasswordDialog() {
-  const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    const { error } = await supabase!.auth.updateUser({ password });
-    setBusy(false);
-    if (error) setError(error.message);
-    else finishRecovery();
-  };
-  return (
-    <Modal eyebrow="Account" title="Choose a new password">
-      <form className="auth-form" onSubmit={(e) => void submit(e)}>
-        <label>
-          New password
-          <input type="password" required minLength={8} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
-          <small className="muted">At least 8 characters.</small>
-        </label>
-        {error && <p className="error small">{error}</p>}
-        <button className="primary" disabled={busy}>
-          {busy ? 'Saving…' : 'Save password'}
-        </button>
-      </form>
+      <button className="google-btn" disabled={busy} onClick={() => void google()}>
+        <GoogleMark /> Continue with Google
+      </button>
+      {error && <p className="error small">{error}</p>}
     </Modal>
   );
 }
