@@ -11,8 +11,10 @@ aws s3 sync "s3://${SOLVER_BUCKET}/solver-output" /data/solver-output --delete -
 # App secrets live in SSM Parameter Store under /gtotutor/ (e.g. /gtotutor/ANTHROPIC_API_KEY).
 aws ssm get-parameters-by-path --path /gtotutor/ --with-decryption --region "$AWS_REGION" \
   --query 'Parameters[].[Name,Value]' --output text \
-  | awk -F'\t' '{ sub("^/gtotutor/", "", $1); print $1 "=" $2 }' > .env
-chmod 600 .env
+  | awk -F'\t' '{ sub("^/gtotutor/", "", $1); print $1 "=" $2 }' > app.env
+chmod 600 app.env
+# Compose reads .env on its own, so plain `docker compose ps/logs` find API_IMAGE and API_DOMAIN.
+ln -sf deploy.env .env
 
 aws ecr get-login-password --region "$AWS_REGION" \
   | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"

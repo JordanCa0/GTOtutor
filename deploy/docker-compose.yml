@@ -1,10 +1,11 @@
 # Runs on the EC2 instance from /opt/gtotutor (see docs/deployment.md).
-# API_IMAGE and API_DOMAIN come from /opt/gtotutor/deploy.env; app secrets from .env (written from SSM by deploy.sh).
+# API_IMAGE and API_DOMAIN come from deploy.env (linked as .env, which Compose reads on its own);
+# app secrets from app.env (written from SSM by deploy.sh).
 services:
   api:
     image: ${API_IMAGE}
     restart: unless-stopped
-    env_file: .env
+    env_file: app.env
     volumes:
       - /data/solver-output:/data/solver-output:ro
     logging:

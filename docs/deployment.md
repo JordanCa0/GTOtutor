@@ -48,7 +48,7 @@ The files are in `deploy/` and `apps/api/Dockerfile`. Placeholders in angle brac
    ```
 
 ## 4. Secrets in SSM Parameter Store
-Create one **SecureString** parameter per variable under `/gtotutor/`. `deploy.sh` turns them into the container's `.env`.
+Create one **SecureString** parameter per variable under `/gtotutor/`. `deploy.sh` writes them to `app.env`, which the API container reads.
 
 | Parameter | Value |
 |---|---|
