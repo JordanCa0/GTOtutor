@@ -2,7 +2,9 @@
 
 A browser poker trainer: play preflop spots, get a verdict against range charts, and learn from a Claude-powered coach. Flop decisions are played and graded from offline solver output for spots that have it; turn and river still run out automatically. See `docs/postflop-plan.md`.
 
-Ideas planned for later (opponent archetypes, heads-up exploit mode, player style chart, glossary and beginner section, hand replayer) are in `docs/future-ideas.md`.
+20bb and 60bb (equal and mixed stacks) are planned in `docs/stack-depths-plan.md`.
+
+Ideas planned for later (opponent archetypes, heads-up exploit mode, player style chart, glossary and beginner section, hand replayer, mobile layout) are in `docs/future-ideas.md`.
 
 Accounts and a database run on Supabase: sign-in with Google only, guest play that carries over on sign-up, and every hand and decision saved in Postgres. Saved coach chats, stars/tags, "My hands", and solver data in Storage are next. See `docs/accounts-and-data.md` and `docs/database-schema.md`.
 

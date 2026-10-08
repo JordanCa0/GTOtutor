@@ -303,6 +303,21 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 480px; gap: 1rem; pa
 .range-grid { width: clamp(160px, 24vh, 240px); display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 1px; background: #05070a; border: 1px solid var(--line-2); border-radius: var(--r-sm); overflow: hidden; }
 .cell { aspect-ratio: 1; min-width: 0; overflow: hidden; letter-spacing: -0.02em; display: grid; place-items: center; color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7); font-weight: 600; }
 .cell.me { outline: 2px solid var(--gold); outline-offset: -1px; z-index: 1; animation: me 1.4s ease-in-out 3; }
+/* Enlarged chart: every cell is a button that selects the hand. The selection is an inset white ring, so it shows alongside the gold "your hand" outline. */
+.range-grid.selectable .cell { border: 0; padding: 0; margin: 0; font: inherit; font-weight: 600; cursor: pointer; }
+.range-grid.selectable .cell:focus { outline: none; }
+.range-grid.selectable .cell.me:focus { outline: 2px solid var(--gold); }
+.cell.picked { box-shadow: inset 0 0 0 2px #fff, inset 0 0 0 4px rgba(0, 0, 0, 0.55); z-index: 2; }
+.range-grid.selectable .cell:focus-visible { box-shadow: inset 0 0 0 2px #fff, inset 0 0 0 4px var(--gold); }
+@media (hover: hover) and (pointer: fine) {
+  .range-grid.selectable .cell:hover { filter: brightness(1.18); }
+}
+.hand-detail { margin-top: 0.25rem; }
+.hand-detail .label .link { font-size: inherit; font-weight: 500; }
+.detail-hand { font-family: var(--serif); font-size: var(--fs-xl); margin: 0 0 0.5rem; line-height: 1.2; }
+.detail-hand .muted { font-family: var(--sans); font-size: var(--fs-sm); }
+.hand-detail .mini-bar { margin-bottom: 0.5rem; }
+.hand-detail p.small { margin: 0.4rem 0 0; }
 @keyframes me { 50% { outline-color: #fff; } }
 .range-side { font-size: var(--fs-sm); min-width: 0; }
 .range-title { font-family: var(--serif); font-size: var(--fs-md); margin: 0; line-height: 1.3; }

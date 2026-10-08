@@ -79,3 +79,11 @@ Recreate a hand, from a real game or a hypothetical one, and have it solved and 
   - So this depends on the planned browser (WASM) solving in `docs/postflop-plan.md`, or on a solver we write ourselves.
   - Until then, the replayer should say clearly which decisions are solved, approximated or unsolved.
 - **Saving:** replayed hands could live with saved hands ("My hands" in `docs/accounts-and-data.md`) and be shared by link.
+
+## Mobile layout
+
+Make the app work properly on phones. Found 2026-10-08 while building the chart explorer.
+
+- **The page is wider than a phone screen,** so it scrolls sideways and the header gets cut off at 390px wide.
+- **The enlarged range chart opens partly off-screen to the right.** The pop-up lines up with the too-wide page instead of the screen. This matters most for the chart explorer, where tapping hands is the main use.
+- Check every screen at phone width on a real device: title, setup, table, decision panel, coach, session review, dialogs. The `mobile-native` skill's checklist covers the usual fixes: tap highlight, `100dvh`, inputs that zoom the page, safe areas.
