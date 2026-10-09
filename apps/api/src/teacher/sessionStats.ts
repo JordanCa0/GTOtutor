@@ -16,6 +16,8 @@ const LEAK_LABELS: Record<LeakType, string> = {
   under_raise: 'Calling or checking where the chart bets or raises',
 };
 
+export const spotLabel = (spot: SpotType) => SPOT_LABELS[spot];
+
 export function spotTypeOf(nodeKey: string): SpotType {
   if (nodeKey.startsWith('FLOP|')) return 'FLOP';
   const type = nodeKey.split('|')[2];

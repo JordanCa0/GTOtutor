@@ -11,7 +11,10 @@ import {
   type HandView,
   type HintResponse,
   type MeResponse,
+  type ProfileResponse,
+  type ProfileReviewResponse,
   type SessionReviewResponse,
+  type StarredResponse,
   type StarRequest,
   type StartHandRequest,
   type SubmitDecisionRequest,
@@ -25,7 +28,13 @@ import { playerKey, type CoachMessage } from './db/repo.js';
 import { HttpError, isFlopNodeKey, type HandEngine } from './engine/handEngine.js';
 import type { HandContext, HandService } from './engine/handService.js';
 import type { ExplainInput, LlmTeacher, SpotContext } from './teacher/llmTeacher.js';
+import { gtoSummaryOf, styleOf } from './teacher/playerStyle.js';
 import { computeSessionStats } from './teacher/sessionStats.js';
+
+/** The profile looks at an account's most recent decisions, up to this many. */
+export const PROFILE_DECISIONS = 5000;
+/** The all-time coach review is written again once this many new decisions have been played. */
+export const PROFILE_REVIEW_EVERY = 25;
 
 export interface AppDeps {
   charts: ChartService;
@@ -266,6 +275,61 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
     const user = await players.user(req);
     return { user: user && { id: user.userId, email: user.email, name: user.name } };
   });
+
+  /** Profile routes are for signed-in accounts: a guest's data only lasts one session. */
+  const signedIn = async (req: Parameters<typeof players.user>[0]) => {
+    const user = await players.user(req);
+    if (!user) throw new HttpError(401, 'Sign in to see your profile.');
+    return user;
+  };
+
+  app.get('/api/me/profile', async (req): Promise<ProfileResponse> => {
+    const { userId } = await signedIn(req);
+    const { decisions } = await hands.playerDecisions(userId, PROFILE_DECISIONS);
+    return {
+      stats: computeSessionStats([{ decisions }], false),
+      style: styleOf(decisions),
+      gto: gtoSummaryOf(decisions),
+      starredCount: await hands.starredCount(userId),
+    };
+  });
+
+  app.get('/api/me/profile/review', async (req): Promise<ProfileReviewResponse> => {
+    const { userId } = await signedIn(req);
+    const { decisions, total } = await hands.playerDecisions(userId, PROFILE_DECISIONS);
+    if (total < MIN_DECISIONS_FOR_REVIEW) return { coach: { status: 'not_enough_data', needed: MIN_DECISIONS_FOR_REVIEW - total } };
+    // Written once, then kept until enough new decisions have been played to say something new.
+    const saved = await hands.profileReview(userId);
+    if (saved && total - saved.decisionsCount < PROFILE_REVIEW_EVERY) return { coach: saved.coach };
+    const stats = computeSessionStats([{ decisions }], false);
+    const coach = await teacher.review(`profile-${userId}`, stats, playerKey({ kind: 'user', userId }), 'all-time');
+    // Reviews with invented numbers aren't kept, so the next visit can replace them.
+    if (coach.status === 'ok' && coach.ungroundedNumbers.length === 0) await hands.saveProfileReview(userId, total, stats, coach);
+    // A failed refresh still shows the last good review.
+    return { coach: coach.status === 'ok' || !saved ? coach : saved.coach };
+  });
+
+  app.get<{ Querystring: { before?: string; limit?: number } }>(
+    '/api/me/starred',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          additionalProperties: false,
+          properties: { before: { type: 'string', format: 'date-time' }, limit: { type: 'integer', minimum: 1, maximum: 100 } },
+        },
+      },
+    },
+    async (req): Promise<StarredResponse> => {
+      const { userId } = await signedIn(req);
+      const limit = req.query.limit ?? 50;
+      const rows = await hands.starred(userId, req.query.before ? new Date(req.query.before) : null, limit);
+      return {
+        items: rows.map((r) => ({ handId: r.handId, decision: r.decision, note: r.note, starredAt: r.starredAt.toISOString() })),
+        nextBefore: rows.length === limit ? rows.at(-1)!.starredAt.toISOString() : null,
+      };
+    },
+  );
 
   /** After sign-in: move this browser's guest data into the account. */
   app.post<{ Body: { guestId: string } }>(

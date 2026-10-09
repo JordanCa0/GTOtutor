@@ -1,11 +1,11 @@
 import type { DecisionFeedback, DecisionStar, SessionStats } from '@gtotutor/shared-types';
-import { and, asc, eq, inArray, isNotNull, lt, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, lt, ne, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { spotTypeOf } from '../teacher/sessionStats.js';
-import type { CoachMessage, HandRecord, HandReplay, Player, Repo, SavedCoachReview } from './repo.js';
+import type { CoachMessage, HandRecord, HandReplay, Player, Repo, SavedCoachReview, StarredRow } from './repo.js';
 import * as schema from './schema.js';
-import { coachMessages, decisions, hands, practiceSessions, profiles, sessionReviews } from './schema.js';
+import { coachMessages, decisions, hands, practiceSessions, profileReviews, profiles, sessionReviews } from './schema.js';
 
 const ownerCols = (p: Player) => (p.kind === 'user' ? { userId: p.userId, guestId: null } : { userId: null, guestId: p.guestId });
 const rowOwner = (r: { userId: string | null; guestId: string | null }): Player =>
@@ -161,6 +161,45 @@ export class PgRepo implements Repo {
 
   async saveSessionReview(sessionId: string, decisionsCount: number, stats: SessionStats, coach: SavedCoachReview): Promise<void> {
     await this.db.insert(sessionReviews).values({ sessionId, decisionsCount, stats, coach }).onConflictDoNothing();
+  }
+
+  async playerDecisions(userId: string, limit: number): Promise<{ decisions: DecisionFeedback[]; total: number }> {
+    const rows = await this.db
+      .select({ feedback: decisions.feedback })
+      .from(decisions)
+      .where(eq(decisions.userId, userId))
+      .orderBy(desc(decisions.createdAt), desc(decisions.idx))
+      .limit(limit);
+    const [{ n }] = await this.db.select({ n: sql<number>`count(*)::int` }).from(decisions).where(eq(decisions.userId, userId));
+    return { decisions: rows.map((r) => r.feedback as DecisionFeedback), total: n };
+  }
+
+  async starredDecisions(userId: string, before: Date | null, limit: number): Promise<StarredRow[]> {
+    const rows = await this.db
+      .select({ handId: decisions.handId, feedback: decisions.feedback, note: decisions.note, starredAt: decisions.starredAt })
+      .from(decisions)
+      .where(and(eq(decisions.userId, userId), isNotNull(decisions.starredAt), before ? lt(decisions.starredAt, before) : undefined))
+      .orderBy(desc(decisions.starredAt))
+      .limit(limit);
+    return rows.map((r) => ({ handId: r.handId, decision: r.feedback as DecisionFeedback, note: r.note, starredAt: r.starredAt! }));
+  }
+
+  async starredCount(userId: string): Promise<number> {
+    const [{ n }] = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(decisions)
+      .where(and(eq(decisions.userId, userId), isNotNull(decisions.starredAt)));
+    return n;
+  }
+
+  async profileReview(userId: string): Promise<{ decisionsCount: number; coach: SavedCoachReview } | null> {
+    const [row] = await this.db.select().from(profileReviews).where(eq(profileReviews.userId, userId));
+    return row ? { decisionsCount: row.decisionsCount, coach: row.coach as SavedCoachReview } : null;
+  }
+
+  async saveProfileReview(userId: string, decisionsCount: number, stats: SessionStats, coach: SavedCoachReview): Promise<void> {
+    const values = { userId, decisionsCount, stats, coach, createdAt: new Date() };
+    await this.db.insert(profileReviews).values(values).onConflictDoUpdate({ target: profileReviews.userId, set: { decisionsCount, stats, coach, createdAt: values.createdAt } });
   }
 
   /** For checks and scripts: row counts per table. */

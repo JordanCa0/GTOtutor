@@ -125,6 +125,28 @@ export class HandService {
     await this.repo.saveSessionReview(sessionId, stats.decisions, stats, coach);
   }
 
+  // Profile page: signed-in accounts only (the routes check), always the requesting account's own data.
+
+  playerDecisions(userId: string, limit: number) {
+    return this.repo.playerDecisions(userId, limit);
+  }
+
+  starred(userId: string, before: Date | null, limit: number) {
+    return this.repo.starredDecisions(userId, before, limit);
+  }
+
+  starredCount(userId: string) {
+    return this.repo.starredCount(userId);
+  }
+
+  profileReview(userId: string) {
+    return this.repo.profileReview(userId);
+  }
+
+  saveProfileReview(userId: string, decisionsCount: number, stats: SessionStats, coach: SavedCoachReview) {
+    return this.repo.saveProfileReview(userId, decisionsCount, stats, coach);
+  }
+
   /** False for an unknown session; throws (not found) for someone else's. */
   private async ownsSession(player: Player, sessionId: string): Promise<boolean> {
     const owner = await this.repo.sessionOwner(sessionId);

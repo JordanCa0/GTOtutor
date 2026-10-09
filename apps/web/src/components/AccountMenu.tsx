@@ -7,7 +7,7 @@ import { XIcon } from './icons';
 import { Backdrop, Presence } from './Presence';
 
 /** Header control: "Sign in" for guests, the account menu when signed in. Hidden when sign-in isn't configured. */
-export function AccountMenu() {
+export function AccountMenu({ onProfile }: { onProfile?: () => void }) {
   const { enabled, ready, session, error } = useAuth();
   const [dialog, setDialog] = useState<'auth' | 'delete' | null>(null);
   const [open, setOpen] = useState(false);
@@ -49,6 +49,11 @@ export function AccountMenu() {
           {open && (
             <div className="account-menu" role="menu">
               <p className="muted small">Signed in as {session.user.email}</p>
+              {onProfile && (
+                <button role="menuitem" className="ghost" onClick={() => (setOpen(false), onProfile())}>
+                  Profile
+                </button>
+              )}
               <button role="menuitem" className="ghost" onClick={() => void supabase!.auth.signOut().then(() => setOpen(false))}>
                 Sign out
               </button>

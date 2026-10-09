@@ -71,6 +71,22 @@ export interface Repo {
   sessionReview(sessionId: string, decisionsCount: number): Promise<SavedCoachReview | null>;
   /** Keeps a session review; one already saved for the same count stays as it is. */
   saveSessionReview(sessionId: string, decisionsCount: number, stats: SessionStats, coach: SavedCoachReview): Promise<void>;
+  /** An account's most recent decisions (newest first, at most `limit`), and how many it has in all. */
+  playerDecisions(userId: string, limit: number): Promise<{ decisions: DecisionFeedback[]; total: number }>;
+  /** An account's starred decisions, newest star first, starred before `before` if given. */
+  starredDecisions(userId: string, before: Date | null, limit: number): Promise<StarredRow[]>;
+  starredCount(userId: string): Promise<number>;
+  /** The saved all-time coach review for an account, and the decision count it was written at. */
+  profileReview(userId: string): Promise<{ decisionsCount: number; coach: SavedCoachReview } | null>;
+  /** Replaces the account's saved all-time review. */
+  saveProfileReview(userId: string, decisionsCount: number, stats: SessionStats, coach: SavedCoachReview): Promise<void>;
+}
+
+export interface StarredRow {
+  handId: string;
+  decision: DecisionFeedback;
+  note: string | null;
+  starredAt: Date;
 }
 
 /** In-memory Repo with the same semantics, for tests and running without a database. */
@@ -79,8 +95,10 @@ export class MemoryRepo implements Repo {
   private readonly hands = new Map<string, HandRecord>();
   readonly profiles = new Map<string, string | null>();
   private readonly coach: { decisionId: string; owner: Player; message: CoachMessage }[] = [];
-  private readonly stars = new Map<string, string | null>(); // starred decision id -> note
+  private readonly stars = new Map<string, { note: string | null; at: Date }>(); // starred decision id
   private readonly reviews = new Map<string, { sessionId: string; coach: SavedCoachReview }>(); // `${sessionId}|${count}`
+  private readonly profileReviews = new Map<string, { decisionsCount: number; coach: SavedCoachReview }>();
+  private lastStarAt = 0;
 
   async ensureSession(sessionId: string, player: Player): Promise<Player> {
     const s = this.sessions.get(sessionId);
@@ -143,12 +161,52 @@ export class MemoryRepo implements Repo {
   }
 
   async star(decisionId: string): Promise<DecisionStar> {
-    return this.stars.has(decisionId) ? { starred: true, note: this.stars.get(decisionId)! } : { starred: false, note: null };
+    const s = this.stars.get(decisionId);
+    return s ? { starred: true, note: s.note } : { starred: false, note: null };
   }
 
   async setStar(decisionId: string, star: DecisionStar): Promise<void> {
-    if (star.starred) this.stars.set(decisionId, star.note);
-    else this.stars.delete(decisionId);
+    if (!star.starred) {
+      this.stars.delete(decisionId);
+      return;
+    }
+    // Editing the note keeps the original star time; distinct times keep "newest first" stable.
+    this.lastStarAt = Math.max(Date.now(), this.lastStarAt + 1);
+    const at = this.stars.get(decisionId)?.at ?? new Date(this.lastStarAt);
+    this.stars.set(decisionId, { note: star.note, at });
+  }
+
+  async playerDecisions(userId: string, limit: number): Promise<{ decisions: DecisionFeedback[]; total: number }> {
+    const all = this.userHands(userId).flatMap((h) => h.decisions);
+    return { decisions: structuredClone(all.reverse().slice(0, limit)), total: all.length };
+  }
+
+  async starredDecisions(userId: string, before: Date | null, limit: number): Promise<StarredRow[]> {
+    const rows: StarredRow[] = [];
+    for (const h of this.userHands(userId)) {
+      for (const d of h.decisions) {
+        const s = this.stars.get(d.id);
+        if (s && (!before || s.at < before)) rows.push({ handId: h.id, decision: structuredClone(d), note: s.note, starredAt: s.at });
+      }
+    }
+    return rows.sort((a, b) => b.starredAt.getTime() - a.starredAt.getTime()).slice(0, limit);
+  }
+
+  async starredCount(userId: string): Promise<number> {
+    return (await this.starredDecisions(userId, null, Number.MAX_SAFE_INTEGER)).length;
+  }
+
+  async profileReview(userId: string): Promise<{ decisionsCount: number; coach: SavedCoachReview } | null> {
+    const r = this.profileReviews.get(userId);
+    return r ? structuredClone(r) : null;
+  }
+
+  async saveProfileReview(userId: string, decisionsCount: number, _stats: SessionStats, coach: SavedCoachReview): Promise<void> {
+    this.profileReviews.set(userId, { decisionsCount, coach: structuredClone(coach) });
+  }
+
+  private userHands(userId: string): HandRecord[] {
+    return [...this.hands.values()].filter((h) => h.owner.kind === 'user' && h.owner.userId === userId);
   }
 
   async sessionReview(sessionId: string, decisionsCount: number): Promise<SavedCoachReview | null> {

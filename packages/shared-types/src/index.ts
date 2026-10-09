@@ -261,3 +261,59 @@ export interface SessionReviewResponse {
   stats: SessionStats;
   coach: SessionCoachReview;
 }
+
+/**
+ * One axis of the style chart: how far the player's choices lean from the charts', in percentage
+ * points (0 = plays like the charts), over `n` decisions, with its standard error.
+ */
+export interface StyleAxis {
+  value: number;
+  n: number;
+  se: number;
+}
+
+/** A point on the style chart. x: tight (−) to loose (+). y: passive (−) to aggressive (+). */
+export interface StylePoint {
+  x: StyleAxis;
+  y: StyleAxis;
+}
+
+export interface PlayerStyle {
+  overall: StylePoint;
+  bySpot: (StylePoint & { spot: SpotType; label: string })[];
+}
+
+/** How close to the charts and solver: share of decisions graded best or mixed, and EV given up. */
+export interface GtoSummary {
+  accuracy: number;
+  /** Average bb lost per decision against the best-EV action; null when no decision has EVs. */
+  evLossBb: number | null;
+  /** How many decisions had EVs to measure. */
+  evDecisions: number;
+}
+
+/** GET /api/me/profile: all-time numbers for the signed-in player (most recent decisions). */
+export interface ProfileResponse {
+  stats: SessionStats;
+  style: PlayerStyle;
+  gto: GtoSummary;
+  starredCount: number;
+}
+
+/** GET /api/me/profile/review: the coach's write-up of all-time play (saved, refreshed every so often). */
+export interface ProfileReviewResponse {
+  coach: SessionCoachReview;
+}
+
+export interface StarredDecision {
+  handId: string;
+  decision: DecisionFeedback;
+  note: string | null;
+  starredAt: string;
+}
+
+/** GET /api/me/starred: newest first. Pass `nextBefore` back as `before` for the next page. */
+export interface StarredResponse {
+  items: StarredDecision[];
+  nextBefore: string | null;
+}

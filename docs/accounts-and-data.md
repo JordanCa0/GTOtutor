@@ -1,6 +1,6 @@
 # Accounts and data
 
-**Status (2026-10-09): steps 1 (database and guest persistence) and 2 (sign-in) are built and live; step 3 is in progress (saved coach answers, saved session reviews and stars done); step 4 (solver data) is done through S3 instead of Supabase Storage.** Decided with Jordan: Supabase (Postgres + Auth), sign-in with Google (email/password was dropped on 2026-10-08, see below), guest play that carries over on sign-up, and storing hands, decisions, coach conversations, settings, session reviews/progress, and starred decisions. The column-by-column schema is in `docs/database-schema.md`.
+**Status (2026-10-09): steps 1 (database and guest persistence) and 2 (sign-in) are built and live; step 3 is in progress (saved coach answers, saved session reviews, stars and the profile page done); step 4 (solver data) is done through S3 instead of Supabase Storage.** Decided with Jordan: Supabase (Postgres + Auth), sign-in with Google (email/password was dropped on 2026-10-08, see below), guest play that carries over on sign-up, and storing hands, decisions, coach conversations, settings, session reviews/progress, and starred decisions. The column-by-column schema is in `docs/database-schema.md`.
 
 ## Why
 
@@ -29,6 +29,7 @@ Every player-owned row has either `user_id` (→ `auth.users`, deleted with the 
 | `decisions` | Every graded decision: spot, street, board, hand, chosen vs best action, grade, frequencies, borrowed flop, hint used, **starred time and note** |
 | `coach_messages` | Explanations and chat turns per decision (TL;DR, detail, points, ungrounded numbers) |
 | `session_reviews` | Saved session reviews (stats + coach summary) |
+| `profile_reviews` | The profile page's all-time coach review: one per account, rewritten every 25 new decisions |
 | `solver_spots`, `solved_flops` | **Unused.** Created for the dropped Supabase Storage plan; nothing reads or writes them. Remove them in a later migration, or reuse them as an index of the S3 files |
 
 ## Build steps
@@ -50,7 +51,12 @@ Every player-owned row has either `user_id` (→ `auth.users`, deleted with the 
    - Saved session reviews. ✅ Done: a review is paid for once per decision count (`session_reviews`); reviews with invented numbers aren't kept.
    - Settings synced across devices.
    - **Star a decision** (with an optional note). ✅ Done: the star button on the verdict, with a note field once starred (`GET`/`PUT /api/hands/:id/decisions/:decisionId/star`). Tags aren't built yet.
-   - A **"My hands"** view (filters: starred, mistakes, flop, position; replay a decision with its chart and coach thread).
+   - **Profile page** (signed-in players; account menu → Profile). ✅ Done:
+     - all-time accuracy and EV lost per decision
+     - the style chart: tight ↔ loose against passive ↔ aggressive, measured against the charts' own frequencies (`apps/api/src/teacher/playerStyle.ts`)
+     - biggest leaks and the coach's all-time review (saved in `profile_reviews`)
+     - starred decisions, each opening with its verdict, chart, note and coach thread
+   - A **"My hands"** view with filters (mistakes, flop, position) on top of the starred list.
    - Progress stats over time (reusing `computeSessionStats`).
 4. **Solver data off-device.** ✅ Done, through S3 instead of Supabase Storage (2026-10-09).
    - Flop files are uploaded with `aws s3 sync`, and `deploy/deploy.sh` syncs the bucket to the API server's disk. Steps are in `docs/deployment.md`.
@@ -95,4 +101,5 @@ Out of scope for now: other sign-in providers, separate dev and prod projects. H
 - **Deleting an account:** `DELETE /api/me` deletes the Supabase user with the secret key (`src/auth/accounts.ts`); foreign keys delete everything it owned.
 - **Tests:** `npm test` uses the in-memory repo. `RUN_DB_TESTS=1 npx vitest run test/persistence.test.ts` (in `apps/api`) also runs the storage checks against Supabase, cleaning up after itself.
 - **Stars and saved reviews:** a decision's star and note live on its `decisions` row; unstarring clears the note. `GET /api/sessions/:id/review` returns the saved coach review for the current decision count, and asks the coach only when there isn't one.
-- **Not yet:** tags, settings sync, "My hands" (where starred decisions will be listed), and progress stats (the rest of step 3).
+- **Profile page:** `GET /api/me/profile` (stats, style, accuracy and EV loss over the account's most recent 5,000 decisions), `GET /api/me/profile/review` (the saved coach review, rewritten after 25 new decisions), and `GET /api/me/starred` (newest first, paged with `before`). All three answer 401 to guests.
+- **Not yet:** tags, settings sync, filters beyond starred ("My hands"), and progress over time (the rest of step 3).

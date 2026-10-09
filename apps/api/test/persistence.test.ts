@@ -1,6 +1,16 @@
-import { MIN_DECISIONS_FOR_REVIEW, type HandView, type SessionReviewResponse, type SubmitDecisionResponse } from '@gtotutor/shared-types';
+import {
+  MIN_DECISIONS_FOR_REVIEW,
+  type DecisionFeedback,
+  type HandView,
+  type ProfileResponse,
+  type ProfileReviewResponse,
+  type SessionReviewResponse,
+  type StarredResponse,
+  type SubmitDecisionResponse,
+} from '@gtotutor/shared-types';
+import type { FastifyInstance } from 'fastify';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { buildApp } from '../src/app.js';
+import { buildApp, PROFILE_REVIEW_EVERY } from '../src/app.js';
 import { PlayerResolver } from '../src/auth/player.js';
 import { ChartService } from '../src/charts/chartService.js';
 import { buildFixtureChartSet } from '../src/charts/fixtures.js';
@@ -197,6 +207,85 @@ describe('saved session reviews', () => {
   });
 });
 
+describe('profile page', () => {
+  const OTHER_USER = '44444444-4444-4444-8444-444444444444';
+  const reviewLlm = () => fakeLlm({ structured: () => ({ summary: 'Steady player.', leaks: [{ title: 'Flop checks', advice: 'Bet more.' }], drill: 'BTN vs BB flops.' }) });
+  const asUser = (app: FastifyInstance, userId = USER) => client(app, { token: `test-user:${userId}` }, `profile-${userId.slice(0, 8)}`);
+
+  /** Plays flop-practice hands until at least `count` more decisions are made; returns them. */
+  async function play(call: ReturnType<typeof client>, count: number): Promise<{ handId: string; decision: DecisionFeedback }[]> {
+    const made: { handId: string; decision: DecisionFeedback }[] = [];
+    while (made.length < count) {
+      let hand = (await call(flopPractice)).json<HandView>();
+      while (hand.status === 'awaiting_hero') {
+        const res = (await call({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action: hand.legalActions[0].id } })).json<SubmitDecisionResponse>();
+        made.push({ handId: hand.id, decision: res.feedback });
+        hand = res.hand;
+      }
+    }
+    return made;
+  }
+
+  it('is for signed-in players only', async () => {
+    const app = makeApp(new MemoryRepo());
+    for (const url of ['/api/me/profile', '/api/me/profile/review', '/api/me/starred']) {
+      expect((await client(app)({ method: 'GET', url })).statusCode).toBe(401);
+    }
+    await app.close();
+  });
+
+  it('shows all-time numbers and starred decisions, newest first, only to their owner', async () => {
+    const app = makeApp(new MemoryRepo());
+    const me = asUser(app);
+    const made = await play(me, 3);
+    const star = (i: number, note: string) => me({ method: 'PUT', url: `/api/hands/${made[i].handId}/decisions/${made[i].decision.id}/star`, payload: { starred: true, note } });
+    await star(0, 'first');
+    await star(2, 'second');
+
+    const profile = (await me({ method: 'GET', url: '/api/me/profile' })).json<ProfileResponse>();
+    expect(profile.stats.decisions).toBe(made.length);
+    expect(profile.starredCount).toBe(2);
+    expect(profile.gto.accuracy).toBeGreaterThanOrEqual(0);
+    expect(profile.gto.accuracy).toBeLessThanOrEqual(1);
+    expect(profile.style.overall.y.n).toBeGreaterThan(0);
+
+    const page1 = (await me({ method: 'GET', url: '/api/me/starred?limit=1' })).json<StarredResponse>();
+    expect(page1.items.map((i) => i.note)).toEqual(['second']);
+    expect(page1.items[0]).toMatchObject({ handId: made[2].handId, decision: { id: made[2].decision.id } });
+    const page2 = (await me({ method: 'GET', url: `/api/me/starred?limit=1&before=${encodeURIComponent(page1.nextBefore!)}` })).json<StarredResponse>();
+    expect(page2.items.map((i) => i.note)).toEqual(['first']);
+    expect((await me({ method: 'GET', url: '/api/me/starred?before=not-a-date' })).statusCode).toBe(400);
+
+    const other = asUser(app, OTHER_USER);
+    expect((await other({ method: 'GET', url: '/api/me/starred' })).json()).toEqual({ items: [], nextBefore: null });
+    expect((await other({ method: 'GET', url: '/api/me/profile' })).json<ProfileResponse>().stats.decisions).toBe(0);
+    await app.close();
+  });
+
+  it('writes the coach review once, keeps it across a restart, and refreshes it after enough new decisions', async () => {
+    const repo = new MemoryRepo();
+    const llm = reviewLlm();
+    const before = makeApp(repo, undefined, llm);
+    const me = asUser(before);
+    const url = '/api/me/profile/review';
+    expect((await me({ method: 'GET', url })).json<ProfileReviewResponse>().coach).toEqual({ status: 'not_enough_data', needed: MIN_DECISIONS_FOR_REVIEW });
+    await play(me, MIN_DECISIONS_FOR_REVIEW);
+    expect((await me({ method: 'GET', url })).json<ProfileReviewResponse>().coach).toMatchObject({ status: 'ok', summary: 'Steady player.' });
+    await me({ method: 'GET', url });
+    expect(llm.structured).toHaveBeenCalledTimes(1);
+    await before.close();
+
+    const after = makeApp(repo, undefined, llm); // empty in-memory caches
+    const again = asUser(after);
+    expect((await again({ method: 'GET', url })).json<ProfileReviewResponse>().coach).toMatchObject({ status: 'ok' });
+    expect(llm.structured).toHaveBeenCalledTimes(1);
+    await play(again, PROFILE_REVIEW_EVERY);
+    await again({ method: 'GET', url });
+    expect(llm.structured).toHaveBeenCalledTimes(2);
+    await after.close();
+  });
+});
+
 describe('guest data lasts one session', () => {
   it('deletes the previous session when a guest starts a new one, and idle sessions after 24 hours', async () => {
     const repo = new MemoryRepo();
@@ -295,6 +384,9 @@ function repoContract(name: string, makeRepo: () => Repo, cleanup?: () => Promis
       await repo.saveSessionReview(sessionId, 1, stats, { ...review, summary: 'Replaced?' });
       expect(await repo.sessionReview(sessionId, 1)).toEqual(review);
       expect(await repo.sessionReview(sessionId, 2)).toBeNull();
+      // Profile queries are by account, so a guest's rows don't show up in them.
+      expect(await repo.starredDecisions(crypto.randomUUID(), null, 10)).toEqual([]);
+      expect((await repo.playerDecisions(crypto.randomUUID(), 10)).total).toBe(0);
       const got = (await repo.getHand(id))!;
       expect(got.status).toBe('complete');
       expect(got.state).toBeNull();

@@ -143,6 +143,18 @@ Saving explanations means each one is paid for once; reopening a decision shows 
 
 Primary key: `session_id` + `decisions_count`.
 
+### `profile_reviews`: the profile page's all-time coach review
+
+| Column | Type | Required | What it holds |
+|---|---|---|---|
+| `user_id` | uuid, primary key → `auth.users` | yes | The account (deleted with it) |
+| `decisions_count` | integer | yes | The account's decisions when it was written; a new review is made once 25 more have been played |
+| `stats` | JSON | yes | The all-time stats it was written from |
+| `coach` | JSON | yes | The coach's summary, leaks, and practice suggestion |
+| `created_at` | timestamp | yes | When it was written |
+
+One row per account, replaced on refresh. A review that cites numbers not in the stats isn't saved. Added in migration `0002_profile_reviews`.
+
 ## Shared solver tables (not player data)
 
 **Unused (2026-10-09).** These tables were made for a plan to keep the solved flop files in Supabase Storage. The files went to S3 instead (see `docs/deployment.md`), and nothing reads or writes these tables. Remove them in a later migration, or reuse them as an index of the S3 files.

@@ -8,6 +8,7 @@ import { SessionReview } from './components/SessionReview';
 import { AccountMenu } from './components/AccountMenu';
 import { HelpIcon, SlidersIcon } from './components/icons';
 import { Presence } from './components/Presence';
+import { ProfilePage } from './components/ProfilePage';
 import { SettingsMenu } from './components/SettingsMenu';
 import { SetupScreen } from './components/SetupScreen';
 import { Table } from './components/Table';
@@ -40,6 +41,14 @@ export function App() {
   const [showTitle, setShowTitle] = useState(() => !hasSeenTitle());
   const [configOpen, setConfigOpen] = useState(false);
   const [helpRequest, setHelpRequest] = useState(0);
+  // The profile opens over the table, so a hand in progress waits underneath.
+  const [profileOpen, setProfileOpen] = useState(false);
+  const openProfile = useCallback(() => setProfileOpen(true), []);
+  const profile = (
+    <Presence show={profileOpen}>
+      <ProfilePage onClose={() => setProfileOpen(false)} />
+    </Presence>
+  );
   const { animations } = useSettings();
   const { ready: authReady, session } = useAuth();
   const userId = session?.user.id ?? null;
@@ -78,7 +87,7 @@ export function App() {
   // Before the first hand there's no header, so the account control sits in the corner.
   const corner = (
     <div className="corner-account">
-      <AccountMenu />
+      <AccountMenu onProfile={openProfile} />
     </div>
   );
   // First visit only, and never once signed in. Wait for the stored session so signed-in users don't see it flash.
@@ -99,6 +108,7 @@ export function App() {
       <>
         {corner}
         <SetupScreen initial={settings} starting={start.isPending} error={start.error?.message ?? null} onStart={deal} />
+        {profile}
       </>
     );
   }
@@ -124,7 +134,7 @@ export function App() {
           <HelpIcon size={17} />
         </button>
         <SettingsMenu />
-        <AccountMenu />
+        <AccountMenu onProfile={openProfile} />
       </header>
 
       {hand.dataSource.kind === 'fixture' && <div className="banner">Chart numbers come from placeholder ranges, not a solver yet. EVs arrive with the solver.</div>}
@@ -146,6 +156,8 @@ export function App() {
       <Presence show={configOpen}>
         <SetupScreen initial={settings} starting={start.isPending} error={start.error?.message ?? null} onStart={deal} onClose={() => setConfigOpen(false)} />
       </Presence>
+
+      {profile}
 
       <Presence show={reviewOpen}>
         <SessionReview
