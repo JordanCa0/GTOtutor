@@ -1,6 +1,6 @@
 # Game tree v9 plan: limping from every position, flop bets 33/66/100%
 
-**Status (2026-10-09): phase 2 (preflop limping) built; phase 1 measuring; phase 3 next.** Two game-tree changes, made together so everything is re-solved once:
+**Status (2026-10-09): phases 1 (measured: keep all three sizes) and 2 (preflop limping) done; phase 3 next.** Two game-tree changes, made together so everything is re-solved once:
 
 - **Limping from every position.** Today only the SB can limp.
 - **Three flop bet sizes: 33%, 66% and 100% of the pot,** each with a 3× raise. Today the flop has one size (33%).
@@ -54,6 +54,20 @@ The cloud run on v8 was stopped on 2026-10-09 for this reason. Production doesn'
 - **Storage:** flop files grow about 2.5×: ~3.6 GB becomes ~9 GB for a full chart version. Grow the API server's disk from 20 to 30 GB (`docs/deployment.md`; about $1/month).
 - **Live turn/river solving** (`docs/postflop-plan.md`, step 7) is unaffected per solve. More flop lines spread the cache thinner.
 
+## Measured (phase 1, 2026-10-09)
+
+BTN vs BB single-raised pot on v8 ranges, the same 20 flops (`--limit 20`), desktop, 16 threads. Spot files are in `solver/spots/measure-v9tree/`.
+
+| Flop tree | Memory per solve | Time for 20 flops | Per flop |
+|---|---|---|---|
+| 33% only (today) | 2.6 GB | 303 s | 15 s |
+| 33 / 66 / 100% | 5.7 GB | 719 s | 36 s |
+
+- **Cost:** 2.4× the time and 2.2× the memory, at the low end of the 2.5–3× estimate.
+- **All three sizes are used.** When BB checks, BTN bets 33% 30% of the time (6–80% depending on the flop), 66% 12% (1–25%) and 100% 15% (0–30%), and checks back 43%.
+- **Leading into the raiser is rare:** BB bets 4.3% in total, almost all of it at 33%.
+- **Decision: keep all three sizes.**
+
 ## Phases
 
 1. **Measure (half a day).**
@@ -80,12 +94,12 @@ The cloud run on v8 was stopped on 2026-10-09 for this reason. Production doesn'
 | | Desktop hours |
 |---|---|
 | Today's tree, every flop of every spot, from scratch | ~155 |
-| 3 flop sizes (×2.5–3) | ~390–465 |
+| 3 flop sizes (×2.4, measured) | ~370 |
 | New limp spots at sample coverage | ~10 |
-| **Total** | **~400–475** |
+| **Total** | **~380** |
 
 - **Spot quota:** 64 vCPUs (approved 2026-10-09).
-- **On a 64-core instance** (`c7g.16xlarge`, `launch.ps1`'s default; ~14× the desktop, 4 solver processes × 16 threads): about **30–35 hours**, roughly **$25–40 in credits**.
+- **On a 64-core instance** (`c7g.16xlarge`, `launch.ps1`'s default; ~14× the desktop, 4 solver processes × 16 threads): about **27–30 hours**, roughly **$20–35 in credits**.
 - **Memory:** 4 processes × ~7 GB fit easily in 128 GB.
 
 ## Effect on other plans
