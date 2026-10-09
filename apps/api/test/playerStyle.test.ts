@@ -52,6 +52,28 @@ describe('style chart', () => {
     expect(overall.x.se).toBeGreaterThan(0);
   });
 
+  it('reports the player’s and the charts’ rates behind each axis', () => {
+    const spot = { fold: 0.5, call: 0.3, raise: 0.2 };
+    const { overall } = styleOf([decision('fold', spot), decision('call', spot)]);
+    expect(overall.x).toMatchObject({ you: 50, chart: 50, value: 0 }); // continued 1 of 2, the chart 50%
+    expect(overall.y).toMatchObject({ you: 0, chart: 20, value: -20 });
+  });
+
+  it('splits loose and tight leaks, weighted by the charts’ mix', () => {
+    const mostlyFold = { fold: 0.7, call: 0.3 };
+    const mostlyPlay = { fold: 0.2, call: 0.8 };
+    // Calls a hand the chart mostly folds; folds a hand the chart mostly plays.
+    const { leaks } = styleOf([decision('call', mostlyFold), decision('fold', mostlyPlay)]);
+    // Chart-fold weight 0.7 + 0.2 = 0.9, of which the call covered 0.7.
+    expect(leaks.playedChartFolds).toEqual({ rate: 77.8, weight: 0.9 });
+    // Chart-play weight 0.3 + 0.8 = 1.1, of which the fold gave up 0.8.
+    expect(leaks.foldedChartPlays).toEqual({ rate: 72.7, weight: 1.1 });
+    // Playing the charts' pure choices leaks nothing either way.
+    const clean = styleOf([decision('fold', { fold: 1, call: 0 }), decision('call', { fold: 0, call: 1 })]).leaks;
+    expect(clean.playedChartFolds.rate).toBe(0);
+    expect(clean.foldedChartPlays.rate).toBe(0);
+  });
+
   it('skips the loose axis where folding isn’t possible, and groups by spot', () => {
     const flop = decision('check', { check: 0.6, bet: 0.4 }, { nodeKey: 'FLOP|btn_vs_bb_srp_100|Kh7d2c|' });
     const style = styleOf([flop]);

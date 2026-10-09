@@ -91,29 +91,43 @@ function ReviewBody({
   );
 }
 
-/** Grades, the by-spot table, and the biggest mistakes (session review and profile page). */
-export function StatsSection({ stats }: { stats: SessionStats }) {
+/**
+ * Grades, the by-spot table, and the biggest mistakes (session review and profile page). The profile
+ * shows its own accuracy summary, so it passes `headline={false}`.
+ */
+export function StatsSection({
+  stats,
+  headline = true,
+}: {
+  stats: SessionStats;
+  headline?: boolean;
+}) {
   const g = stats.grades;
   return (
-    <section>
-      <p className="big-stat">
-        {pct(g.best, stats.decisions)}{" "}
-        <span className="muted small">
-          of {stats.decisions} decisions matched the chart
-        </span>
-      </p>
-      <div className="grade-bar">
-        <span className="good" style={{ flex: g.best }} />
-        <span className="ok" style={{ flex: g.mixed }} />
-        <span className="bad" style={{ flex: g.mistake }} />
-      </div>
-      <p className="muted small">
-        {stats.hands} hands · {g.best} best · {g.mixed} mixed · {g.mistake}{" "}
-        mistake{g.mistake === 1 ? "" : "s"} · {stats.hintsUsed} hint
-        {stats.hintsUsed === 1 ? "" : "s"} used
-        {stats.easyFoldsSkipped &&
-          " · easy folds were mostly skipped, so this skews toward harder spots"}
-      </p>
+    <section className={headline ? undefined : "stats-plain"}>
+      {headline && (
+        <>
+          <p className="big-stat">
+            {pct(g.best, stats.decisions)}{" "}
+            <span className="muted small">
+              of {stats.decisions} decisions matched the chart
+            </span>
+          </p>
+          <div className="grade-bar">
+            <span className="good" style={{ flex: g.best }} />
+            <span className="ok" style={{ flex: g.mixed }} />
+            <span className="bad" style={{ flex: g.mistake }} />
+          </div>
+          <p className="muted small">
+            {stats.hands} hands · {g.best} best · {g.mixed} mixed ·{" "}
+            {g.mistake} mistake{g.mistake === 1 ? "" : "s"} · {stats.hintsUsed}{" "}
+            hint
+            {stats.hintsUsed === 1 ? "" : "s"} used
+            {stats.easyFoldsSkipped &&
+              " · easy folds were mostly skipped, so this skews toward harder spots"}
+          </p>
+        </>
+      )}
 
       <h3>By spot</h3>
       <table className="spot-table">

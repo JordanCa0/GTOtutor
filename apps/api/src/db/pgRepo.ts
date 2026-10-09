@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, isNotNull, lt, ne, sql } from 'drizzle-orm
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { spotTypeOf } from '../teacher/sessionStats.js';
-import type { CoachMessage, HandRecord, HandReplay, Player, Repo, SavedCoachReview, StarredRow } from './repo.js';
+import { groupByHand, type CoachMessage, type HandRecord, type HandReplay, type Player, type PlayerDecisions, type Repo, type SavedCoachReview, type StarredRow } from './repo.js';
 import * as schema from './schema.js';
 import { coachMessages, decisions, hands, practiceSessions, profileReviews, profiles, sessionReviews } from './schema.js';
 
@@ -163,15 +163,15 @@ export class PgRepo implements Repo {
     await this.db.insert(sessionReviews).values({ sessionId, decisionsCount, stats, coach }).onConflictDoNothing();
   }
 
-  async playerDecisions(userId: string, limit: number): Promise<{ decisions: DecisionFeedback[]; total: number }> {
+  async playerDecisions(userId: string, limit: number): Promise<PlayerDecisions> {
     const rows = await this.db
-      .select({ feedback: decisions.feedback })
+      .select({ handId: decisions.handId, feedback: decisions.feedback })
       .from(decisions)
       .where(eq(decisions.userId, userId))
       .orderBy(desc(decisions.createdAt), desc(decisions.idx))
       .limit(limit);
     const [{ n }] = await this.db.select({ n: sql<number>`count(*)::int` }).from(decisions).where(eq(decisions.userId, userId));
-    return { decisions: rows.map((r) => r.feedback as DecisionFeedback), total: n };
+    return { hands: groupByHand(rows.map((r) => ({ handId: r.handId, decision: r.feedback as DecisionFeedback }))), total: n };
   }
 
   async starredDecisions(userId: string, before: Date | null, limit: number): Promise<StarredRow[]> {

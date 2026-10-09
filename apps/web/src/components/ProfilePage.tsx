@@ -9,10 +9,12 @@ import { PlayingCard } from './PlayingCard';
 import { Backdrop, Presence } from './Presence';
 import { RangeGrid } from './RangeGrid';
 import { CoachSection, StatsSection } from './SessionReview';
-import { StyleChart } from './StyleChart';
+import { StyleCard } from './StyleChart';
 import { VerdictBanner, verdictTitle } from './VerdictBanner';
 
 const pct = (f: number) => `${Math.round(f * 100)}%`;
+/** "−0.14bb", "0.00bb": EV given up shows as a negative number, with a real minus sign. */
+const signedBb = (bb: number) => `${bb < -0.005 ? '−' : ''}${Math.abs(bb).toFixed(2)}bb`;
 
 /** The signed-in player's page: all-time review, style chart, and starred decisions. */
 export function ProfilePage({ onClose }: { onClose: () => void }) {
@@ -28,15 +30,22 @@ export function ProfilePage({ onClose }: { onClose: () => void }) {
   return (
     <div className="profile-page" role="dialog" aria-modal="true" aria-label="Your profile">
       <div className="profile-inner">
-        <div className="profile-head">
-          <div>
-            <p className="eyebrow">Profile</p>
-            <h1>{session ? displayName(session) : 'Your profile'}</h1>
+        <header className="profile-head">
+          <div className="profile-id">
+            {session && (
+              <span className="profile-avatar" aria-hidden>
+                {displayName(session).slice(0, 1).toUpperCase()}
+              </span>
+            )}
+            <div>
+              <h1>{session ? displayName(session) : 'Your profile'}</h1>
+              {session?.user.email && <p className="muted small">{session.user.email}</p>}
+            </div>
           </div>
-          <button className="secondary" onClick={onClose}>
+          <button className="ghost" onClick={onClose}>
             Back to the table
           </button>
-        </div>
+        </header>
         {session ? (
           <ProfileBody onOpen={setOpen} />
         ) : (
@@ -58,38 +67,58 @@ function ProfileBody({ onOpen }: { onOpen: (item: StarredDecision) => void }) {
   const { stats, style, gto, starredCount } = profile.data;
   if (stats.decisions === 0) return <p className="muted">Play some hands while signed in and your profile fills in here.</p>;
 
+  const g = stats.grades;
+
   return (
     <>
-      <section className="profile-summary">
-        <div>
-          <p className="big-stat">{pct(gto.accuracy)}</p>
-          <p className="muted small">of {stats.decisions} decisions matched the charts or solver (best or mixed play)</p>
+      <section className="profile-stats" aria-label="Summary">
+        <div className="profile-stat">
+          <p className="profile-stat-label">Accuracy</p>
+          <p className="profile-stat-value">{pct(gto.accuracy)}</p>
+          <div className="grade-bar" aria-hidden>
+            <span className="good" style={{ flex: g.best }} />
+            <span className="ok" style={{ flex: g.mixed }} />
+            <span className="bad" style={{ flex: g.mistake }} />
+          </div>
+          <p className="muted small">
+            Best or mixed play in {stats.decisions} decisions. {g.mistake} mistake{g.mistake === 1 ? '' : 's'}.
+          </p>
         </div>
-        <div>
-          <p className="big-stat">{gto.evLossBb === null ? '–' : `${gto.evLossBb.toFixed(2)}bb`}</p>
-          <p className="muted small">{gto.evLossBb === null ? 'EV lost per decision: needs decisions with EVs (flop spots or solved charts)' : `EV lost per decision, over the ${gto.evDecisions} decisions with EVs`}</p>
+        <div className="profile-stat">
+          <p className="profile-stat-label">EV per decision</p>
+          <p className={`profile-stat-value ${gto.evLossBb ? 'down' : ''}`}>{gto.evLossBb === null ? '–' : signedBb(-gto.evLossBb)}</p>
+          <p className="muted small">
+            {gto.evLossBb === null
+              ? 'Shows up once you play flop spots or solved charts: the placeholder preflop charts have no EVs.'
+              : `Against the best play in each spot, so 0 is perfect. Over ${gto.evDecisions} decisions with EVs.`}
+          </p>
         </div>
-        <div>
-          <p className="big-stat">{stats.hands}</p>
-          <p className="muted small">hands with a decision</p>
+        <div className="profile-stat">
+          <p className="profile-stat-label">Hands</p>
+          <p className="profile-stat-value">{stats.hands}</p>
+          <p className="muted small">
+            {stats.hintsUsed} hint{stats.hintsUsed === 1 ? '' : 's'} used.
+          </p>
         </div>
       </section>
 
       <section className="profile-section">
-        <h2>Your playing style</h2>
-        <StyleChart style={style} />
+        <h2>Playing style</h2>
+        <StyleCard style={style} />
       </section>
 
       <section className="profile-section">
-        <h2>Biggest leaks</h2>
+        <h2>Leaks</h2>
         <div className="review-grid">
-          <StatsSection stats={stats} />
+          <StatsSection stats={stats} headline={false} />
           <CoachSection stats={stats} coach={review.isPending ? undefined : review.data?.coach ?? { status: 'unavailable', reason: review.error?.message ?? 'No review.' }} onRetry={() => review.refetch()} drillTitle="What to practise next" />
         </div>
       </section>
 
       <section className="profile-section">
-        <h2>Starred decisions {starredCount > 0 && <span className="muted small">({starredCount})</span>}</h2>
+        <h2>
+          Starred decisions {starredCount > 0 && <span className="profile-count">{starredCount}</span>}
+        </h2>
         <StarredList onOpen={onOpen} />
       </section>
     </>
@@ -121,7 +150,7 @@ function StarredList({ onOpen }: { onOpen: (item: StarredDecision) => void }) {
               </span>
               <span className="starred-text">
                 <strong>{verdictTitle(item.decision)}</strong> <span className="muted">{item.decision.nodeLabel}</span>
-                {item.decision.board.length > 0 && <span className="muted"> · board {item.decision.board.join(' ')}</span>}
+                {item.decision.board.length > 0 && <span className="muted">on {item.decision.board.join(' ')}</span>}
                 {item.note && <span className="starred-note">{item.note}</span>}
               </span>
               <span className="muted small">{new Date(item.starredAt).toLocaleDateString()}</span>

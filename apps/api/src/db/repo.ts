@@ -71,8 +71,8 @@ export interface Repo {
   sessionReview(sessionId: string, decisionsCount: number): Promise<SavedCoachReview | null>;
   /** Keeps a session review; one already saved for the same count stays as it is. */
   saveSessionReview(sessionId: string, decisionsCount: number, stats: SessionStats, coach: SavedCoachReview): Promise<void>;
-  /** An account's most recent decisions (newest first, at most `limit`), and how many it has in all. */
-  playerDecisions(userId: string, limit: number): Promise<{ decisions: DecisionFeedback[]; total: number }>;
+  /** An account's most recent decisions (at most `limit`) grouped by hand, and how many it has in all. */
+  playerDecisions(userId: string, limit: number): Promise<PlayerDecisions>;
   /** An account's starred decisions, newest star first, starred before `before` if given. */
   starredDecisions(userId: string, before: Date | null, limit: number): Promise<StarredRow[]>;
   starredCount(userId: string): Promise<number>;
@@ -80,6 +80,22 @@ export interface Repo {
   profileReview(userId: string): Promise<{ decisionsCount: number; coach: SavedCoachReview } | null>;
   /** Replaces the account's saved all-time review. */
   saveProfileReview(userId: string, decisionsCount: number, stats: SessionStats, coach: SavedCoachReview): Promise<void>;
+}
+
+/**
+ * An account's most recent decisions, grouped by hand (newest hand first), and how many decisions it
+ * has in all. The oldest hand can be partial when the limit cuts through it.
+ */
+export interface PlayerDecisions {
+  hands: { handId: string; decisions: DecisionFeedback[] }[];
+  total: number;
+}
+
+/** Groups decisions (newest first) into hands, keeping that order. */
+export function groupByHand(rows: { handId: string; decision: DecisionFeedback }[]): PlayerDecisions['hands'] {
+  const byHand = new Map<string, DecisionFeedback[]>();
+  for (const r of rows) byHand.set(r.handId, [...(byHand.get(r.handId) ?? []), r.decision]);
+  return [...byHand].map(([handId, decisions]) => ({ handId, decisions }));
 }
 
 export interface StarredRow {
@@ -176,9 +192,9 @@ export class MemoryRepo implements Repo {
     this.stars.set(decisionId, { note: star.note, at });
   }
 
-  async playerDecisions(userId: string, limit: number): Promise<{ decisions: DecisionFeedback[]; total: number }> {
-    const all = this.userHands(userId).flatMap((h) => h.decisions);
-    return { decisions: structuredClone(all.reverse().slice(0, limit)), total: all.length };
+  async playerDecisions(userId: string, limit: number): Promise<PlayerDecisions> {
+    const all = this.userHands(userId).flatMap((h) => h.decisions.map((decision) => ({ handId: h.id, decision })));
+    return { hands: groupByHand(structuredClone(all.reverse().slice(0, limit))), total: all.length };
   }
 
   async starredDecisions(userId: string, before: Date | null, limit: number): Promise<StarredRow[]> {

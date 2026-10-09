@@ -285,9 +285,11 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
 
   app.get('/api/me/profile', async (req): Promise<ProfileResponse> => {
     const { userId } = await signedIn(req);
-    const { decisions } = await hands.playerDecisions(userId, PROFILE_DECISIONS);
+    // Grouped by hand so the stats count hands, not one big hand of every decision.
+    const { hands: played } = await hands.playerDecisions(userId, PROFILE_DECISIONS);
+    const decisions = played.flatMap((h) => h.decisions);
     return {
-      stats: computeSessionStats([{ decisions }], false),
+      stats: computeSessionStats(played, false),
       style: styleOf(decisions),
       gto: gtoSummaryOf(decisions),
       starredCount: await hands.starredCount(userId),
@@ -296,12 +298,12 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
 
   app.get('/api/me/profile/review', async (req): Promise<ProfileReviewResponse> => {
     const { userId } = await signedIn(req);
-    const { decisions, total } = await hands.playerDecisions(userId, PROFILE_DECISIONS);
+    const { hands: played, total } = await hands.playerDecisions(userId, PROFILE_DECISIONS);
     if (total < MIN_DECISIONS_FOR_REVIEW) return { coach: { status: 'not_enough_data', needed: MIN_DECISIONS_FOR_REVIEW - total } };
     // Written once, then kept until enough new decisions have been played to say something new.
     const saved = await hands.profileReview(userId);
     if (saved && total - saved.decisionsCount < PROFILE_REVIEW_EVERY) return { coach: saved.coach };
-    const stats = computeSessionStats([{ decisions }], false);
+    const stats = computeSessionStats(played, false);
     const coach = await teacher.review(`profile-${userId}`, stats, playerKey({ kind: 'user', userId }), 'all-time');
     // Reviews with invented numbers aren't kept, so the next visit can replace them.
     if (coach.status === 'ok' && coach.ungroundedNumbers.length === 0) await hands.saveProfileReview(userId, total, stats, coach);

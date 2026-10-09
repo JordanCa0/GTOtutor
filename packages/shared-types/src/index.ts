@@ -270,6 +270,26 @@ export interface StyleAxis {
   value: number;
   n: number;
   se: number;
+  /** How often the player continued (x) or bet/raised (y) in these decisions, in percent. */
+  you: number;
+  /** How often the charts do the same in the same spots, in percent. `value` is `you − chart`. */
+  chart: number;
+}
+
+/**
+ * One direction of a loose/tight leak, weighted by the charts' own mixes (no cutoff for "a chart fold").
+ * `rate` is in percent; `weight` is how many hands' worth of chart weight it's measured over.
+ */
+export interface StyleLeakRate {
+  rate: number;
+  weight: number;
+}
+
+export interface StyleLeakRates {
+  /** Of the hands the charts fold, the share the player played anyway. */
+  playedChartFolds: StyleLeakRate;
+  /** Of the hands the charts play, the share the player folded. */
+  foldedChartPlays: StyleLeakRate;
 }
 
 /** A point on the style chart. x: tight (−) to loose (+). y: passive (−) to aggressive (+). */
@@ -281,6 +301,8 @@ export interface StylePoint {
 export interface PlayerStyle {
   overall: StylePoint;
   bySpot: (StylePoint & { spot: SpotType; label: string })[];
+  /** All decisions together, split into the two directions the x axis nets out. */
+  leaks: StyleLeakRates;
 }
 
 /** How close to the charts and solver: share of decisions graded best or mixed, and EV given up. */

@@ -244,6 +244,8 @@ describe('profile page', () => {
 
     const profile = (await me({ method: 'GET', url: '/api/me/profile' })).json<ProfileResponse>();
     expect(profile.stats.decisions).toBe(made.length);
+    // Counted per hand, not as one big hand of every decision.
+    expect(profile.stats.hands).toBe(new Set(made.map((m) => m.handId)).size);
     expect(profile.starredCount).toBe(2);
     expect(profile.gto.accuracy).toBeGreaterThanOrEqual(0);
     expect(profile.gto.accuracy).toBeLessThanOrEqual(1);
