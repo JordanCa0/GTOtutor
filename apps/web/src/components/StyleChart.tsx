@@ -47,6 +47,32 @@ function StylePlot({ style, large, active, onActive }: PlotProps) {
   const { overall } = style;
   // Only the half-scale lines are numbered: end labels would sit on the frame. The full range is in the notes.
   const ticks = [-range / 2, range / 2];
+  const youX = sx(overall.x.value);
+  const youY = sy(overall.y.value);
+  // Labels only exist in the large view. "You" is placed first so it keeps the best spot.
+  const labels = large
+    ? placeLabels(
+        [
+          { key: 'overall', x: youX, y: youY, text: 'You', gap: 16, bold: true },
+          ...style.bySpot.map((p) => ({ key: p.spot, x: sx(p.x.value), y: sy(p.y.value), text: p.label, gap: 10 })),
+        ],
+        // The star, the corner and centre labels, and the axis numbers are in the way too.
+        [
+          { left: youX - 15, right: youX + 15, top: youY - 15, bottom: youY + 15 },
+          { left: pad, right: pad + 112, top: pad, bottom: pad + 24 },
+          { left: size - pad - 112, right: size - pad, top: pad, bottom: pad + 24 },
+          { left: pad, right: pad + 100, top: size - pad - 24, bottom: size - pad },
+          { left: size - pad - 100, right: size - pad, top: size - pad - 24, bottom: size - pad },
+          { left: mid - 50, right: mid, top: size - pad - 24, bottom: size - pad },
+          ...ticks.flatMap((t) => [
+            { left: sx(t) - 12, right: sx(t) + 12, top: mid + 3, bottom: mid + 18 },
+            { left: mid - 30, right: mid - 4, top: sy(t) - 8, bottom: sy(t) + 7 },
+          ]),
+        ],
+        { left: pad + 4, right: size - pad - 4, top: pad + 4, bottom: size - pad - 4 },
+        mid,
+      )
+    : new Map<string, Placed>();
 
   return (
     <svg viewBox={`0 0 ${size} ${size}`} className={large ? 'style-plot large' : 'style-plot'} role="img" aria-label={`You: ${describe(overall)}`}>
@@ -104,8 +130,7 @@ function StylePlot({ style, large, active, onActive }: PlotProps) {
         const x = sx(p.x.value);
         const y = sy(p.y.value);
         const on = active === p.spot;
-        // Labels go on the side with more room, away from the centre line.
-        const right = x <= mid;
+        const label = labels.get(p.spot);
         return (
           <g
             key={p.spot}
@@ -113,24 +138,16 @@ function StylePlot({ style, large, active, onActive }: PlotProps) {
             onPointerEnter={() => onActive?.(p.spot)}
             onPointerLeave={() => onActive?.(null)}
           >
+            {label && <LabelText label={label} text={p.label} />}
             <circle cx={x} cy={y} r={on ? 7 : large ? 5.5 : 4.5} />
-            {large && (
-              <text x={right ? x + 10 : x - 10} y={y + 4} textAnchor={right ? 'start' : 'end'}>
-                {p.label}
-              </text>
-            )}
             <title>{`${p.label}: ${describe(p)}`}</title>
           </g>
         );
       })}
 
       <g className={`style-player ${active === 'overall' ? 'on' : ''}`} onPointerEnter={() => onActive?.('overall')} onPointerLeave={() => onActive?.(null)}>
-        <polygon points={starPoints(sx(overall.x.value), sy(overall.y.value), large ? 14 : 12)} />
-        {large && (
-          <text x={sx(overall.x.value) + 16} y={sy(overall.y.value) - 12} className="style-you">
-            You
-          </text>
-        )}
+        <polygon points={starPoints(youX, youY, large ? 14 : 12)} />
+        {labels.get('overall') && <LabelText label={labels.get('overall')!} text="You" className="style-you" />}
         <title>{`You: ${describe(overall)}`}</title>
       </g>
     </svg>
@@ -295,6 +312,86 @@ function LeakLines({ leaks }: { leaks: StyleLeakRates }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+interface Box {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+/** Where a label landed: its text position, and a line back to its dot if it had to move. */
+interface Placed {
+  x: number;
+  y: number;
+  anchor: 'start' | 'end';
+  leader: { x1: number; y1: number; x2: number; y2: number } | null;
+}
+
+/** Vertical step between label rows, in chart units (the labels are 12px). */
+const LABEL_ROW = 15;
+
+const overlaps = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+/**
+ * Puts each label beside its dot without overlapping earlier labels, the dots, or the frame. Each one
+ * tries its natural spot first (the side away from the centre line), then the other side, then rows
+ * further up and down. Labels placed earlier win, so the most important go first.
+ */
+function placeLabels(
+  items: { key: string; x: number; y: number; text: string; gap: number; bold?: boolean }[],
+  obstacles: Box[],
+  bounds: Box,
+  mid: number,
+): Map<string, Placed> {
+  // Every dot is in the way of every label but its own (which sits outside its own label anyway).
+  const taken: Box[] = [...obstacles, ...items.map((it) => ({ left: it.x - 9, right: it.x + 9, top: it.y - 9, bottom: it.y + 9 }))];
+  const out = new Map<string, Placed>();
+  const shifts = Array.from({ length: 17 }, (_, i) => (i % 2 ? -1 : 1) * Math.ceil(i / 2) * LABEL_ROW);
+  for (const it of items) {
+    // Rough text width for 12px Inter; a little generous so neighbours don't touch.
+    const width = it.text.length * (it.bold ? 7.4 : 6.8);
+    const sides = it.x <= mid ? [1, -1] : [-1, 1];
+    const boxFor = (side: number, cy: number): Box => {
+      const left = side > 0 ? it.x + it.gap : it.x - it.gap - width;
+      return { left, right: left + width, top: cy - 8, bottom: cy + 7 };
+    };
+    const inside = (b: Box) => b.left >= bounds.left && b.right <= bounds.right && b.top >= bounds.top && b.bottom <= bounds.bottom;
+    // Score every spot in the frame: collisions cost the most, then distance from the dot, then the
+    // less natural side. On a very crowded chart this still picks the spot that overlaps least.
+    let found: { side: number; cy: number; box: Box; cost: number } | null = null;
+    for (const dy of shifts) {
+      for (const side of sides) {
+        const box = boxFor(side, it.y + dy);
+        if (!inside(box)) continue;
+        const cost = taken.filter((t) => overlaps(t, box)).length * 1000 + Math.abs(dy) + (side === sides[0] ? 0 : 6);
+        if (!found || cost < found.cost) found = { side, cy: it.y + dy, box, cost };
+      }
+    }
+    // Only possible for a label wider than the frame: keep the natural spot.
+    if (!found) found = { side: sides[0], cy: it.y, box: boxFor(sides[0], it.y), cost: 0 };
+    taken.push(found.box);
+    const { side, cy, box } = found;
+    out.set(it.key, {
+      x: side > 0 ? box.left : box.right,
+      y: cy + 4,
+      anchor: side > 0 ? 'start' : 'end',
+      leader: Math.abs(cy - it.y) > 1 ? { x1: it.x + side * 6, y1: it.y, x2: side > 0 ? box.left - 3 : box.right + 3, y2: cy } : null,
+    });
+  }
+  return out;
+}
+
+function LabelText({ label, text, className }: { label: Placed; text: string; className?: string }) {
+  return (
+    <>
+      {label.leader && <line className="style-leader" {...label.leader} />}
+      <text x={label.x} y={label.y} textAnchor={label.anchor} className={className}>
+        {text}
+      </text>
+    </>
   );
 }
 

@@ -611,6 +611,8 @@ button.primary.danger { background: #c25a4b; color: #fff; }
 .style-spot.on text { fill: var(--text); font-weight: 600; }
 .style-player polygon { fill: var(--gold); stroke: var(--raised); stroke-width: 2; stroke-linejoin: round; }
 .style-you { fill: var(--gold); font-size: 12px; font-weight: 700; }
+/* Thin line from a dot to its label when the label had to move out of the way. */
+.style-leader { stroke: var(--line-3); stroke-width: 1; }
 .style-reading { display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; min-width: 0; }
 .style-reading p { margin: 0; }
 .style-headline { font-family: var(--serif); font-size: var(--fs-lg); line-height: 1.3; }
