@@ -1,5 +1,5 @@
-import type { ActionLogEntry, ActionType, DecisionFeedback, StartHandRequest } from '@gtotutor/shared-types';
-import { samePlayer, type CoachMessage, type HandRecord, type Player, type Repo } from '../db/repo.js';
+import type { ActionLogEntry, ActionType, DecisionFeedback, DecisionStar, SessionStats, StartHandRequest } from '@gtotutor/shared-types';
+import { samePlayer, type CoachMessage, type HandRecord, type Player, type Repo, type SavedCoachReview } from '../db/repo.js';
 import { HttpError, type HandEngine, type HandState, type StoredHandState } from './handEngine.js';
 
 /** What the coach needs about a hand, whether it's in progress or finished. */
@@ -99,12 +99,38 @@ export class HandService {
     await this.repo.addCoachMessages(decisionOf(ctx, decisionId), ctx.owner, messages);
   }
 
+  /** A decision's star and note. Takes a context from `context()`, which has checked ownership. */
+  async star(ctx: HandContext, decisionId: string): Promise<DecisionStar> {
+    return this.repo.star(decisionOf(ctx, decisionId));
+  }
+
+  async setStar(ctx: HandContext, decisionId: string, star: DecisionStar): Promise<void> {
+    await this.repo.setStar(decisionOf(ctx, decisionId), star);
+  }
+
   /** A session's hands; an unknown session is empty, someone else's is not found. */
   async sessionHands(player: Player, sessionId: string): Promise<HandRecord[]> {
-    const owner = await this.repo.sessionOwner(sessionId);
-    if (!owner) return [];
-    if (!samePlayer(owner, player)) throw new HttpError(404, 'Session not found.');
+    if (!(await this.ownsSession(player, sessionId))) return [];
     return this.repo.sessionHands(sessionId);
+  }
+
+  /** The coach review saved for one of the player's sessions at this many decisions. */
+  async savedReview(player: Player, sessionId: string, decisionsCount: number): Promise<SavedCoachReview | null> {
+    if (!(await this.ownsSession(player, sessionId))) return null;
+    return this.repo.sessionReview(sessionId, decisionsCount);
+  }
+
+  async saveReview(player: Player, sessionId: string, stats: SessionStats, coach: SavedCoachReview): Promise<void> {
+    if (!(await this.ownsSession(player, sessionId))) return;
+    await this.repo.saveSessionReview(sessionId, stats.decisions, stats, coach);
+  }
+
+  /** False for an unknown session; throws (not found) for someone else's. */
+  private async ownsSession(player: Player, sessionId: string): Promise<boolean> {
+    const owner = await this.repo.sessionOwner(sessionId);
+    if (!owner) return false;
+    if (!samePlayer(owner, player)) throw new HttpError(404, 'Session not found.');
+    return true;
   }
 
   /** Moves a guest's data to a signed-in account (on sign-up or sign-in). */

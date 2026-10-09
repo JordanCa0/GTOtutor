@@ -291,6 +291,11 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) 480px; gap: 1rem; pa
 .verdict-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.6rem; }
 .verdict-title h2 { font-family: var(--serif); font-size: var(--fs-lg); font-weight: 700; }
 .badge { margin-left: 0.4rem; font-size: var(--fs-xs); border: 1px solid var(--line-2); border-radius: 999px; padding: 0 0.45rem; }
+.verdict-title .star-btn { margin-left: auto; align-self: center; width: 30px; height: 30px; }
+.star-btn[aria-pressed='true'] { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
+.star-note { display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.5rem; }
+.star-note input { width: 100%; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line-2); border-radius: var(--r-md); padding: 0.45rem 0.7rem; color: var(--text); font: inherit; font-size: var(--fs-sm); }
+.star-note input:focus { outline: none; border-color: var(--line-3); }
 .pills { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.5rem; }
 .pill { font-size: var(--fs-xs); padding: 0.2rem 0.6rem; border-radius: 999px; background: color-mix(in srgb, var(--c) 22%, transparent); border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); }
 .pill b { font-variant-numeric: tabular-nums; }

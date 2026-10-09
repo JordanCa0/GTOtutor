@@ -1,4 +1,4 @@
-import type { HandView, SessionReviewResponse, SubmitDecisionResponse } from '@gtotutor/shared-types';
+import { MIN_DECISIONS_FOR_REVIEW, type HandView, type SessionReviewResponse, type SubmitDecisionResponse } from '@gtotutor/shared-types';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { PlayerResolver } from '../src/auth/player.js';
@@ -134,6 +134,69 @@ describe('saved coach threads', () => {
   });
 });
 
+describe('starred decisions', () => {
+  it('stars a decision with a note, keeps it private and across a restart, and clears it on unstar', async () => {
+    const repo = new MemoryRepo();
+    const before = makeApp(repo);
+    const mine = client(before);
+    const hand = (await mine(flopPractice)).json<HandView>();
+    const { feedback } = (await mine({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action: 'check' } })).json<SubmitDecisionResponse>();
+    const url = `/api/hands/${hand.id}/decisions/${feedback.id}/star`;
+    expect((await mine({ method: 'GET', url })).json()).toEqual({ starred: false, note: null });
+    const put = await mine({ method: 'PUT', url, payload: { starred: true, note: '  Check back vs this sizing  ' } });
+    expect(put.json()).toEqual({ starred: true, note: 'Check back vs this sizing' });
+    expect((await mine({ method: 'PUT', url, payload: { starred: true, note: 'x'.repeat(501) } })).statusCode).toBe(400);
+    expect((await client(before, { guestId: OTHER_GUEST })({ method: 'PUT', url, payload: { starred: true } })).statusCode).toBe(404);
+    expect((await mine({ method: 'PUT', url: `/api/hands/${hand.id}/decisions/not-a-decision/star`, payload: { starred: true } })).statusCode).toBe(404);
+    await before.close();
+
+    const after = makeApp(repo);
+    const again = client(after);
+    expect((await again({ method: 'GET', url })).json()).toEqual({ starred: true, note: 'Check back vs this sizing' });
+    expect((await client(after, { guestId: OTHER_GUEST })({ method: 'GET', url })).statusCode).toBe(404);
+
+    // Signing up carries the star over; unstarring clears the note.
+    const user = client(after, { token: `test-user:${USER}` });
+    await user({ method: 'POST', url: '/api/me/claim-guest', payload: { guestId: GUEST } });
+    expect((await user({ method: 'GET', url })).json()).toEqual({ starred: true, note: 'Check back vs this sizing' });
+    expect((await user({ method: 'PUT', url, payload: { starred: false, note: 'ignored' } })).json()).toEqual({ starred: false, note: null });
+    expect((await user({ method: 'GET', url })).json()).toEqual({ starred: false, note: null });
+    await after.close();
+  });
+});
+
+describe('saved session reviews', () => {
+  const reviewLlm = () => fakeLlm({ structured: () => ({ summary: 'Solid session.', leaks: [{ title: 'Flop checks', advice: 'Bet more.' }], drill: 'Play BTN vs BB flops.' }) });
+
+  it('asks the coach once per decision count, then serves the saved review after a restart', async () => {
+    const repo = new MemoryRepo();
+    const llm = reviewLlm();
+    const before = makeApp(repo, undefined, llm);
+    const mine = client(before);
+    let decisions = 0;
+    while (decisions < MIN_DECISIONS_FOR_REVIEW) {
+      let hand = (await mine(flopPractice)).json<HandView>();
+      while (hand.status === 'awaiting_hero') {
+        hand = (await mine({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action: hand.legalActions[0].id } })).json<SubmitDecisionResponse>().hand;
+        decisions++;
+      }
+    }
+    const url = '/api/sessions/test-session-0001/review';
+    const first = (await mine({ method: 'GET', url })).json<SessionReviewResponse>();
+    expect(first.coach).toMatchObject({ status: 'ok', summary: 'Solid session.' });
+    expect(llm.structured).toHaveBeenCalledTimes(1);
+    await before.close();
+
+    const after = makeApp(repo, undefined, llm); // empty in-memory caches
+    const again = (await client(after)({ method: 'GET', url })).json<SessionReviewResponse>();
+    expect(again.coach).toEqual(first.coach);
+    expect(again.stats.decisions).toBe(decisions);
+    expect(llm.structured).toHaveBeenCalledTimes(1);
+    expect((await client(after, { guestId: OTHER_GUEST })({ method: 'GET', url })).statusCode).toBe(404);
+    await after.close();
+  });
+});
+
 describe('guest data lasts one session', () => {
   it('deletes the previous session when a guest starts a new one, and idle sessions after 24 hours', async () => {
     const repo = new MemoryRepo();
@@ -221,6 +284,17 @@ function repoContract(name: string, makeRepo: () => Repo, cleanup?: () => Promis
         { ...chat, role: 'assistant', content: 'Because.', tldr: 'Raise.' },
       ]);
       expect((await repo.coachMessages(decision.id)).map((m) => m.content)).toEqual(['Why?', 'Because.']);
+      expect(await repo.star(decision.id)).toEqual({ starred: false, note: null });
+      await repo.setStar(decision.id, { starred: true, note: 'Look again' });
+      await repo.setStar(decision.id, { starred: true, note: 'Edited note' });
+      expect(await repo.star(decision.id)).toEqual({ starred: true, note: 'Edited note' });
+      const review = { status: 'ok' as const, summary: 'Fine.', leaks: [], drill: 'More flops.', ungroundedNumbers: [] };
+      const stats = { hands: 1, decisions: 1, grades: { best: 1, mixed: 0, mistake: 0 }, hintsUsed: 0, bySpot: [], leaks: [], worstMistakes: [], easyFoldsSkipped: true };
+      expect(await repo.sessionReview(sessionId, 1)).toBeNull();
+      await repo.saveSessionReview(sessionId, 1, stats, review);
+      await repo.saveSessionReview(sessionId, 1, stats, { ...review, summary: 'Replaced?' });
+      expect(await repo.sessionReview(sessionId, 1)).toEqual(review);
+      expect(await repo.sessionReview(sessionId, 2)).toBeNull();
       const got = (await repo.getHand(id))!;
       expect(got.status).toBe('complete');
       expect(got.state).toBeNull();
@@ -231,6 +305,8 @@ function repoContract(name: string, makeRepo: () => Repo, cleanup?: () => Promis
       expect(await repo.getHand(id)).toBeNull();
       expect(await repo.sessionOwner(sessionId)).toBeNull();
       expect(await repo.coachMessages(decision.id)).toEqual([]);
+      expect(await repo.star(decision.id)).toEqual({ starred: false, note: null });
+      expect(await repo.sessionReview(sessionId, 1)).toBeNull();
     });
   });
 }

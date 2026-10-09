@@ -1,6 +1,6 @@
 # Accounts and data
 
-**Status (2026-10-09): steps 1 (database and guest persistence) and 2 (sign-in) are built and live; step 3 is in progress (saved coach answers done); step 4 (solver data) is done through S3 instead of Supabase Storage.** Decided with Jordan: Supabase (Postgres + Auth), sign-in with Google (email/password was dropped on 2026-10-08, see below), guest play that carries over on sign-up, and storing hands, decisions, coach conversations, settings, session reviews/progress, and starred decisions. The column-by-column schema is in `docs/database-schema.md`.
+**Status (2026-10-09): steps 1 (database and guest persistence) and 2 (sign-in) are built and live; step 3 is in progress (saved coach answers, saved session reviews and stars done); step 4 (solver data) is done through S3 instead of Supabase Storage.** Decided with Jordan: Supabase (Postgres + Auth), sign-in with Google (email/password was dropped on 2026-10-08, see below), guest play that carries over on sign-up, and storing hands, decisions, coach conversations, settings, session reviews/progress, and starred decisions. The column-by-column schema is in `docs/database-schema.md`.
 
 ## Why
 
@@ -47,9 +47,9 @@ Every player-owned row has either `user_id` (→ `auth.users`, deleted with the 
    - `DELETE /api/me` deletes the account and its data.
 3. **Features on the stored data.**
    - Coach answers saved: explanations are paid for once, and chats reappear. ✅ Done.
-   - Saved session reviews.
+   - Saved session reviews. ✅ Done: a review is paid for once per decision count (`session_reviews`); reviews with invented numbers aren't kept.
    - Settings synced across devices.
-   - **Star a decision** (with an optional note).
+   - **Star a decision** (with an optional note). ✅ Done: the star button on the verdict, with a note field once starred (`GET`/`PUT /api/hands/:id/decisions/:decisionId/star`). Tags aren't built yet.
    - A **"My hands"** view (filters: starred, mistakes, flop, position; replay a decision with its chart and coach thread).
    - Progress stats over time (reusing `computeSessionStats`).
 4. **Solver data off-device.** ✅ Done, through S3 instead of Supabase Storage (2026-10-09).
@@ -94,4 +94,5 @@ Out of scope for now: other sign-in providers, separate dev and prod projects. H
 - **Sign-in (web):** `apps/web/src/components/AccountMenu.tsx` has the sign-in dialog (Google only) and the account menu (sign out, delete account). On sign-in, `POST /api/me/claim-guest` moves the guest's session to the account and the browser starts a fresh guest id. Signing out resets the table.
 - **Deleting an account:** `DELETE /api/me` deletes the Supabase user with the secret key (`src/auth/accounts.ts`); foreign keys delete everything it owned.
 - **Tests:** `npm test` uses the in-memory repo. `RUN_DB_TESTS=1 npx vitest run test/persistence.test.ts` (in `apps/api`) also runs the storage checks against Supabase, cleaning up after itself.
-- **Not yet:** saved session reviews, stars, settings sync, "My hands", and progress stats (the rest of step 3).
+- **Stars and saved reviews:** a decision's star and note live on its `decisions` row; unstarring clears the note. `GET /api/sessions/:id/review` returns the saved coach review for the current decision count, and asks the coach only when there isn't one.
+- **Not yet:** tags, settings sync, "My hands" (where starred decisions will be listed), and progress stats (the rest of step 3).

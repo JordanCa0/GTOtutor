@@ -1,11 +1,11 @@
-import type { DecisionFeedback } from '@gtotutor/shared-types';
+import type { DecisionFeedback, DecisionStar, SessionStats } from '@gtotutor/shared-types';
 import { and, asc, eq, inArray, isNotNull, lt, ne, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { spotTypeOf } from '../teacher/sessionStats.js';
-import type { CoachMessage, HandRecord, HandReplay, Player, Repo } from './repo.js';
+import type { CoachMessage, HandRecord, HandReplay, Player, Repo, SavedCoachReview } from './repo.js';
 import * as schema from './schema.js';
-import { coachMessages, decisions, hands, practiceSessions, profiles } from './schema.js';
+import { coachMessages, decisions, hands, practiceSessions, profiles, sessionReviews } from './schema.js';
 
 const ownerCols = (p: Player) => (p.kind === 'user' ? { userId: p.userId, guestId: null } : { userId: null, guestId: p.guestId });
 const rowOwner = (r: { userId: string | null; guestId: string | null }): Player =>
@@ -137,6 +137,30 @@ export class PgRepo implements Repo {
     // A question and its answer are written together; space their timestamps so they stay in order.
     const now = Date.now();
     await this.db.insert(coachMessages).values(messages.map((m, i) => ({ decisionId, ...ownerCols(owner), ...m, createdAt: new Date(now + i) })));
+  }
+
+  async star(decisionId: string): Promise<DecisionStar> {
+    const [row] = await this.db.select({ starredAt: decisions.starredAt, note: decisions.note }).from(decisions).where(eq(decisions.id, decisionId));
+    return row?.starredAt ? { starred: true, note: row.note } : { starred: false, note: null };
+  }
+
+  async setStar(decisionId: string, star: DecisionStar): Promise<void> {
+    await this.db
+      .update(decisions)
+      .set(star.starred ? { starredAt: sql`coalesce(${decisions.starredAt}, now())`, note: star.note } : { starredAt: null, note: null })
+      .where(eq(decisions.id, decisionId));
+  }
+
+  async sessionReview(sessionId: string, decisionsCount: number): Promise<SavedCoachReview | null> {
+    const [row] = await this.db
+      .select({ coach: sessionReviews.coach })
+      .from(sessionReviews)
+      .where(and(eq(sessionReviews.sessionId, sessionId), eq(sessionReviews.decisionsCount, decisionsCount)));
+    return row ? (row.coach as SavedCoachReview) : null;
+  }
+
+  async saveSessionReview(sessionId: string, decisionsCount: number, stats: SessionStats, coach: SavedCoachReview): Promise<void> {
+    await this.db.insert(sessionReviews).values({ sessionId, decisionsCount, stats, coach }).onConflictDoNothing();
   }
 
   /** For checks and scripts: row counts per table. */

@@ -6,7 +6,7 @@ A browser poker trainer: play preflop spots, get a verdict against range charts,
 
 Ideas planned for later (opponent archetypes, heads-up exploit mode, player style chart, glossary and beginner section, hand replayer, mobile layout) are in `docs/future-ideas.md`.
 
-Accounts and a database run on Supabase: sign-in with Google only, guest play that carries over on sign-up, and every hand and decision saved in Postgres. Saved coach chats, stars/tags, and "My hands" are next. Solver data lives in S3, not Supabase (see Hosting below). See `docs/accounts-and-data.md` and `docs/database-schema.md`.
+Accounts and a database run on Supabase: sign-in with Google only, guest play that carries over on sign-up, and every hand and decision saved in Postgres, along with coach threads, session reviews and starred decisions. Tags, settings sync and "My hands" are next. Solver data lives in S3, not Supabase (see Hosting below). See `docs/accounts-and-data.md` and `docs/database-schema.md`.
 
 Hosting is on AWS: web on S3 + CloudFront, the API in Docker on one EC2 instance (it keeps live hands in memory, so never more than one), flop files synced from S3. Runbook in `docs/deployment.md`; files in `deploy/` and `apps/api/Dockerfile`.
 

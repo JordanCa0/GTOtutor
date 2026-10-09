@@ -1,15 +1,18 @@
 import {
   CHAT_LIMITS,
   MIN_DECISIONS_FOR_REVIEW,
+  STAR_NOTE_MAX_CHARS,
   type ChartNodeView,
   type ChatRequest,
   type ChatResponse,
   type CoachThreadResponse,
+  type DecisionStar,
   type ExplanationResponse,
   type HandView,
   type HintResponse,
   type MeResponse,
   type SessionReviewResponse,
+  type StarRequest,
   type StartHandRequest,
   type SubmitDecisionRequest,
   type SubmitDecisionResponse,
@@ -74,6 +77,13 @@ const chatSchema = {
       },
     },
   },
+} as const;
+
+const starSchema = {
+  type: 'object',
+  required: ['starred'],
+  additionalProperties: false,
+  properties: { starred: { type: 'boolean' }, note: { type: ['string', 'null'], maxLength: STAR_NOTE_MAX_CHARS } },
 } as const;
 
 /** The saved explanation in a coach thread, shaped like a fresh one. */
@@ -214,6 +224,23 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
     },
   );
 
+  app.get<{ Params: { id: string; decisionId: string } }>('/api/hands/:id/decisions/:decisionId/star', async (req): Promise<DecisionStar> => {
+    const ctx = await hands.context(await players.player(req), req.params.id);
+    return hands.star(ctx, req.params.decisionId);
+  });
+
+  app.put<{ Params: { id: string; decisionId: string }; Body: StarRequest }>(
+    '/api/hands/:id/decisions/:decisionId/star',
+    { schema: { body: starSchema } },
+    async (req): Promise<DecisionStar> => {
+      const ctx = await hands.context(await players.player(req), req.params.id);
+      const note = req.body.note?.trim() || null;
+      const star: DecisionStar = req.body.starred ? { starred: true, note } : { starred: false, note: null };
+      await hands.setStar(ctx, req.params.decisionId, star);
+      return star;
+    },
+  );
+
   app.get<{ Params: { sessionId: string } }>(
     '/api/sessions/:sessionId/review',
     { schema: { params: { type: 'object', properties: { sessionId: sessionIdSchema } } } },
@@ -221,10 +248,15 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
       const player = await players.player(req);
       const records = await hands.sessionHands(player, req.params.sessionId);
       const stats = computeSessionStats(records, records.some((h) => h.config.easyFoldsSkipped));
-      const coach =
-        stats.decisions < MIN_DECISIONS_FOR_REVIEW
-          ? ({ status: 'not_enough_data', needed: MIN_DECISIONS_FOR_REVIEW - stats.decisions } as const)
-          : await teacher.review(req.params.sessionId, stats, playerKey(player));
+      if (stats.decisions < MIN_DECISIONS_FOR_REVIEW) {
+        return { stats, coach: { status: 'not_enough_data', needed: MIN_DECISIONS_FOR_REVIEW - stats.decisions } };
+      }
+      // A review is paid for once per decision count; after that it comes from the database.
+      const saved = await hands.savedReview(player, req.params.sessionId, stats.decisions);
+      if (saved) return { stats, coach: saved };
+      const coach = await teacher.review(req.params.sessionId, stats, playerKey(player));
+      // Reviews with invented numbers aren't kept, so opening the review again can replace them.
+      if (coach.status === 'ok' && coach.ungroundedNumbers.length === 0) await hands.saveReview(player, req.params.sessionId, stats, coach);
       return { stats, coach };
     },
   );

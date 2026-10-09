@@ -199,6 +199,20 @@ export type ChatResponse =
     }
   | { status: 'unavailable'; reason: string };
 
+/** A decision the player starred to come back to, with an optional note. */
+export interface DecisionStar {
+  starred: boolean;
+  note: string | null;
+}
+
+/** PUT …/decisions/:id/star. Unstarring clears the note. */
+export interface StarRequest {
+  starred: boolean;
+  note?: string | null;
+}
+
+export const STAR_NOTE_MAX_CHARS = 500;
+
 /** GET …/decisions/:id/coach: the saved coach thread for a decision, so it survives a reload. */
 export interface CoachThreadResponse {
   explanation: Extract<ExplanationResponse, { status: 'ok' }> | null;

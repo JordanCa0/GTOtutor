@@ -1,4 +1,7 @@
-import type { ActionLogEntry, DecisionFeedback, HandConfig, HandResult, Position } from '@gtotutor/shared-types';
+import type { ActionLogEntry, DecisionFeedback, DecisionStar, HandConfig, HandResult, Position, SessionCoachReview, SessionStats } from '@gtotutor/shared-types';
+
+/** A coach review that came back clean, so it can be kept and shown again without asking the coach. */
+export type SavedCoachReview = Extract<SessionCoachReview, { status: 'ok' }>;
 
 /** Who is playing: a signed-in account or a browser guest. */
 export type Player = { kind: 'user'; userId: string } | { kind: 'guest'; guestId: string };
@@ -60,6 +63,14 @@ export interface Repo {
   coachMessages(decisionId: string): Promise<CoachMessage[]>;
   /** Appends messages to a decision's coach thread, in the order given. */
   addCoachMessages(decisionId: string, owner: Player, messages: CoachMessage[]): Promise<void>;
+  /** Whether a saved decision is starred, and its note. */
+  star(decisionId: string): Promise<DecisionStar>;
+  /** Stars or unstars a saved decision. Unstarring clears the note. */
+  setStar(decisionId: string, star: DecisionStar): Promise<void>;
+  /** The coach review saved for a session at this many decisions, if any. */
+  sessionReview(sessionId: string, decisionsCount: number): Promise<SavedCoachReview | null>;
+  /** Keeps a session review; one already saved for the same count stays as it is. */
+  saveSessionReview(sessionId: string, decisionsCount: number, stats: SessionStats, coach: SavedCoachReview): Promise<void>;
 }
 
 /** In-memory Repo with the same semantics, for tests and running without a database. */
@@ -68,6 +79,8 @@ export class MemoryRepo implements Repo {
   private readonly hands = new Map<string, HandRecord>();
   readonly profiles = new Map<string, string | null>();
   private readonly coach: { decisionId: string; owner: Player; message: CoachMessage }[] = [];
+  private readonly stars = new Map<string, string | null>(); // starred decision id -> note
+  private readonly reviews = new Map<string, { sessionId: string; coach: SavedCoachReview }>(); // `${sessionId}|${count}`
 
   async ensureSession(sessionId: string, player: Player): Promise<Player> {
     const s = this.sessions.get(sessionId);
@@ -129,6 +142,25 @@ export class MemoryRepo implements Repo {
     for (const message of messages) this.coach.push({ decisionId, owner, message: structuredClone(message) });
   }
 
+  async star(decisionId: string): Promise<DecisionStar> {
+    return this.stars.has(decisionId) ? { starred: true, note: this.stars.get(decisionId)! } : { starred: false, note: null };
+  }
+
+  async setStar(decisionId: string, star: DecisionStar): Promise<void> {
+    if (star.starred) this.stars.set(decisionId, star.note);
+    else this.stars.delete(decisionId);
+  }
+
+  async sessionReview(sessionId: string, decisionsCount: number): Promise<SavedCoachReview | null> {
+    const saved = this.reviews.get(`${sessionId}|${decisionsCount}`);
+    return saved ? structuredClone(saved.coach) : null;
+  }
+
+  async saveSessionReview(sessionId: string, decisionsCount: number, _stats: SessionStats, coach: SavedCoachReview): Promise<void> {
+    const key = `${sessionId}|${decisionsCount}`;
+    if (!this.reviews.has(key)) this.reviews.set(key, { sessionId, coach: structuredClone(coach) });
+  }
+
   private deleteSessions(match: (entry: [string, { owner: Player; lastActive: Date }]) => boolean): number {
     const doomed = [...this.sessions.entries()].filter(match).map(([id]) => id);
     const doomedDecisions = new Set<string>();
@@ -140,8 +172,10 @@ export class MemoryRepo implements Repo {
         this.hands.delete(hid);
       }
     }
-    // Coach messages go with their decisions, like the database's cascade.
+    // Coach messages, stars and reviews go with their decisions and sessions, like the database's cascades.
     for (let i = this.coach.length - 1; i >= 0; i--) if (doomedDecisions.has(this.coach[i].decisionId)) this.coach.splice(i, 1);
+    for (const id of doomedDecisions) this.stars.delete(id);
+    for (const [key, r] of this.reviews) if (doomed.includes(r.sessionId)) this.reviews.delete(key);
     return doomed.length;
   }
 }
