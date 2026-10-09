@@ -56,9 +56,9 @@ export class HandService {
     return state;
   }
 
-  async decide(player: Player, handId: string, action: ActionType): Promise<{ state: HandState; feedback: DecisionFeedback }> {
+  async decide(player: Player, handId: string, action: ActionType, toBb?: number): Promise<{ state: HandState; feedback: DecisionFeedback }> {
     const state = await this.get(player, handId);
-    const feedback = this.engine.decide(state, action);
+    const feedback = this.engine.decide(state, action, toBb);
     await this.save(player, state);
     return { state, feedback };
   }

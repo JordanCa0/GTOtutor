@@ -74,6 +74,8 @@ export interface SeatView {
 export interface ActionOption {
   actionId: ActionType;
   label: string;
+  /** Bet/raise size (street total postflop, hand total preflop); tells apart several options of one type, e.g. three flop bets. */
+  toBb?: number | null;
   frequency: number;
   evBb: number | null;
 }
@@ -88,7 +90,12 @@ export interface DecisionFeedback {
   options: ActionOption[];
   chosenFrequency: number;
   bestAction: ActionType;
+  /** Indexes into `options` of hero's choice and the most frequent option (decisions before 2026-10-09 lack them). */
+  chosenIndex?: number;
+  bestIndex?: number;
   grade: Grade;
+  /** "Right idea, different size": betting or raising was right but at another size, for little EV. Graded 'mixed'. */
+  sizeOnly?: boolean;
   hintUsed: boolean;
   street: Street;
   /** Board cards when the decision was made (empty preflop). */
@@ -148,6 +155,8 @@ export interface HandView {
 
 export interface SubmitDecisionRequest {
   action: ActionType;
+  /** Which size, when several options share `action` (e.g. flop bets of 33/66/100%). */
+  toBb?: number;
 }
 
 export interface SubmitDecisionResponse {
@@ -246,4 +255,14 @@ export type SessionCoachReview =
 export interface SessionReviewResponse {
   stats: SessionStats;
   coach: SessionCoachReview;
+}
+
+/** Hero's option in a decision. Decisions saved before 2026-10-09 lack `chosenIndex`; each type appeared once then. */
+export function chosenOption(d: Pick<DecisionFeedback, 'options' | 'chosenAction' | 'chosenIndex'>): ActionOption {
+  return d.options[d.chosenIndex ?? d.options.findIndex((o) => o.actionId === d.chosenAction)];
+}
+
+/** The most frequent option in a decision (see `chosenOption`). */
+export function bestOption(d: Pick<DecisionFeedback, 'options' | 'bestAction' | 'bestIndex'>): ActionOption {
+  return d.options[d.bestIndex ?? d.options.findIndex((o) => o.actionId === d.bestAction)];
 }

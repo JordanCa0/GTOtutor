@@ -1,6 +1,6 @@
 # Game tree v9 plan: limping from every position, flop bets 33/66/100%
 
-**Status (2026-10-09): phases 1 (measured: keep all three sizes) and 2 (preflop limping) done; phase 3 next.** Two game-tree changes, made together so everything is re-solved once:
+**Status (2026-10-09): phases 1–3 done (measured; limping; bet sizes in the app). Phase 4 (calibrate and freeze preflop-v9) next.** Two game-tree changes, made together so everything is re-solved once:
 
 - **Limping from every position.** Today only the SB can limp.
 - **Three flop bet sizes: 33%, 66% and 100% of the pot,** each with a 3× raise. Today the flop has one size (33%).

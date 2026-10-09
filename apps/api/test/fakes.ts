@@ -54,7 +54,8 @@ export function client(app: FastifyInstance, who: { guestId?: string; token?: st
 export const GUEST = '11111111-1111-4111-8111-111111111111';
 
 /** A tiny solved spot: one rainbow flop where BB always checks and BTN checks or bets 1.8 half the time. */
-export function fakeSolverOutput(): string {
+/** A one-flop solve (BB always checks first). `threeBets`: BTN bets 33/66/100% after the check (game tree v9), with EVs. */
+export function fakeSolverOutput({ threeBets = false } = {}): string {
   const root = mkdtempSync(join(tmpdir(), 'gtotutor-flops-'));
   const dir = join(root, 'btn_vs_bb_srp_100');
   mkdirSync(dir);
@@ -70,8 +71,16 @@ export function fakeSolverOutput(): string {
     hands: [hands, hands],
     nodes: [
       { history: [], player: 0, actions: ['check', 'bet 1.8'], strategy: [fill(1000), fill(0)] },
-      { history: [0], player: 1, actions: ['check', 'bet 1.8'], strategy: [fill(500), fill(500)] },
-      { history: [0, 1], player: 0, actions: ['fold', 'call', 'raise 7.2'], strategy: [fill(0), fill(1000), fill(0)] },
+      ...(threeBets
+        ? [
+            // Check 40%, bet 33% 50%, 66% 5%, 100% 5%. Against the 33% bet the 66% bet loses 0.02bb, the 100% bet 0.5bb.
+            { history: [0], player: 1 as const, actions: ['check', 'bet 1.8', 'bet 3.65', 'bet 5.5'], strategy: [fill(400), fill(500), fill(50), fill(50)], ev_bb: [fill(1), fill(1.2), fill(1.18), fill(0.7)] },
+            ...[1, 2, 3].map((i) => ({ history: [0, i], player: 0 as const, actions: ['fold', 'call', 'raise 9'], strategy: [fill(0), fill(1000), fill(0)] })),
+          ]
+        : [
+            { history: [0], player: 1 as const, actions: ['check', 'bet 1.8'], strategy: [fill(500), fill(500)] },
+            { history: [0, 1], player: 0 as const, actions: ['fold', 'call', 'raise 7.2'], strategy: [fill(0), fill(1000), fill(0)] },
+          ]),
       { history: [1], player: 1, actions: ['fold', 'call', 'raise 7.2'], strategy: [fill(0), fill(1000), fill(0)] },
     ],
   };

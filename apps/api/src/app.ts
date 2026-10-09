@@ -54,7 +54,7 @@ const decisionSchema = {
   type: 'object',
   required: ['action'],
   additionalProperties: false,
-  properties: { action: { enum: ['fold', 'check', 'call', 'bet', 'raise', 'allin'] } },
+  properties: { action: { enum: ['fold', 'check', 'call', 'bet', 'raise', 'allin'] }, toBb: { type: 'number', minimum: 0 } },
 } as const;
 
 const chatSchema = {
@@ -135,7 +135,7 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
     '/api/hands/:id/decisions',
     { schema: { body: decisionSchema } },
     async (req): Promise<SubmitDecisionResponse> => {
-      const { state, feedback } = await hands.decide(await players.player(req), req.params.id, req.body.action);
+      const { state, feedback } = await hands.decide(await players.player(req), req.params.id, req.body.action, req.body.toBb);
       return { feedback, hand: engine.view(state) };
     },
   );

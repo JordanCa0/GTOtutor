@@ -2,6 +2,7 @@
 // Run from the repo root:
 //   npx tsx apps/api/scripts/exportSolverSpots.ts                       placeholder charts -> solver/spots/
 //   npx tsx apps/api/scripts/exportSolverSpots.ts --charts <file.json>  solved charts -> solver/spots/<version>/
+//   --flop-bets <sizes>   flop bet sizes (default 33%,66%,100%, game tree v9; preflop-v8 used 33%)
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { SIX_MAX_POSITIONS, type Position } from '@gtotutor/shared-types';
 import { chartsFromEnv } from '../src/charts/solvedCharts.js';
@@ -12,6 +13,8 @@ const chartsPath = chartsArg >= 0 ? process.argv[chartsArg + 1] : undefined;
 const charts = chartsFromEnv(chartsPath ?? '');
 const outDir = chartsPath ? `solver/spots/${charts.version}` : 'solver/spots';
 const STACK = 100;
+const betsArg = process.argv.indexOf('--flop-bets');
+const FLOP_BETS = betsArg >= 0 ? process.argv[betsArg + 1] : '33%,66%,100%';
 
 /** One preflop decision a player made on the way to the flop: chart node + the action taken. */
 type Step = [nodeKey: string, action: string];
@@ -65,10 +68,10 @@ function spot(name: string, description: string, a: Position, aRange: string, b:
     stack_bb: STACK - invested,
     oop_range: aIsOop ? aRange : bRange,
     ip_range: aIsOop ? bRange : aRange,
-    // Deliberately small tree to keep each solve cheap: one size per street, and no raises on the
-    // turn and river. Only the flop strategy is kept (the browser re-solves later streets), and
-    // dropping those raises made solves 3x faster for ~0.005bb/hand of flop EV (docs/postflop-plan.md).
-    flop: ['33%', '3x'],
+    // Small tree to keep each solve cheap: three flop bet sizes (v9; 2.4x the time of one, all three
+    // get used: docs/game-tree-v9-plan.md), one size on the turn and river, and no raises there.
+    // Dropping those raises made solves 3x faster for ~0.005bb/hand of flop EV (docs/postflop-plan.md).
+    flop: [FLOP_BETS, '3x'],
     turn: ['66%', ''],
     river: ['75%', ''],
   };

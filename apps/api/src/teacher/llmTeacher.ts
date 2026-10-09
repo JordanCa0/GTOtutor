@@ -12,9 +12,16 @@ import type {
   SessionCoachReview,
   SessionStats,
 } from '@gtotutor/shared-types';
+import { chosenOption } from '@gtotutor/shared-types';
 import { z } from 'zod';
 import { findUngroundedPercentages } from './grounding.js';
 import { HourlyRateLimiter } from './rateLimit.js';
+
+/** Cache key part for hero's choice: the type, plus the size when there's more than one of that type. */
+const chosenKey = (d: DecisionFeedback) => {
+  const o = chosenOption(d);
+  return d.options.filter((x) => x.actionId === o.actionId).length > 1 ? `${o.actionId}@${o.toBb}` : o.actionId;
+};
 
 const PROMPT_VERSION = 'v5';
 
@@ -133,7 +140,7 @@ export function buildSpotContext(spot: SpotContext): string {
   if (spot.priorDecisions.length) {
     lines.push(
       `Earlier in this hand hero: ${spot.priorDecisions
-        .map((d) => `${d.nodeLabel} → chose ${d.options.find((o) => o.actionId === d.chosenAction)!.label} (chart ${pct(d.chosenFrequency)})`)
+        .map((d) => `${d.nodeLabel} → chose ${chosenOption(d).label} (chart ${pct(d.chosenFrequency)})`)
         .join('; ')}.`,
     );
   }
@@ -143,9 +150,15 @@ export function buildSpotContext(spot: SpotContext): string {
 
 export function buildContext(input: ExplainInput): string {
   const d = input.decision;
-  const chosen = d.options.find((o) => o.actionId === d.chosenAction)!;
+  const chosen = chosenOption(d);
   const grade =
-    d.grade === 'best' ? 'highest-frequency action' : d.grade === 'mixed' ? 'part of a mixed strategy, not the main action' : 'rarely or never taken by the chart';
+    d.grade === 'best'
+      ? 'highest-frequency action'
+      : d.sizeOnly
+        ? 'right kind of action at a size the solver uses less, for little EV ("right idea, different size")'
+        : d.grade === 'mixed'
+          ? 'part of a mixed strategy, not the main action'
+          : 'rarely or never taken by the chart';
   return `${buildSpotContext(input)}\nHero chose: ${chosen.label} (chart frequency ${pct(d.chosenFrequency)}). Grade: ${grade}.`;
 }
 
@@ -255,7 +268,7 @@ export class LlmTeacher {
 
   async explain(input: ExplainInput, clientKey: string): Promise<ExplanationResponse> {
     const d = input.decision;
-    const cacheKey = this.key(d.nodeKey, d.handClass, d.chosenAction, String(input.priorDecisions.length));
+    const cacheKey = this.key(d.nodeKey, d.handClass, chosenKey(d), String(input.priorDecisions.length));
     const hit = this.explanations.get(cacheKey);
     if (hit) return { status: 'ok', ...hit, cached: true };
 
@@ -298,7 +311,7 @@ export class LlmTeacher {
 
   cachedExplanation(input: ExplainInput): string | null {
     const d = input.decision;
-    const hit = this.explanations.get(this.key(d.nodeKey, d.handClass, d.chosenAction, String(input.priorDecisions.length)));
+    const hit = this.explanations.get(this.key(d.nodeKey, d.handClass, chosenKey(d), String(input.priorDecisions.length)));
     return hit ? [hit.tldr, ...hit.points.map((p) => `- ${p}`)].join('\n') : null;
   }
 

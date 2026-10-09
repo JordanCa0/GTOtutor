@@ -1,4 +1,4 @@
-import type { ActionType, ChatMessage, HandView, StartHandRequest } from '@gtotutor/shared-types';
+import type { ActionType, ChatMessage, HandView, LegalAction, StartHandRequest } from '@gtotutor/shared-types';
 import { useMutation } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api/client';
@@ -181,7 +181,7 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
   const { playback, done, skip } = usePlayback(hand, animate);
   useTableSounds(hand, playback, animate);
   const decide = useMutation({
-    mutationFn: (action: ActionType) => api.decide(hand.id, action),
+    mutationFn: (action: LegalAction) => api.decide(hand.id, action.id, action.toBb),
     onSuccess: ({ hand: h, feedback }) => {
       playSound(feedback.grade === 'best' ? 'good' : feedback.grade === 'mixed' ? 'mixed' : 'bad');
       onHand(h);
@@ -193,14 +193,16 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
   const result = hand.result;
   const complete = hand.status === 'complete';
 
-  // One entry per button, in display order. A spot can offer two aggressive options (e.g. raise and all-in):
-  // the slot takes the first, and the other gets its own button after the three fixed ones.
+  // One entry per button, in display order. A spot can offer several aggressive options (raise and all-in,
+  // or flop bets of 33/66/100%): the slot takes the first, and each other one gets its own button after the
+  // three fixed ones, with a number shortcut (all-in keeps "a").
   const slotted = ACTION_SLOTS.map((slot) => ({ slot, action: hand.legalActions.find((a) => slot.ids.includes(a.id)) }));
   const extras = hand.legalActions.filter((a) => slotted.every((s) => s.action !== a));
-  const shortcuts = new Map<string, ActionType>();
-  for (const { slot, action } of slotted) if (action) shortcuts.set(slot.key[0], action.id);
-  for (const a of extras) if (a.id === 'allin' && !shortcuts.has('a')) shortcuts.set('a', a.id);
-  const keyFor = (id: ActionType) => [...shortcuts].find(([, v]) => v === id)?.[0];
+  const shortcuts = new Map<string, LegalAction>();
+  for (const { slot, action } of slotted) if (action) shortcuts.set(slot.key[0], action);
+  let digit = 2;
+  for (const a of extras) shortcuts.set(a.id === 'allin' && !shortcuts.has('a') ? 'a' : String(digit++), a);
+  const keyFor = (action: LegalAction) => [...shortcuts].find(([, v]) => v === action)?.[0];
 
   const canAct = done && !complete && !decide.isPending;
   const canDeal = done && complete && !dealing;
@@ -275,9 +277,9 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
             <div className="actions">
               {slotted.map(({ slot, action }) =>
                 action ? (
-                  <button key={slot.key} className={`act act-${slot.key}`} disabled={decide.isPending} onClick={() => decide.mutate(action.id)}>
+                  <button key={slot.key} className={`act act-${slot.key}`} disabled={decide.isPending} onClick={() => decide.mutate(action)}>
                     {action.label}
-                    <ShortcutKey k={keyFor(action.id)} />
+                    <ShortcutKey k={keyFor(action)} />
                   </button>
                 ) : (
                   <button key={slot.key} className={`act act-${slot.key} unavailable`} disabled title="Not an option in this spot">
@@ -286,9 +288,9 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
                 ),
               )}
               {extras.map((a) => (
-                <button key={a.id} className="act act-raise" disabled={decide.isPending} onClick={() => decide.mutate(a.id)}>
+                <button key={`${a.id}-${a.toBb}`} className="act act-raise" disabled={decide.isPending} onClick={() => decide.mutate(a)}>
                   {a.label}
-                  <ShortcutKey k={keyFor(a.id)} />
+                  <ShortcutKey k={keyFor(a)} />
                 </button>
               ))}
             </div>

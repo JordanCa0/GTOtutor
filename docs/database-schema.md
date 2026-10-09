@@ -102,8 +102,8 @@ The main table for history, stats, and stars.
 | `hand_class` | text | yes | Your hand type | `AKo` |
 | `hero_cards` | text list | yes | Your exact cards | `{Ah,Kd}` |
 | `board` | text list | yes | Board at the time (empty preflop) | `{Kh,7d,2c}` |
-| `chosen_action` | text | yes | What you did | `bet` |
-| `best_action` | text | yes | Most frequent action in the strategy | `check` |
+| `chosen_action` | text | yes | What you did: the action type. With several sizes of one type (flop bets of 33/66/100%), the size is in `feedback` (`chosenIndex`, `options[].toBb`) | `bet` |
+| `best_action` | text | yes | Type of the most frequent action (exact option: `feedback.bestIndex`) | `check` |
 | `grade` | text | yes | `best`, `mixed`, or `mistake` | `mixed` |
 | `chosen_frequency` | number | yes | How often the strategy takes your action (0–1) | `0.32` |
 | `feedback` | JSON | yes | The complete verdict as shown (all options, frequencies, EVs), so it replays exactly even if charts change later | |

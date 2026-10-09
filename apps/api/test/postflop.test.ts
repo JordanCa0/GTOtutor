@@ -3,7 +3,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { ChartService } from '../src/charts/chartService.js';
 import { buildFixtureChartSet } from '../src/charts/fixtures.js';
-import { HandEngine } from '../src/engine/handEngine.js';
+import { gradeDecision, HandEngine } from '../src/engine/handEngine.js';
 import { runoutResolver } from '../src/engine/showdownResolver.js';
 import { CardMapper, cardStr, mapHand, nearestFlop, parseCards, shapeOf, handIndex } from '../src/postflop/flopMap.js';
 import { FlopStore, parseSolverAction } from '../src/postflop/flopStore.js';
@@ -155,5 +155,53 @@ describe('flop play over HTTP', () => {
       const coach = await call({ method: 'GET', url: `/api/hands/${hand.id}/decisions/${feedback.id}/explanation` });
       expect(coach.json()).toMatchObject({ status: 'ok' });
     }
+  });
+});
+
+describe('several flop bet sizes (game tree v9)', () => {
+  const charts = new ChartService(buildFixtureChartSet());
+  const engine = new HandEngine(charts, seededRng(21), runoutResolver, new FlopStore(fakeSolverOutput({ threeBets: true })));
+  // A BTN flop decision after BB's check: check 40%, bet 33% 50%, 66% 5%, 100% 5%.
+  const btnFlop = () => engine.start({ tableSize: 'SIX_MAX', stackDepthBb: 100, heroPosition: 'BTN', flopPractice: true });
+
+  it('offers every size and needs the size to tell bets apart', () => {
+    const state = btnFlop();
+    expect(engine.view(state).legalActions.map((a) => a.label)).toEqual(['Check', 'Bet 1.8', 'Bet 3.65', 'Bet 5.5']);
+    expect(() => engine.decide(state, 'bet')).toThrow('several "bet" sizes');
+    expect(() => engine.decide(state, 'bet', 2)).toThrow('no "bet" of 2bb');
+    const feedback = engine.decide(state, 'bet', 3.65);
+    expect(feedback).toMatchObject({ chosenAction: 'bet', chosenIndex: 2, bestIndex: 1, chosenFrequency: 0.05 });
+    expect(feedback.options.map((o) => o.toBb)).toEqual([null, 1.8, 3.65, 5.5]);
+  });
+
+  it('grades a rarely used size that costs little EV as "right idea, different size"', () => {
+    expect(engine.decide(btnFlop(), 'bet', 1.8)).toMatchObject({ grade: 'best' });
+    expect(engine.decide(btnFlop(), 'bet', 3.65)).toMatchObject({ grade: 'mixed', sizeOnly: true }); // 0.02bb worse
+    const big = engine.decide(btnFlop(), 'bet', 5.5); // 0.5bb worse: more than 1% of the 5.5bb pot
+    expect(big.grade).toBe('mistake');
+    expect(big.sizeOnly).toBeUndefined();
+  });
+});
+
+describe('gradeDecision', () => {
+  const opt = (actionId: 'check' | 'bet', frequency: number, evBb: number | null = null, toBb: number | null = null) => ({ actionId, label: actionId, toBb, frequency, evBb });
+
+  it('keeps the usual grades for one option per type', () => {
+    expect(gradeDecision([opt('check', 0.7), opt('bet', 0.3)], 0, 10)).toEqual({ grade: 'best', sizeOnly: false });
+    expect(gradeDecision([opt('check', 0.7), opt('bet', 0.3)], 1, 10)).toEqual({ grade: 'mixed', sizeOnly: false });
+    expect(gradeDecision([opt('check', 0.95), opt('bet', 0.05)], 1, 10)).toEqual({ grade: 'mistake', sizeOnly: false });
+  });
+
+  it('only calls it a size slip when betting itself is a real option', () => {
+    const sizes = (f: number[]) => [opt('check', f[0], 1), opt('bet', f[1], 1, 2), opt('bet', f[2], 0.99, 4)];
+    expect(gradeDecision(sizes([0.5, 0.45, 0.05]), 2, 10)).toEqual({ grade: 'mixed', sizeOnly: true });
+    // Betting is only 6% in total: betting at all is the mistake.
+    expect(gradeDecision(sizes([0.94, 0.03, 0.03]), 2, 10)).toEqual({ grade: 'mistake', sizeOnly: false });
+  });
+
+  it('without EVs, needs the size to be used at least sometimes', () => {
+    const sizes = (rare: number) => [opt('check', 0.5), opt('bet', 0.5 - rare, null, 2), opt('bet', rare, null, 4)];
+    expect(gradeDecision(sizes(0.02), 2, 10).sizeOnly).toBe(true);
+    expect(gradeDecision(sizes(0), 2, 10)).toEqual({ grade: 'mistake', sizeOnly: false });
   });
 });

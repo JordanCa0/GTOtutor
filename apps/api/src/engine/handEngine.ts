@@ -109,7 +109,41 @@ const postflopIndex = (p: Position) => ['SB', 'BB', 'UTG', 'HJ', 'CO', 'BTN'].in
 
 const round2 = (x: number) => Math.round(x * 100) / 100;
 const MIXED_THRESHOLD = 0.1;
+/** "Right idea, different size" when the chosen size gives up at most this share of the pot vs the best size of that action. */
+const SIZE_EV_TOLERANCE = 0.01;
 const MAX_DEAL_ATTEMPTS = 200;
+
+/** Hero's option: the only one of that type, or the one of that type at `toBb` (e.g. one of three flop bets). */
+function chooseIndex(actions: LegalAction[], action: ActionType, toBb?: number): number {
+  const matches = actions.flatMap((a, i) => (a.id === action ? [i] : []));
+  if (!matches.length) throw new HttpError(400, `Illegal action "${action}" here.`);
+  if (matches.length === 1) return matches[0];
+  if (toBb === undefined) throw new HttpError(400, `There are several "${action}" sizes here; choose one with toBb.`);
+  const i = matches.find((m) => actions[m].toBb !== null && Math.abs(actions[m].toBb! - toBb) < 1e-6);
+  if (i === undefined) throw new HttpError(400, `There is no "${action}" of ${toBb}bb here.`);
+  return i;
+}
+
+/**
+ * best: the most frequent option. mixed: played at least MIXED_THRESHOLD of the time. Otherwise a
+ * mistake, unless hero picked the right kind of action (e.g. bet) at a size the solver uses less:
+ * that's "right idea, different size" (mixed) when that action is a real option and the size costs
+ * little EV (or, without EVs, the solver uses it at least sometimes).
+ */
+export function gradeDecision(options: ActionOption[], chosen: number, potBb: number): { grade: Grade; sizeOnly: boolean } {
+  const maxFreq = Math.max(...options.map((o) => o.frequency));
+  const f = options[chosen].frequency;
+  if (f >= maxFreq - 1e-9) return { grade: 'best', sizeOnly: false };
+  if (f >= MIXED_THRESHOLD) return { grade: 'mixed', sizeOnly: false };
+  const sizes = options.filter((o) => o.actionId === options[chosen].actionId);
+  if (sizes.length > 1 && sizes.reduce((s, o) => s + o.frequency, 0) >= MIXED_THRESHOLD) {
+    const ev = options[chosen].evBb;
+    const bestEv = Math.max(...sizes.map((o) => o.evBb ?? -Infinity));
+    const close = ev !== null && bestEv > -Infinity ? bestEv - ev <= SIZE_EV_TOLERANCE * potBb : f >= 0.01;
+    if (close) return { grade: 'mixed', sizeOnly: true };
+  }
+  return { grade: 'mistake', sizeOnly: false };
+}
 const EASY_FOLD_THRESHOLD = 0.98;
 /** Share of deals that skip the filter, so easy folds still show up occasionally for folding discipline. */
 export const UNFILTERED_DEAL_RATE = 0.1;
@@ -208,6 +242,7 @@ export class HandEngine {
         options: actions.map((a, i) => ({
           actionId: a.id,
           label: a.label,
+          toBb: a.toBb,
           frequency: node.strategy[i][h] / 1000,
           evBb: node.ev_bb ? node.ev_bb[i][h] : null,
         })),
@@ -225,7 +260,7 @@ export class HandEngine {
       actions: node.actions,
       heroCards: [...hero.cards],
       handClass: hc,
-      options: node.actions.map((a, i) => ({ actionId: a.id, label: legal[i].label, frequency: freqs[i], evBb: evs[i] })),
+      options: node.actions.map((a, i) => ({ actionId: a.id, label: legal[i].label, toBb: legal[i].toBb, frequency: freqs[i], evBb: evs[i] })),
       approxFlop: null,
     };
   }
@@ -293,17 +328,17 @@ export class HandEngine {
     if (state.heroToAct) state.hintUsedPending = true;
   }
 
-  decide(state: HandState, action: ActionType): DecisionFeedback {
+  decide(state: HandState, action: ActionType, toBb?: number): DecisionFeedback {
     const pending = this.pendingDecision(state);
     if (!pending) throw new HttpError(409, 'It is not your turn — this hand is complete.');
     const { options } = pending;
-    const chosenIdx = pending.actions.findIndex((a) => a.id === action);
-    if (chosenIdx < 0) throw new HttpError(400, `Illegal action "${action}" here.`);
+    const chosenIdx = chooseIndex(pending.actions, action, toBb);
 
     const maxFreq = Math.max(...options.map((o) => o.frequency));
+    const bestIdx = options.findIndex((o) => o.frequency === maxFreq);
     const chosenFrequency = options[chosenIdx].frequency;
-    const grade: Grade =
-      chosenFrequency >= maxFreq - 1e-9 ? 'best' : chosenFrequency >= MIXED_THRESHOLD ? 'mixed' : 'mistake';
+    const potBb = state.players.reduce((s, p) => s + p.committed, 0);
+    const { grade, sizeOnly } = gradeDecision(options, chosenIdx, potBb);
 
     const feedback: DecisionFeedback = {
       id: `${state.id}-d${state.decisions.length + 1}`,
@@ -314,8 +349,11 @@ export class HandEngine {
       chosenAction: action,
       options,
       chosenFrequency,
-      bestAction: options.find((o) => o.frequency === maxFreq)!.actionId,
+      bestAction: options[bestIdx].actionId,
+      chosenIndex: chosenIdx,
+      bestIndex: bestIdx,
       grade,
+      ...(sizeOnly && { sizeOnly }),
       hintUsed: state.hintUsedPending,
       street: pending.street,
       board: [...state.board],

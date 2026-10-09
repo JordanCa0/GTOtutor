@@ -2,7 +2,7 @@ import type { ChartNodeView } from '@gtotutor/shared-types';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { api } from '../api/client';
-import { ACTION_COLORS, STRIPE_ORDER } from './actionColors';
+import { ACTION_COLORS, optionColor, stripeOrder } from './actionColors';
 import { Backdrop, Presence } from './Presence';
 
 const DESC = 'AKQJT98765432';
@@ -67,11 +67,10 @@ function RangeView({ data, highlight, large, onGridClick, selected, onSelect }: 
     const freqs = data.strategy[hc];
     let at = 0;
     const stops: string[] = [];
-    for (const id of STRIPE_ORDER) {
-      const i = data.actions.findIndex((a) => a.id === id);
-      if (i < 0 || freqs[i] <= 0) continue;
+    for (const i of stripeOrder(data.actions)) {
+      if (freqs[i] <= 0) continue;
       const end = at + freqs[i] * 100;
-      stops.push(`${ACTION_COLORS[id]} ${at}% ${end}%`);
+      stops.push(`${optionColor(data.actions, i)} ${at}% ${end}%`);
       at = end;
     }
     return stops.length ? `linear-gradient(to right, ${stops.join(', ')})` : ACTION_COLORS.fold;
@@ -158,8 +157,8 @@ function RangeView({ data, highlight, large, onGridClick, selected, onSelect }: 
         <p className="range-title">{data.label}</p>
         <p className="label">Whole range</p>
         {data.actions.map((a, i) => (
-          <div key={a.id} className="range-row">
-            <i style={{ background: ACTION_COLORS[a.id] }} />
+          <div key={i} className="range-row">
+            <i style={{ background: optionColor(data.actions, i) }} />
             <span>{a.label}</span>
             <b>{pct(totals[i] / (all || 1))}</b>
           </div>
@@ -178,7 +177,7 @@ function RangeView({ data, highlight, large, onGridClick, selected, onSelect }: 
               <p className="label">{data.dataSource.kind === 'solver' ? `${highlight} on average` : `Your hand (${highlight})`}</p>
               <div className="mini-bar">
                 {data.actions.map((a, i) => (
-                  <span key={a.id} style={{ flex: data.strategy[highlight][i], background: ACTION_COLORS[a.id] }} />
+                  <span key={i} style={{ flex: data.strategy[highlight][i], background: optionColor(data.actions, i) }} />
                 ))}
               </div>
             </>
@@ -216,12 +215,12 @@ function HandDetail({ data, hc, isHero, onBack }: { data: ChartNodeView; hc: str
         <>
           <div className="mini-bar">
             {data.actions.map((a, i) => (
-              <span key={a.id} style={{ flex: freqs[i], background: ACTION_COLORS[a.id] }} />
+              <span key={i} style={{ flex: freqs[i], background: optionColor(data.actions, i) }} />
             ))}
           </div>
           {data.actions.map((a, i) => (
-            <div key={a.id} className="range-row">
-              <i style={{ background: ACTION_COLORS[a.id] }} />
+            <div key={i} className="range-row">
+              <i style={{ background: optionColor(data.actions, i) }} />
               <span>{a.label}</span>
               <b>{pct(freqs[i])}</b>
             </div>

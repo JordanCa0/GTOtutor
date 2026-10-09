@@ -1,4 +1,4 @@
-import type { DecisionFeedback, LeakType, SessionStats, SpotType } from '@gtotutor/shared-types';
+import { bestOption, chosenOption, type DecisionFeedback, type LeakType, type SessionStats, type SpotType } from '@gtotutor/shared-types';
 
 const SPOT_LABELS: Record<SpotType, string> = {
   RFI: 'Opening (first in)',
@@ -53,19 +53,18 @@ export function computeSessionStats(hands: { decisions: DecisionFeedback[] }[], 
     if (leak) leaks.set(leak, (leaks.get(leak) ?? 0) + 1);
   }
 
-  const label = (d: DecisionFeedback, id: string) => d.options.find((o) => o.actionId === id)!;
   const worstMistakes = decisions
     .filter((d) => d.grade === 'mistake')
-    .sort((a, b) => a.chosenFrequency - b.chosenFrequency || label(b, b.bestAction).frequency - label(a, a.bestAction).frequency)
+    .sort((a, b) => a.chosenFrequency - b.chosenFrequency || bestOption(b).frequency - bestOption(a).frequency)
     .slice(0, 5)
     .map((d) => ({
       nodeLabel: d.nodeLabel,
       heroCards: d.heroCards,
       handClass: d.handClass,
-      chosenLabel: label(d, d.chosenAction).label,
+      chosenLabel: chosenOption(d).label,
       chosenFrequency: d.chosenFrequency,
-      bestLabel: label(d, d.bestAction).label,
-      bestFrequency: label(d, d.bestAction).frequency,
+      bestLabel: bestOption(d).label,
+      bestFrequency: bestOption(d).frequency,
     }));
 
   return {
