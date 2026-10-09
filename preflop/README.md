@@ -1,6 +1,6 @@
 # GTOtutor preflop solver
 
-Solves 6-max, 100bb preflop play and writes the charts the app uses. Its output replaces the placeholder `fixture-v2` charts (`apps/api/src/charts/fixtures.ts`).
+Solves 6-max, 100bb preflop play and writes the charts the app uses. Its output replaces the placeholder `fixture-v3` charts (`apps/api/src/charts/fixtures.ts`).
 
 This is our own code with no postflop-solver dependency, so it isn't AGPL. Its output and the binary itself can be used anywhere.
 

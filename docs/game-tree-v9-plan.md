@@ -1,6 +1,6 @@
 # Game tree v9 plan: limping from every position, flop bets 33/66/100%
 
-**Status (2026-10-09): planned, not started.** Two game-tree changes, made together so everything is re-solved once:
+**Status (2026-10-09): phase 2 (preflop limping) built; phase 1 measuring; phase 3 next.** Two game-tree changes, made together so everything is re-solved once:
 
 - **Limping from every position.** Today only the SB can limp.
 - **Three flop bet sizes: 33%, 66% and 100% of the pot,** each with a 3× raise. Today the flop has one size (33%).
@@ -24,7 +24,11 @@ The cloud run on v8 was stopped on 2026-10-09 for this reason. Production doesn'
   - **Facing a limp:** every player behind the limper gets a `VS_LIMP` node with check (BB) or fold (others) and an isolation raise.
     - Calling behind is blocked by the heads-up rule: two players (the limper and the BB) have already matched the bet. Those nodes are `|nocall`.
     - If nobody raises, the hand is limper vs BB, heads-up.
-  - **The limper facing an isolation raise (`VS_ISO`):** fold, call or re-raise. Cold players facing it use the existing `COLD_VS_*` nodes.
+  - **The limper facing an isolation raise (`VS_ISO`):** fold, call or re-raise to 11. After a re-raise, the isolator uses `VS_3BET|<isolator>|<limper>`, then the usual 4-bet and 5-bet nodes. These keys can't collide with ordinary open/3-bet lines, where the 3-bettor always acts after the opener.
+  - **Everyone else behind an isolation raise folds automatically,** hero included, so the pot is always limper vs isolator (built 2026-10-09).
+    - Letting a third player call or 3-bet would put those lines on the same chart nodes as ordinary open/3-bet lines, but with different sizes.
+    - Limps are rare at equilibrium, so this costs little.
+    - A hand where hero is folded this way before any decision is redealt, like a walk in the BB.
   - **Sizes (decision needed):**
     - isolation raise to 3.5 plus 1 per limper, so 4.5 against one limper in position. Today's BB isolation raise vs the SB stays 3.5.
     - limp-re-raise to 11, as the SB today.

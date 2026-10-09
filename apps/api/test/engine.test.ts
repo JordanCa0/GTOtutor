@@ -113,6 +113,61 @@ describe('hand engine', () => {
     expect(seen).toEqual(new Set(['checked', 'iso-raised']));
   });
 
+  it('lets every position limp first in, and puts the limper vs the BB or an isolator', () => {
+    const engine = newEngine(33);
+    const seen = new Set<string>();
+    for (let i = 0; i < 600 && seen.size < 2; i++) {
+      const state = engine.start({ ...req, heroPosition: 'UTG', skipEasyFolds: false });
+      expect(engine.view(state).legalActions.map((a) => a.label)).toEqual(['Fold', 'Limp', 'Raise to 2.5']);
+      engine.decide(state, 'call');
+      const view = engine.view(state);
+      if (view.status === 'complete') {
+        expect(view.actionLog.find((a) => a.position === 'BB')).toMatchObject({ action: 'check', toBb: 1 });
+        expect(view.result!.potBb).toBe(2.5); // UTG 1, BB 1, the SB's folded 0.5
+        seen.add('checked');
+      } else {
+        const iso = view.actionLog.find((a) => a.action === 'raise')!;
+        expect(view.pendingSpot!.nodeKey).toBe(`SIX_MAX|100|VS_ISO|UTG|${iso.position}`);
+        expect(view.legalActions.map((a) => a.label)).toEqual(['Fold', `Call ${iso.toBb}`, '3-bet to 11']);
+        // Everyone behind the isolation raise folded: the pot is UTG vs the isolator.
+        expect(view.seats.filter((s) => !s.folded).map((s) => s.position).sort()).toEqual(['UTG', iso.position].sort());
+        seen.add('isolated');
+      }
+    }
+    expect(seen).toEqual(new Set(['checked', 'isolated']));
+  });
+
+  it('facing a limp: fold or isolate to 4.5, never over-limp; the BB checks or isolates', () => {
+    // The placeholders never limp outside the SB, so make UTG always limp here.
+    const set = buildFixtureChartSet();
+    const rfi = set.nodes.get('SIX_MAX|100|RFI|UTG')!;
+    for (const hc of rfi.strategy.keys()) rfi.strategy.set(hc, [0, 1, 0]);
+    const engine = new HandEngine(new ChartService(set), seededRng(34), runoutResolver);
+
+    const hj = engine.start({ ...req, heroPosition: 'HJ', skipEasyFolds: false });
+    expect(engine.pendingDecision(hj)!.nodeKey).toBe('SIX_MAX|100|VS_LIMP|HJ|UTG');
+    expect(engine.view(hj).legalActions.map((a) => a.label)).toEqual(['Fold', 'Raise to 4.5']);
+
+    for (let i = 0; i < 300; i++) {
+      const bb = engine.start({ ...req, heroPosition: 'BB', skipEasyFolds: false });
+      if (engine.pendingDecision(bb)!.nodeKey !== 'SIX_MAX|100|VS_LIMP|BB|UTG') continue;
+      expect(engine.view(bb).legalActions.map((a) => a.label)).toEqual(['Check', 'Raise to 4.5']);
+      return;
+    }
+    throw new Error('never dealt a BB hero facing a UTG limp alone');
+  });
+
+  it('folds hero automatically behind an isolation raise, so such hands are redealt', () => {
+    // UTG always limps and HJ always isolates: a BTN hero never gets a decision.
+    const set = buildFixtureChartSet();
+    for (const [key, actions] of [['SIX_MAX|100|RFI|UTG', [0, 1, 0]], ['SIX_MAX|100|VS_LIMP|HJ|UTG', [0, 1]]] as const) {
+      const n = set.nodes.get(key)!;
+      for (const hc of n.strategy.keys()) n.strategy.set(hc, [...actions]);
+    }
+    const engine = new HandEngine(new ChartService(set), seededRng(35), runoutResolver);
+    expect(() => engine.start({ ...req, heroPosition: 'BTN', skipEasyFolds: false })).toThrow('Could not deal a hand with a hero decision');
+  });
+
   it('gives the BB a check-or-raise spot (no fold) after an SB limp', () => {
     const engine = newEngine(32);
     for (let i = 0; i < 2000; i++) {

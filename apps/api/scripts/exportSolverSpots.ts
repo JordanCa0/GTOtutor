@@ -5,7 +5,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { SIX_MAX_POSITIONS, type Position } from '@gtotutor/shared-types';
 import { chartsFromEnv } from '../src/charts/solvedCharts.js';
-import { FOUR_BET_SIZE, ISO_RAISE_SIZE, openSize, SB_VS_ISO_3BET_SIZE, threeBetSize } from '../src/charts/fixtures.js';
+import { FOUR_BET_SIZE, isoSize, openSize, SB_VS_ISO_3BET_SIZE, threeBetSize } from '../src/charts/fixtures.js';
 
 const chartsArg = process.argv.indexOf('--charts');
 const chartsPath = chartsArg >= 0 ? process.argv[chartsArg + 1] : undefined;
@@ -107,22 +107,42 @@ for (const [i, opener] of order.entries()) {
   }
 }
 
-// Limped pots: only the SB can limp, so these are always SB vs BB.
-const limp: Step = [key('RFI', 'SB'), 'call'];
-const iso: Step = [key('VS_LIMP', 'BB', 'SB'), 'raise'];
-spots.push(spot('sb_vs_bb_limp_100', 'SB limps, BB checks', 'SB', range(limp), 'BB', range([key('VS_LIMP', 'BB', 'SB'), 'check']), 1));
-spots.push(spot('sb_vs_bb_iso_100', `SB limps, BB raises ${ISO_RAISE_SIZE}, SB calls`, 'SB', range(limp, [key('VS_ISO', 'SB', 'BB'), 'call']), 'BB', range(iso), ISO_RAISE_SIZE));
-spots.push(
-  spot(
-    'sb_vs_bb_l3b_100',
-    `SB limps, BB raises ${ISO_RAISE_SIZE}, SB 3-bets ${SB_VS_ISO_3BET_SIZE}, BB calls`,
-    'SB',
-    range(limp, [key('VS_ISO', 'SB', 'BB'), 'raise']),
-    'BB',
-    range(iso, [key('VS_3BET', 'BB', 'SB'), 'call']),
-    SB_VS_ISO_3BET_SIZE,
-  ),
-);
+// Limped pots: limper vs BB (checked behind), limper vs isolator, and limp-re-raised. Charts before
+// v9 only let the SB limp; spots their charts can't reach are skipped (see `limpSpot`).
+for (const [i, limper] of order.entries()) {
+  if (limper === 'BB') continue;
+  const limp: Step = [key('RFI', limper), 'call'];
+  const l = lc(limper);
+  limpSpot(() => spot(`${l}_vs_bb_limp_${STACK}`, `${limper} limps, BB checks`, limper, range(limp), 'BB', range([key('VS_LIMP', 'BB', limper), 'check']), 1));
+  for (const iso of order.slice(i + 1)) {
+    const size = isoSize(iso, limper);
+    const isoStep: Step = [key('VS_LIMP', iso, limper), 'raise'];
+    const v = lc(iso);
+    limpSpot(() =>
+      spot(`${l}_vs_${v}_iso_${STACK}`, `${limper} limps, ${iso} raises ${size}, ${limper} calls`, limper, range(limp, [key('VS_ISO', limper, iso), 'call']), iso, range(isoStep), size),
+    );
+    limpSpot(() =>
+      spot(
+        `${l}_vs_${v}_l3b_${STACK}`,
+        `${limper} limps, ${iso} raises ${size}, ${limper} 3-bets ${SB_VS_ISO_3BET_SIZE}, ${iso} calls`,
+        limper,
+        range(limp, [key('VS_ISO', limper, iso), 'raise']),
+        iso,
+        range(isoStep, [key('VS_3BET', iso, limper), 'call']),
+        SB_VS_ISO_3BET_SIZE,
+      ),
+    );
+  }
+}
+
+/** Adds a limped-pot spot, unless the charts have no such line (a limp option or node they lack). */
+function limpSpot(make: () => Spot): void {
+  try {
+    spots.push(make());
+  } catch (err) {
+    if (!/^no (chart node|action)/.test((err as Error).message)) throw err;
+  }
+}
 
 mkdirSync(outDir, { recursive: true });
 // A line the charts never take (e.g. SB limp-3bets with the placeholder charts) has an empty range.

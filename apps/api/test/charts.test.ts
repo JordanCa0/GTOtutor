@@ -30,7 +30,10 @@ describe('fixture charts', () => {
   });
 
   it('opens wider on the button than UTG', () => {
-    const openShare = (pos: string) => charts.rangeSummary(node(`SIX_MAX|100|RFI|${pos}`))[1];
+    const openShare = (pos: string) => {
+      const n = node(`SIX_MAX|100|RFI|${pos}`);
+      return charts.rangeSummary(n)[n.actions.findIndex((a) => a.id === 'raise')];
+    };
     expect(openShare('BTN')).toBeGreaterThan(openShare('CO'));
     expect(openShare('CO')).toBeGreaterThan(openShare('UTG'));
     expect(openShare('UTG')).toBeCloseTo(0.15, 1);

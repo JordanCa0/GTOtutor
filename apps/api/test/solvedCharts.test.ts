@@ -60,7 +60,7 @@ describe('solved preflop charts', () => {
   it('keeps placeholder nodes for keys the solver output lacks', () => {
     const set = loadSolvedCharts(writeChartFile());
     expect(set.nodes.size).toBe(buildFixtureChartSet().nodes.size);
-    expect(set.nodes.get('SIX_MAX|100|RFI|BTN')!.ev.get('AA')).toEqual([null, null]);
+    expect(set.nodes.get('SIX_MAX|100|RFI|BTN')!.ev.get('AA')).toEqual([null, null, null]); // fold, limp, raise
   });
 
   it.skipIf(!newest)('the engine plays thousands of hands on the newest solved charts', () => {
@@ -89,7 +89,7 @@ describe('solved preflop charts', () => {
   });
 
   it('uses the placeholders unless a chart file is given', () => {
-    expect(chartsFromEnv('').version).toBe('fixture-v2');
+    expect(chartsFromEnv('').version).toBe('fixture-v3');
     expect(chartsFromEnv(writeChartFile()).version).toBe('preflop-test');
   });
 });

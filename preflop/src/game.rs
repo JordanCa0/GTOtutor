@@ -16,7 +16,11 @@ const SB: usize = 4;
 const BB: usize = 5;
 pub const STACK: f64 = 100.0;
 const FOUR_BET: f64 = 22.0;
+/// BB isolating an SB limp (unchanged since v8).
 const ISO_RAISE: f64 = 3.5;
+/// Isolating any other limp: anyone behind a UTG–BTN limper, or the SB/BB isolating them.
+const ISO_RAISE_VS_LIMP: f64 = 4.5;
+/// The limper re-raising an isolation raise.
 const SB_VS_ISO_3BET: f64 = 11.0;
 
 fn open_size(p: usize) -> f64 {
@@ -24,6 +28,13 @@ fn open_size(p: usize) -> f64 {
         3.0
     } else {
         2.5
+    }
+}
+fn iso_size(p: usize, limper: usize) -> f64 {
+    if p == BB && limper == SB {
+        ISO_RAISE
+    } else {
+        ISO_RAISE_VS_LIMP
     }
 }
 fn three_bet_size(p: usize) -> f64 {
@@ -182,9 +193,18 @@ impl Builder {
             assert_eq!(live.len(), 2, "the call rule keeps every flop heads-up");
             return self.flop(s, live[0], live[1]);
         };
+        // Behind an isolation raise, everyone but the limper folds: the pot stays limper vs isolator.
+        // (A third player calling or 3-betting here would land on the same chart nodes as ordinary
+        // open/3-bet lines with different sizes; limps are rare enough that this costs little.)
+        if s.raise_level == 1 && s.limper.is_some_and(|l| l != p) {
+            let mut next = s.clone();
+            apply(&mut next, p, &act("fold", "Fold", None));
+            return self.build(&next);
+        }
         let (key, label, actions) = chart_node(s, p);
         let matched_others = (0..6).filter(|&q| q != p && !s.folded[q] && s.committed[q] >= s.current_bet).count();
-        let call_ok = matched_others <= 1;
+        // Nodes without a call (facing a limp: fold or isolate) need no "|nocall" variant.
+        let call_ok = matched_others <= 1 || !actions.iter().any(|a| a.id == "call");
         let legal: Vec<usize> = (0..actions.len()).filter(|&i| call_ok || actions[i].id != "call").collect();
         let infoset = if call_ok {
             self.infoset(p, key, label, actions.clone(), true)
@@ -246,20 +266,25 @@ fn chart_node(s: &State, p: usize) -> (String, String, Vec<ActSpec>) {
     let jam = || act("allin", format!("All-in {STACK}"), Some(STACK));
     let call_jam = || act("call", "Call all-in", None);
     if s.raise_level == 0 {
-        if p == BB {
-            let l = s.limper.unwrap();
-            return (key("VS_LIMP", p, Some(l)), "BB facing SB limp".into(), vec![act("check", "Check", None), act("raise", format!("Raise to {ISO_RAISE}"), Some(ISO_RAISE))]);
+        if let Some(l) = s.limper {
+            // Facing a limp: isolate, or check (BB) / fold (anyone else). Over-limping isn't allowed:
+            // the limper and the BB have both matched the bet, so the heads-up rule blocks a call.
+            let iso = iso_size(p, l);
+            let raise = act("raise", format!("Raise to {iso}"), Some(iso));
+            let passive = if p == BB { act("check", "Check", None) } else { fold() };
+            return (key("VS_LIMP", p, Some(l)), format!("{pos} facing {} limp", POSITIONS[l]), vec![passive, raise]);
         }
         let raise = act("raise", format!("Raise to {}", open_size(p)), Some(open_size(p)));
         if p == SB {
             return (key("RFI", p, None), "SB first in (raise, limp, or fold)".into(), vec![fold(), act("call", "Limp", None), raise]);
         }
-        return (key("RFI", p, None), format!("{pos} first in (open-raise or fold)"), vec![fold(), raise]);
+        return (key("RFI", p, None), format!("{pos} first in (raise, limp, or fold)"), vec![fold(), act("call", "Limp", None), raise]);
     }
     if s.raise_level == 1 {
         let o = s.opener.unwrap();
         if Some(p) == s.limper {
-            return (key("VS_ISO", p, Some(o)), "SB (limped) facing BB raise".into(), vec![fold(), call(), act("raise", format!("3-bet to {SB_VS_ISO_3BET}"), Some(SB_VS_ISO_3BET))]);
+            let label = format!("{pos} (limped) facing {} raise", POSITIONS[o]);
+            return (key("VS_ISO", p, Some(o)), label, vec![fold(), call(), act("raise", format!("3-bet to {SB_VS_ISO_3BET}"), Some(SB_VS_ISO_3BET))]);
         }
         let size = three_bet_size(p);
         return (key("VS_OPEN", p, Some(o)), format!("{pos} facing {} open", POSITIONS[o]), vec![fold(), call(), act("raise", format!("3-bet to {size}"), Some(size))]);
@@ -368,6 +393,23 @@ mod tests {
         let vs_open = t.infosets.iter().find(|i| i.key == "SIX_MAX|100|VS_OPEN|BTN|CO").unwrap();
         assert_eq!(vs_open.label, "BTN facing CO open");
         assert_eq!(vs_open.actions[2].label, "3-bet to 7.5");
+
+        // Limping from every position (v9): first in is fold, limp or raise.
+        let ids = |key: &str| t.infosets.iter().find(|i| i.key == key).unwrap_or_else(|| panic!("missing {key}")).actions.iter().map(|a| a.id).collect::<Vec<_>>();
+        for pos in ["UTG", "HJ", "CO", "BTN", "SB"] {
+            assert_eq!(ids(&format!("SIX_MAX|100|RFI|{pos}")), ["fold", "call", "raise"], "{pos} first in");
+        }
+        // Facing a limp: fold or isolate (check or isolate for the BB); never an over-limp.
+        assert_eq!(ids("SIX_MAX|100|VS_LIMP|HJ|UTG"), ["fold", "raise"]);
+        assert_eq!(ids("SIX_MAX|100|VS_LIMP|SB|BTN"), ["fold", "raise"]);
+        assert_eq!(ids("SIX_MAX|100|VS_LIMP|BB|CO"), ["check", "raise"]);
+        let iso = t.infosets.iter().find(|i| i.key == "SIX_MAX|100|VS_LIMP|BTN|UTG").unwrap();
+        assert_eq!((iso.label.as_str(), iso.actions[1].to_bb), ("BTN facing UTG limp", Some(4.5)));
+        assert_eq!(t.infosets.iter().find(|i| i.key == "SIX_MAX|100|VS_LIMP|BB|SB").unwrap().actions[1].to_bb, Some(3.5), "BB vs SB limp unchanged");
+        assert!(!keys.iter().any(|k| k.starts_with("SIX_MAX|100|VS_LIMP") && k.ends_with("|nocall")));
+        // The limper facing an isolation raise, and the isolator facing the limp-re-raise.
+        assert_eq!(ids("SIX_MAX|100|VS_ISO|UTG|CO"), ["fold", "call", "raise"]);
+        assert_eq!(ids("SIX_MAX|100|VS_3BET|CO|UTG"), ["fold", "call", "raise"]);
         println!("{} nodes, {} info sets", t.nodes.len(), t.infosets.len());
     }
 }

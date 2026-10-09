@@ -421,7 +421,17 @@ export class HandEngine {
   private nodeKeyFor(state: HandState, player: Player): string {
     const key = this.baseNodeKeyFor(state, player);
     const matched = state.players.filter((p) => p !== player && !p.folded && p.committed >= state.currentBet).length;
-    return matched >= 2 ? `${key}${NOCALL_SUFFIX}` : key;
+    // Facing a limp there's no call to block (fold or isolate), so those nodes have no "|nocall" variant.
+    const hasCall = !this.charts.hasNode(key) || this.charts.getNode(key).actions.some((a) => a.id === 'call');
+    return matched >= 2 && hasCall ? `${key}${NOCALL_SUFFIX}` : key;
+  }
+
+  /**
+   * Behind an isolation raise, everyone but the limper folds, hero included: the pot stays limper vs
+   * isolator, as in the preflop solver (preflop/src/game.rs).
+   */
+  private mustFold(state: HandState, player: Player): boolean {
+    return state.raiseLevel === 1 && state.limper !== null && player.position !== state.limper;
   }
 
   /** Normalizes the live action history into a chart lookup key (2-player subgame abstraction). */
@@ -429,8 +439,8 @@ export class HandEngine {
     const { tableSize, stackDepthBb } = state.config;
     const pos = player.position;
     if (state.raiseLevel === 0) {
-      // The BB only acts in an unraised pot after the SB limps.
-      return pos === 'BB' ? makeNodeKey(tableSize, stackDepthBb, 'VS_LIMP', pos, state.limper!) : makeNodeKey(tableSize, stackDepthBb, 'RFI', pos);
+      // Facing a limp: fold/check or isolate. Otherwise first in.
+      return state.limper ? makeNodeKey(tableSize, stackDepthBb, 'VS_LIMP', pos, state.limper) : makeNodeKey(tableSize, stackDepthBb, 'RFI', pos);
     }
     if (state.raiseLevel === 1) {
       return pos === state.limper
@@ -498,6 +508,10 @@ export class HandEngine {
         return this.finish(state);
       }
       const player = state.players[idx];
+      if (this.mustFold(state, player)) {
+        this.apply(state, player, { id: 'fold', label: 'Fold', toBb: null });
+        continue;
+      }
       if (player.isHero) {
         state.heroToAct = true;
         return;
@@ -524,8 +538,11 @@ export class HandEngine {
     if (live.length !== 2) return null;
     const suffix = state.config.stackDepthBb;
     if (state.limper) {
+      // Limped lines are always limper vs BB (check behind) or limper vs isolator.
       const kind = ['limp', 'iso', 'l3b'][state.raiseLevel];
-      return kind ? `sb_vs_bb_${kind}_${suffix}` : null;
+      const other = live.find((p) => p !== state.limper);
+      if (!kind || !other || !live.includes(state.limper)) return null;
+      return `${state.limper.toLowerCase()}_vs_${other.toLowerCase()}_${kind}_${suffix}`;
     }
     const opener = state.opener;
     if (!opener || !live.includes(opener)) return null;

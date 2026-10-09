@@ -15,7 +15,12 @@ const TOTAL_COMBOS = 1326;
 /** Open-raise widths. The SB also limps (SB_LIMP_PCT) instead of playing raise-or-fold. */
 export const RFI_WIDTH_PCT: Record<Position, number> = { UTG: 15, HJ: 19, CO: 27, BTN: 44, SB: 24, BB: 0 };
 export const SB_LIMP_PCT = 36;
+/** BB isolating an SB limp. */
 export const ISO_RAISE_SIZE = 3.5;
+/** Isolating any other limp (as in preflop/src/game.rs). */
+export const ISO_RAISE_VS_LIMP_SIZE = 4.5;
+export const isoSize = (pos: Position, limper: Position) => (pos === 'BB' && limper === 'SB' ? ISO_RAISE_SIZE : ISO_RAISE_VS_LIMP_SIZE);
+/** The limper re-raising an isolation raise. */
 export const SB_VS_ISO_3BET_SIZE = 11;
 export const openSize = (pos: Position) => (pos === 'SB' ? 3 : 2.5);
 export const threeBetSize = (pos: Position) => (pos === 'SB' || pos === 'BB' ? 10 : 7.5);
@@ -128,8 +133,9 @@ export function buildFixtureChartSet(): ChartSet {
         makeNode('RFI', pos, undefined, 'SB first in (raise, limp, or fold)', [act('fold', 'Fold', null), act('call', 'Limp', null), act('raise', `Raise to ${openSize(pos)}`, openSize(pos))], buildMixes(RFI_WIDTH_PCT.SB, SB_LIMP_PCT)),
       );
     } else if (pos !== 'BB') {
+      // Limping is allowed from every position but the placeholders never limp outside the SB (0%).
       add(
-        makeNode('RFI', pos, undefined, `${pos} first in (open-raise or fold)`, [act('fold', 'Fold', null), act('raise', `Raise to ${openSize(pos)}`, openSize(pos))], buildMixes(RFI_WIDTH_PCT[pos], 0)),
+        makeNode('RFI', pos, undefined, `${pos} first in (raise, limp, or fold)`, [act('fold', 'Fold', null), act('call', 'Limp', null), act('raise', `Raise to ${openSize(pos)}`, openSize(pos))], buildMixes(RFI_WIDTH_PCT[pos], 0)),
       );
     }
 
@@ -157,14 +163,28 @@ export function buildFixtureChartSet(): ChartSet {
     add(makeNode('COLD_VS_5BET', pos, undefined, isCold('5-bet all-in'), [act('fold', 'Fold', null), act('call', 'Call all-in', null)], buildMixes(0, 0.9)));
   }
 
-  // Limped pots: only the SB can limp, so these are always SB vs BB.
-  add(makeNode('VS_LIMP', 'BB', 'SB', 'BB facing SB limp', [act('check', 'Check', null), act('raise', `Raise to ${ISO_RAISE_SIZE}`, ISO_RAISE_SIZE)], buildMixes(28, 0, WHEEL_ACE_BLUFFS_3BET)));
-  add(
-    makeNode('VS_ISO', 'SB', 'BB', 'SB (limped) facing BB raise', [act('fold', 'Fold', null), act('call', 'Call', null), act('raise', `3-bet to ${SB_VS_ISO_3BET_SIZE}`, SB_VS_ISO_3BET_SIZE)], buildMixes(4, 24)),
-  );
+  // Limped pots. SB vs BB keeps its v2 numbers; limps from UTG–BTN only happen when hero limps, so
+  // their nodes just need sensible placeholder isolation and defence ranges.
+  for (const [i, limper] of SIX_MAX_POSITIONS.entries()) {
+    if (limper === 'BB') continue;
+    for (const pos of SIX_MAX_POSITIONS.slice(i + 1)) {
+      const size = isoSize(pos, limper);
+      const raise = act('raise', `Raise to ${size}`, size);
+      if (pos === 'BB') {
+        const isoPct = limper === 'SB' ? 28 : 20;
+        add(makeNode('VS_LIMP', pos, limper, `BB facing ${limper} limp`, [act('check', 'Check', null), raise], buildMixes(isoPct, 0, WHEEL_ACE_BLUFFS_3BET)));
+      } else {
+        // No over-limp: two players have matched the bet, so the heads-up rule allows fold or isolate only.
+        add(makeNode('VS_LIMP', pos, limper, `${pos} facing ${limper} limp`, [act('fold', 'Fold', null), raise], buildMixes(Math.max(12, RFI_WIDTH_PCT[pos] * 0.6), 0, WHEEL_ACE_BLUFFS_3BET)));
+      }
+      add(
+        makeNode('VS_ISO', limper, pos, `${limper} (limped) facing ${pos} raise`, [act('fold', 'Fold', null), act('call', 'Call', null), act('raise', `3-bet to ${SB_VS_ISO_3BET_SIZE}`, SB_VS_ISO_3BET_SIZE)], buildMixes(4, 24)),
+      );
+    }
+  }
 
   return {
-    version: 'fixture-v2',
+    version: 'fixture-v3',
     dataSource: {
       kind: 'fixture',
       note: 'Placeholder ranges from a heuristic hand ranking at approximate standard widths — not solver output yet. EVs are unavailable until the CFR+ solver lands.',
