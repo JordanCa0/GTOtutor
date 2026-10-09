@@ -62,7 +62,7 @@ Desktop, one flop (Kh7d2c) unless noted:
 
 `solver/output/btn_vs_bb_srp_100`: the first 584 flops in the fixed order were solved with the old tree and have no `weights`/`equity`/`ev_bb` per node. Later flops use the current tree and have them; each file's `tree` field says which. Re-solving the 584 with the current tree would take about 2.3 hours.
 
-Planned: move this output to a private Supabase Storage bucket (gzipped, indexed in the database) so any machine can serve flop play; see `docs/accounts-and-data.md`.
+Production serves this output from a private S3 bucket synced to the API server's disk (`docs/deployment.md`). The `preflop-v8` output is about 3.6 GB.
 
 ## Steps
 

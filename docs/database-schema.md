@@ -145,7 +145,7 @@ Primary key: `session_id` + `decisions_count`.
 
 ## Shared solver tables (not player data)
 
-The solved flop files themselves go to Supabase **Storage** (file storage), gzipped, at `solver/<spot>/<flop>.json.gz`. These tables are the index of what's there.
+**Unused (2026-10-09).** These tables were made for a plan to keep the solved flop files in Supabase Storage. The files went to S3 instead (see `docs/deployment.md`), and nothing reads or writes these tables. Remove them in a later migration, or reuse them as an index of the S3 files.
 
 ### `solver_spots`: one row per preflop spot
 
@@ -166,7 +166,7 @@ The solved flop files themselves go to Supabase **Storage** (file storage), gzip
 | `exploitability_pct_pot` | number | yes | Solve accuracy (lower is better) | `0.84` |
 | `tree` | JSON | no | Bet sizes it was solved with | `[["33%","3x"],["66%",""],["75%",""]]` |
 | `has_ev` | boolean | yes | File includes per-action EVs | `true` |
-| `storage_path` | text | yes | Where the file is in Storage | `btn_vs_bb_srp_100/Kh7d2c.json.gz` |
+| `storage_path` | text | yes | Where the file is | `btn_vs_bb_srp_100/Kh7d2c.json.gz` |
 | `bytes` | integer | yes | File size | `41230` |
 | `sha256` | text | yes | Checksum, so re-uploads skip unchanged files | |
 | `solved_at` | timestamp | yes | When it was uploaded | |
@@ -178,5 +178,5 @@ Primary key: `spot` + `flop`.
 - **Per decision:** about 2–3 KB (mostly the `feedback` JSON).
 - **Per hand:** about 5–10 KB while in progress (the engine `state`), about 1 KB once complete (the state is cleared).
 - **10,000 hands with 15,000 decisions:** roughly 100–150 MB, well inside the free tier's 500 MB database.
-- **Solver files** go in Storage (1 GB free), not the database.
+- **Solver files** live in S3 and on the API server's disk, not in Supabase (about 3.6 GB for charts `preflop-v8`).
 
