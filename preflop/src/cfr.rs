@@ -25,6 +25,8 @@ pub struct Solver<'a> {
     d_strat: Vec<Vec<f64>>,
     /// One-hot strategies used by Mode::Policy.
     policy: Vec<Vec<f64>>,
+    /// Per info set: an action played at least this often while training (see `set_action_floor`).
+    floor: Vec<Option<(usize, f64)>>,
     pub iterations: u32,
 }
 
@@ -64,6 +66,7 @@ impl<'a> Solver<'a> {
             d_regret: zeros(),
             d_strat: zeros(),
             policy: zeros(),
+            floor: vec![None; tree.infosets.len()],
             iterations: 0,
         };
         s.refresh_realization();
@@ -112,6 +115,16 @@ impl<'a> Solver<'a> {
                 }
             }
         }
+    }
+
+    /// While training, play `action` at `infoset` at least `floor` of the time with every hand.
+    ///
+    /// A line the equilibrium almost never takes (open-limping from UTG–BTN) otherwise gets almost
+    /// no traffic, so the strategies after it (isolating, the limper's reply) stay close to arbitrary.
+    /// The floor gives them real traffic. The average strategy (the charts) still accumulates the
+    /// unadjusted strategy, so the charts don't show the forced share.
+    pub fn set_action_floor(&mut self, infoset: usize, action: usize, floor: f64) {
+        self.floor[infoset] = Some((action, floor));
     }
 
     /// Regret matching: play actions in proportion to positive regret (uniform if none).
@@ -296,7 +309,13 @@ impl<'a> Solver<'a> {
             Node::Decision { player, infoset, legal, children } => {
                 let (p, i) = (*player, *infoset);
                 let strat: Vec<f64> = match mode {
-                    Mode::Train => self.current[i].clone(),
+                    Mode::Train => {
+                        let mut s = self.current[i].clone();
+                        if let Some((a, f)) = self.floor[i] {
+                            apply_floor(&mut s, self.tree.infosets[i].actions.len(), a, f);
+                        }
+                        s
+                    }
                     Mode::Policy(q) if q == p => self.policy[i].clone(),
                     _ => self.average_strategy(i),
                 };
@@ -330,7 +349,9 @@ impl<'a> Solver<'a> {
                         let a = legal[k];
                         for h in 0..H {
                             self.d_regret[i][a * H + h] += c[p * H + h] - out[p * H + h];
-                            self.d_strat[i][a * H + h] += reach[p * H + h] * strat[a * H + h];
+                            // With a floor, average the unadjusted strategy: the charts don't show the forced share.
+                            let played = if self.floor[i].is_some() { self.current[i][a * H + h] } else { strat[a * H + h] };
+                            self.d_strat[i][a * H + h] += reach[p * H + h] * played;
                         }
                     }
                 }
@@ -362,11 +383,40 @@ struct EvAcc {
     den_flat: Vec<f64>,
 }
 
+/// Raises action `a` to at least `floor` for every hand of a strategy laid out [action * H + hand],
+/// scaling the other actions down so each hand still sums to 1.
+fn apply_floor(s: &mut [f64], n: usize, a: usize, floor: f64) {
+    for h in 0..H {
+        let p = s[a * H + h];
+        if p >= floor {
+            continue;
+        }
+        let scale = if p < 1.0 { (1.0 - floor) / (1.0 - p) } else { 0.0 };
+        for b in (0..n).filter(|&b| b != a) {
+            s[b * H + h] *= scale;
+        }
+        s[a * H + h] = floor;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::cards::{all_classes, class_probs};
     use crate::game::build_push_fold;
+
+    #[test]
+    fn action_floor_keeps_each_hand_summing_to_one() {
+        // Two actions, every hand plays action 0 always; a 1% floor on action 1.
+        let mut s = vec![1.0; H];
+        s.extend(vec![0.0; H]);
+        apply_floor(&mut s, 2, 1, 0.01);
+        assert!((s[0] - 0.99).abs() < 1e-12 && (s[H] - 0.01).abs() < 1e-12);
+        // Already above the floor: unchanged.
+        let mut t = vec![0.5; 2 * H];
+        apply_floor(&mut t, 2, 1, 0.01);
+        assert!(t.iter().all(|&x| x == 0.5));
+    }
 
     #[test]
     fn heads_up_push_fold_matches_known_nash() {

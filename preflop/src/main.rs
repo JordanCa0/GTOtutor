@@ -23,6 +23,8 @@ struct Args {
     version: String,
     out: Option<PathBuf>,
     report_every: u32,
+    /// Percent: while training, UTG–BTN open-limp at least this often (see Solver::set_action_floor).
+    limp_floor: f64,
 }
 
 fn die(msg: &str) -> ! {
@@ -31,7 +33,7 @@ fn die(msg: &str) -> ! {
 }
 
 fn parse_args() -> Args {
-    let mut a = Args { iterations: 2000, samples: 20_000, realization: None, version: "preflop-v1".into(), out: None, report_every: 250 };
+    let mut a = Args { iterations: 2000, samples: 20_000, realization: None, version: "preflop-v1".into(), out: None, report_every: 250, limp_floor: 1.0 };
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let mut i = 0;
     while i < argv.len() {
@@ -44,6 +46,7 @@ fn parse_args() -> Args {
             "--version" => a.version = val(),
             "--out" => a.out = Some(val().into()),
             "--report-every" => a.report_every = num(val()).max(1),
+            "--limp-floor" => a.limp_floor = val().parse::<f64>().ok().filter(|p| (0.0..50.0).contains(p)).unwrap_or_else(|| die("--limp-floor must be a percent from 0 to 50")),
             "--help" | "-h" => {
                 println!(
                     "gtotutor-preflop (run from the preflop/ folder)\n\n  cargo run --release -- [options]\n\n  \
@@ -52,7 +55,9 @@ fn parse_args() -> Args {
                      --realization <file> measured realization factors from calibrateRealization.ts (default: built-in model)\n  \
                      --version <name>     chart version written into the output (default preflop-v1)\n  \
                      --out <file>         output path (default charts/<version>.json)\n  \
-                     --report-every <n>   print exploitability every n iterations (default 250)"
+                     --report-every <n>   print exploitability every n iterations (default 250)
+                       --limp-floor <pct>   while training, UTG-BTN open-limp at least this often, so the lines after a limp
+                         get real strategies; the charts show the unforced strategy (default 1, 0 = off)"
                 );
                 std::process::exit(0);
             }
@@ -89,6 +94,17 @@ fn main() {
     );
 
     let mut solver = cfr::Solver::new(&tree, &eq, probs.clone(), model);
+    if args.limp_floor > 0.0 {
+        let mut floored = 0;
+        for (i, info) in tree.infosets.iter().enumerate() {
+            let limp = info.actions.iter().position(|a| a.id == "call");
+            if let (true, false, Some(a)) = (info.key.contains("|RFI|"), info.key.ends_with("|SB"), limp) {
+                solver.set_action_floor(i, a, args.limp_floor / 100.0);
+                floored += 1;
+            }
+        }
+        println!("limp floor: {}% while training, at {floored} first-in nodes", args.limp_floor);
+    }
     let start = Instant::now();
     let mut nash_conv = f64::NAN;
     // Realization depends on the ranges, so it follows the average strategy every 50 iterations,
@@ -160,6 +176,7 @@ fn main() {
             "exploitabilityMbbPerPlayer": round(nash_conv / 6.0 * 1000.0, 2),
             "fullHistoryExploitabilityMbbPerPlayer": round(full_history / 6.0 * 1000.0, 2),
             "realization": args.realization.as_ref().map(|p| p.display().to_string()),
+            "limpFloorPct": args.limp_floor,
             "seatValuesBb": values.iter().zip(game::POSITIONS).map(|(v, p)| (p.to_string(), json!(round(*v, 4)))).collect::<Map<String, Value>>(),
             "evUnits": "bb, net result from the start of the hand",
         },

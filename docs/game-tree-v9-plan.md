@@ -1,6 +1,6 @@
 # Game tree v9 plan: limping from every position, flop bets 33/66/100%
 
-**Status (2026-10-09): phases 1–3 done (measured; limping; bet sizes in the app). Phase 4 (calibrate and freeze preflop-v9) next.** Two game-tree changes, made together so everything is re-solved once:
+**Status (2026-10-09): phases 1–3 done (measured; limping; bet sizes in the app). Phase 4 (calibrating preflop-v9) in progress: round 1 (preflop-v9a) flops on the cloud.** Two game-tree changes, made together so everything is re-solved once:
 
 - **Limping from every position.** Today only the SB can limp.
 - **Three flop bet sizes: 33%, 66% and 100% of the pot,** each with a 3× raise. Today the flop has one size (33%).
@@ -32,6 +32,11 @@ The cloud run on v8 was stopped on 2026-10-09 for this reason. Production doesn'
   - **Sizes (decision needed):**
     - isolation raise to 3.5 plus 1 per limper, so 4.5 against one limper in position. Today's BB isolation raise vs the SB stays 3.5.
     - limp-re-raise to 11, as the SB today.
+- **Limp floor while training** (built 2026-10-09; `--limp-floor`, default 1%):
+  - **Problem:** the solver almost never open-limps UTG–BTN, so the lines after a limp got almost no traffic, and their strategies stayed close to arbitrary (round 1: a limper facing a BB 4-bet shoved 83%).
+  - **Fix:** while training, every hand open-limps at least 1% of the time. The charts still average the unforced strategy, so they show limping at about 0.2–0.3%.
+  - **Result:** a limper facing an isolation raise now folds about 78% (was 25%) and facing a 4-bet folds 74% (was 14%). Open ranges barely move.
+  - **Read it as:** the bots answer a limp as if the limper could hold almost any hand, a fair model of real open-limpers.
 - **Placeholder charts** (`apps/api/src/charts/fixtures.ts`, the app's default): add limp options with 0% frequency, so the default app grades limps ("the chart limps here 0%") rather than refusing them.
 - **Realization:** the new pot types (`limp`, `iso`, `l3b` for positions other than SB vs BB) start from the built-in curves. They're calibrated from flop solves like the others, at about 40 flops per new type, for the types that actually come up.
 - **New flop spots:** about 35.

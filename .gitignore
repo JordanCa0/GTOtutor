@@ -20,3 +20,7 @@ preflop/realization/from-*.json
 preflop/realization/r0-*.json
 # Archify diagram builds (local)
 .archify/
+# Intermediate v9 calibration rounds (preflop-v9a, v9b, ...): only the frozen preflop-v9 is kept.
+preflop/charts/preflop-v9[a-z].json
+solver/spots/preflop-v9[a-z]/
+preflop/compare-preflop-v9*.txt
