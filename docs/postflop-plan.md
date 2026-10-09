@@ -9,13 +9,38 @@ Decided 2026-09-30 to 10-01. This is a copy for machines without the Obsidian va
 - **Flop: precomputed offline** on Jordan's desktop (Intel i7-11700K, 16 threads, 64 GB RAM).
   - The app looks up the stored strategies.
   - Real flops are mapped to the nearest solved flop (`apps/api/src/postflop/flopMap.ts`).
-- **Turn and river: solved in the user's browser.**
-  - Use b-inary's WASM build in a Web Worker, started as soon as the card is dealt.
-  - Phones, and any failed solve, fall back to a cached or approximate strategy.
-  - Browser-solved results are **never** written to the shared cache, because users could tamper with them.
-- **AGPL:** the solver runs only offline (desktop) and in the browser (distributed with its source offered). Never on the live server. Get a legal read before charging money.
+- **Turn and river: solved live on AWS by a separate solver service** (decided 2026-10-09; replaces browser solving).
+  - When a hand reaches the turn, the API asks the solver service to solve the rest of the hand. It starts as soon as the card is dealt; design in "Live turn and river solving" below.
+  - The service runs on AWS Lambda, so it costs nothing when idle and scales with players.
+  - Results go into a shared cache, so players who reach the same spot, flop line and turn reuse one solve.
+  - Phones get the same solves as desktops.
+  - Any failed or slow solve falls back to running the hand out, as today.
+  - Precomputing turns was rejected: about 340,000 turn solves per spot, and terabytes of storage.
+  - The browser (WASM) solver is no longer planned. It could come back later as an extra for desktops.
+- **AGPL (rule changed 2026-10-09):** the solver may now run as part of the live system, as a separate solver service, under the conditions in "AGPL conditions" below. Get a legal read before charging money.
 - **GPU doesn't help:** the solver is CPU-only.
-- **Keep compute low** (2026-10-02): no ML model for now. Use cheap trees, few flops per spot, nearest-flop mapping, and browser solving for small spots.
+- **Keep compute low** (2026-10-02): no ML model for now. Use cheap trees, few flops per spot, nearest-flop mapping, and live solving for the small parts of the game (turn, river, and maybe 4-bet pot flops).
+
+## AGPL conditions
+
+postflop-solver is AGPL-3.0. Its network clause (section 13) says that if users interact with a modified version over a network, they must be offered its source. These conditions keep that obligation limited to the solver service and easy to meet:
+
+1. **Separate program.** The solver runs only inside its own service: its own Lambda function, built from `solver/`.
+   - The API and the web app talk to it only by sending JSON requests and receiving JSON responses.
+   - The solver is never linked into, imported by, or run inside the API or web app process.
+   - It doesn't share code with them beyond the request/response format.
+2. **Source offered to users.**
+   - The service's complete source is public under AGPL-3.0: `solver/`, its build and deploy scripts, and the pinned postflop-solver commit plus any changes to it.
+   - Add a `LICENSE` file (AGPL-3.0) to `solver/`, and keep the upstream copyright notices.
+3. **A link in the app.** An "About / credits" or footer link says live turn and river strategies come from postflop-solver (AGPL-3.0). It points to the solver source **at the exact commit deployed**; the service reports its commit with each response.
+4. **Changes are published.** Any change to postflop-solver itself goes in a public fork or patch, pinned like today. Deploy only commits that are pushed to GitHub.
+5. **Only data crosses the boundary.** The service gets the spot, board, ranges and tree settings, and returns strategies and EVs.
+   - It has no database access, no player data and no secrets.
+   - Its IAM role can only read and write the solve cache.
+   - Only the API can invoke it: no public URL.
+6. **App code stays separately licensed.** The rest of the repo has no license yet, so all rights are reserved by default. Choose one deliberately, and don't let AGPL code move into `apps/` or `packages/`.
+7. **Legal read before charging money,** as before. Ask specifically whether a paid app that calls a separate AGPL service needs anything beyond conditions 1–6.
+8. **The precomputed flops are unaffected.** Shipping solver output (JSON) was always fine.
 
 ## Spots
 
@@ -38,7 +63,7 @@ Desktop, one flop (Kh7d2c) unless noted:
 
 - **Dropping turn/river raises** (20 flops, `apps/api/scripts/compareSolves.ts`): flop strategy gives up 0.015 bb/hand against the full tree's EVs, versus 0.010 for the full tree's own strategy. That's about 0.005 bb/hand extra, for 3x less time.
 - **Nearest solved flop** (`apps/api/scripts/nearestFlopTest.ts`, BTN vs BB, tested on 400 unseen flops): a hand's first-decision strategy differs from the real solve by 4.5% with 184 solved flops (5.7% with 100, 6.8% with 50; a random flop of the same shape: 8.7%). Unweighted, because those files have no reach weights.
-- **4-bet pots** are small enough to solve live in the browser. 3-bet pots take ~1 minute on one thread, so precompute them (6s per flop).
+- **4-bet pots** are small enough to solve live (under 1s each; with the solver service, step 7). 3-bet pots take ~1 minute on one thread, so precompute them (6s per flop).
 - **Solver noise floor** (2026-10-05, 20 flops):
   - 1% solves vs 0.25% solves of the same flops lose ~0.003 bb/hand extra, about 0.05% of pot.
   - Yet their root frequencies already differ by 3.5%. So most of the "4.5% strategy difference" above is solver noise, not mapping.
@@ -72,7 +97,17 @@ Production serves this output from a private S3 bucket synced to the API server'
 4. [x] Load flop strategies into the API; map any flop to the nearest solved flop of the same suit/pairing shape (`apps/api/src/postflop/`).
 5. [~] Engine: real flop betting from the solver for spots with solved flops; turn and river still run out automatically.
 6. [~] UI: board, flop decisions, verdict with EVs and the borrowed flop, flop strategy grid per hand class. The coach gets the board and an approximation note.
-7. [ ] Browser turn/river solving (WASM worker) with a fallback; 4-bet pot flops solved live too.
+7. [ ] Live turn and river solving on AWS (design in "Live turn and river solving"):
+   1. [ ] **Measure first.** Add a mode to `solver/` that solves the turn and river from a stored flop line.
+      - Time it on the desktop and on Graviton (one core, and 2–6 cores), with memory per solve.
+      - Go ahead only if a turn takes a few seconds; otherwise reconsider the tree or the plan.
+   2. [ ] **Solver service:** a Lambda function (arm64) built from `solver/`.
+      - JSON in and out, a commit id in each response, and the AGPL conditions above.
+      - Infrastructure scripts like `solver/cloud/`.
+   3. [ ] **API:** call the service when the turn is dealt; read and write the S3 solve cache; enforce timeouts and fall back to running the hand out; rate limits.
+   4. [ ] **Engine:** turn and river betting from the result, graded like flop decisions.
+   5. [ ] **UI:** turn and river decisions, a "solving…" state, and the source link (AGPL condition 3).
+   6. [ ] **Later:** 4-bet pot flops solved live too (under 1s each), instead of precomputed.
 8. [~] Real preflop charts: the `preflop/` solver (see `preflop/README.md`), calibrated against flop solves.
    - **Frozen: preflop-v8** (`preflop/charts/FROZEN`), on the rank-based realization model. v7→v8 changed 3.1% of decisions, weighted by how often they come up.
    - Open doubts that need a reference solution:
@@ -84,6 +119,27 @@ Production serves this output from a private S3 bucket synced to the API server'
      2. 100 flops for every other spot that's at least 1% of flops.
      3. Every flop for the top five.
    - Earlier versions' output (`solver/output/preflop-v2…v7`) is calibration data only.
+
+## Live turn and river solving
+
+**Status (2026-10-09):** planned. Step 7 first measures whether turns are fast enough.
+
+- **Inputs come from the stored flop solve.** Each flop file has, for every flop decision, each hand's reach (`weights`). The ranges at the start of the turn are those reaches along the flop line actually played.
+- **Solve in the solved flop's cards.**
+  - When the real flop was mapped to a nearest solved flop, the turn card is mapped the same way (`CardMapper` in `apps/api/src/postflop/flopMap.ts`).
+  - The turn is solved on the mapped board, so the ranges and the board match.
+  - Hands map back to the real cards, as they do on the flop.
+- **Tree:** the same as the flop solve's later streets. One bet size on the turn and river, no raises. Accuracy target: 1% of the pot.
+- **The river comes with it.** A turn solve covers every river card.
+  - Keep its river strategies in the cache entry if the size allows.
+  - Otherwise solve the river separately when it's dealt (expected under a second).
+- **Cache.** S3 entries keyed by chart version, spot, solved flop, flop line, turn card and tree. Written only by the solver service, never by clients, so users can't tamper with them. Popular spots warm up quickly.
+- **Time budget.** Start the solve when the turn is dealt. If it isn't back within about 20 seconds, or fails, the hand runs out as today and the player is told why.
+- **Cost (estimate).**
+  - Lambda: about $0.0001 per turn solve (2 GB for ~3 s), so 10,000 solves a month is about $1.
+  - S3: pennies.
+  - Limits: a per-player and a global cap on uncached solves, like the coach's.
+- **Security.** Only the API can invoke the function (IAM). Its role reaches only the cache prefix. No database access, no secrets (AGPL condition 5).
 
 ## Cost estimates (projections, not measured)
 

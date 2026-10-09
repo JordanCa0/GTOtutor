@@ -33,7 +33,7 @@ if (Test-Aws iam get-instance-profile --instance-profile-name $RoleName) {
 }
 
 # Security group with no inbound rules: the instance only reaches out (GitHub, S3, AWS APIs).
-$vpc = Invoke-Aws ec2 describe-vpcs --region $Region --filters Name=is-default,Values=true --query 'Vpcs[0].VpcId' --output text
+$vpc = Invoke-Aws ec2 describe-vpcs --region $Region --filters 'Name=is-default,Values=true' --query 'Vpcs[0].VpcId' --output text
 if ($vpc -eq 'None') { throw "no default VPC in $Region" }
 $sg = Invoke-Aws ec2 describe-security-groups --region $Region --filters "Name=group-name,Values=$GroupName" "Name=vpc-id,Values=$vpc" --query 'SecurityGroups[0].GroupId' --output text
 if ($sg -eq 'None') {

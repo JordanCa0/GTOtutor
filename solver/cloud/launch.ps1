@@ -58,7 +58,7 @@ Write-Lf $userDataFile $userData
 $arch = Invoke-Aws ec2 describe-instance-types --region $Region --instance-types $InstanceType --query 'InstanceTypes[0].ProcessorInfo.SupportedArchitectures[0]' --output text
 $amiParam = if ($arch -eq 'arm64') { 'al2023-ami-kernel-default-arm64' } else { 'al2023-ami-kernel-default-x86_64' }
 $ami = Invoke-Aws ssm get-parameter --region $Region --name "/aws/service/ami-amazon-linux-latest/$amiParam" --query Parameter.Value --output text
-$vpc = Invoke-Aws ec2 describe-vpcs --region $Region --filters Name=is-default,Values=true --query 'Vpcs[0].VpcId' --output text
+$vpc = Invoke-Aws ec2 describe-vpcs --region $Region --filters 'Name=is-default,Values=true' --query 'Vpcs[0].VpcId' --output text
 $sg = Invoke-Aws ec2 describe-security-groups --region $Region --filters "Name=group-name,Values=$GroupName" "Name=vpc-id,Values=$vpc" --query 'SecurityGroups[0].GroupId' --output text
 if ($sg -eq 'None') { throw "security group $GroupName not found: run cloud\setup.ps1 first" }
 

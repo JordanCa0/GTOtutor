@@ -71,7 +71,9 @@ cd "$WORK"
 aws s3 sync "$S3/spots" spots --quiet
 aws s3 sync "$S3/output" output --quiet
 aws s3 cp "$S3/queue.txt" queue.txt --quiet
-grep -vE '^\s*(#|$)' queue.txt > jobs.txt || true
+# Strip carriage returns: a queue saved with Windows line endings would otherwise put one at the end
+# of every --out path (a folder named "preflop-v8\r").
+tr -d '\r' < queue.txt | grep -vE '^\s*(#|$)' > jobs.txt || true
 echo 0 > next
 WORKERS=$(( $(nproc) / THREADS ))
 [ "$WORKERS" -ge 1 ] || WORKERS=1

@@ -2,11 +2,18 @@
 
 This tool precomputes postflop (flop) strategies offline. It wraps [b-inary/postflop-solver](https://github.com/b-inary/postflop-solver).
 
-For one preflop spot, it solves many flops and writes one JSON file per flop to `output/<spot>/<flop>.json`. That file holds the flop-street strategy for every hand, plus each hand's equity and EV. The app will later load these files; turn and river get solved in the browser. The full plan is in [`docs/postflop-plan.md`](../docs/postflop-plan.md).
+For one preflop spot, it solves many flops and writes one JSON file per flop to `output/<spot>/<flop>.json`. That file holds the flop-street strategy for every hand, plus each hand's equity and EV. The app loads these files; turn and river are planned to be solved live by a separate solver service on AWS. The full plan is in [`docs/postflop-plan.md`](../docs/postflop-plan.md).
 
-## License: offline only
+## License
 
-postflop-solver is AGPL-3.0. Run this tool on your own machines and ship only the exported JSON. Never ship this binary, and never run it as part of the live server.
+postflop-solver is AGPL-3.0, so this crate is too (`Cargo.toml`).
+
+- **Offline batch runs** are always fine, on the desktop or rented machines (`cloud/`), and so is shipping their JSON output.
+- **Live use** (planned: turn and river solving on AWS Lambda) is allowed only as a **separate solver service**, under the conditions in [`docs/postflop-plan.md`](../docs/postflop-plan.md#agpl-conditions). In short:
+  - its own process, reached only through JSON requests, never linked into the API or web app;
+  - its source public under AGPL-3.0, with a link in the app to the deployed commit;
+  - no database access or secrets;
+  - a legal read before charging money.
 
 ## Setup on Windows (one time, about 15 minutes)
 

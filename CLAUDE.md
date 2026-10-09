@@ -2,7 +2,7 @@
 
 A browser poker trainer: play preflop spots, get a verdict against range charts, and learn from a Claude-powered coach. Flop decisions are played and graded from offline solver output for spots that have it; turn and river still run out automatically. See `docs/postflop-plan.md`.
 
-20bb and 60bb (equal and mixed stacks) are planned in `docs/stack-depths-plan.md`.
+20bb and 60bb (equal and mixed stacks) are planned in `docs/stack-depths-plan.md`. Limping from every position and 33/66/100% flop bets (`preflop-v9`) are planned in `docs/game-tree-v9-plan.md`, to be done first.
 
 Ideas planned for later (opponent archetypes, heads-up exploit mode, player style chart, glossary and beginner section, hand replayer, mobile layout) are in `docs/future-ideas.md`.
 
@@ -20,7 +20,10 @@ Hosting is on AWS: web on S3 + CloudFront, the API in Docker on one EC2 instance
 - `apps/web`: Vite + React 19. Sign-in lives in `src/auth/` and `src/components/AccountMenu.tsx`.
 - `packages/shared-types`: types shared by the API and the web app.
 - `solver/`: Rust batch flop solver.
-  - Offline only, because of the AGPL license. Batch runs on rented EC2 machines (`solver/cloud/`) count as offline; never run it on the app server.
+  - AGPL-3.0. It may run live only as a separate solver service (planned: AWS Lambda for turn and river), under the conditions in `docs/postflop-plan.md` ("AGPL conditions").
+    - Never link it into, import it from, or run it inside the API or web app; they talk to it only through JSON requests.
+    - Its source must stay public, with a link in the app to the deployed commit.
+    - Batch runs on rented EC2 machines (`solver/cloud/`) are fine.
   - See `solver/README.md`.
 - `preflop/`: Rust preflop solver (our own code, not AGPL).
   - Writes `preflop/charts/<version>.json`. The API loads it with `PREFLOP_CHARTS=<file>`, otherwise it uses the placeholders.
