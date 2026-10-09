@@ -11,7 +11,7 @@ import { HandService } from '../src/engine/handService.js';
 import { runoutResolver } from '../src/engine/showdownResolver.js';
 import { FlopStore } from '../src/postflop/flopStore.js';
 import { seededRng } from '../src/poker/rng.js';
-import { LlmTeacher } from '../src/teacher/llmTeacher.js';
+import { LlmTeacher, type CoachLlm } from '../src/teacher/llmTeacher.js';
 import { client, fakeLlm, fakeSolverOutput, fakeVerifier, GUEST } from './fakes.js';
 
 process.env.LOG_LEVEL = 'silent';
@@ -20,15 +20,17 @@ const flops = new FlopStore(fakeSolverOutput());
 const OTHER_GUEST = '22222222-2222-4222-8222-222222222222';
 const USER = '33333333-3333-4333-8333-333333333333';
 
+const coachLlm = () => fakeLlm({ structured: () => ({ tldr: 'Correct: fine.', points: ['A.', 'B.'], detail: 'Detail.' }), text: 'Hint.' });
+
 /** An app over a given repo; calling it twice with the same repo simulates a server restart. */
-function makeApp(repo: Repo, accounts?: { deleteUser: (id: string) => Promise<void> }) {
+function makeApp(repo: Repo, accounts?: { deleteUser: (id: string) => Promise<void> }, llm: CoachLlm = coachLlm()) {
   const engine = new HandEngine(charts, seededRng(21), runoutResolver, flops);
   return buildApp({
     charts,
     engine,
     hands: new HandService(engine, repo),
     players: new PlayerResolver(fakeVerifier, repo),
-    teacher: new LlmTeacher(fakeLlm({ structured: () => ({ tldr: 'Correct: fine.', points: ['A.', 'B.'], detail: 'Detail.' }), text: 'Hint.' }), 'test', 50),
+    teacher: new LlmTeacher(llm, 'test', 50),
     accounts,
   });
 }
@@ -92,6 +94,43 @@ describe('hands survive a restart', () => {
     const review = (await client(third)({ method: 'GET', url: '/api/sessions/test-session-0001/review' })).json<SessionReviewResponse>();
     expect(review.stats.decisions).toBe(1);
     await third.close();
+  });
+});
+
+describe('saved coach threads', () => {
+  it('pays for an explanation once, brings back the chat after a restart, and keeps both private', async () => {
+    const repo = new MemoryRepo();
+    const llm = coachLlm();
+    const before = makeApp(repo, undefined, llm);
+    const mine = client(before);
+    const hand = (await mine(flopPractice)).json<HandView>();
+    const { feedback } = (await mine({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action: 'check' } })).json<SubmitDecisionResponse>();
+    const base = `/api/hands/${hand.id}/decisions/${feedback.id}`;
+    expect((await mine({ method: 'GET', url: `${base}/coach` })).json()).toEqual({ explanation: null, messages: [] });
+    expect((await mine({ method: 'GET', url: `${base}/explanation` })).json()).toMatchObject({ status: 'ok', cached: false });
+    await mine({ method: 'POST', url: `${base}/chat`, payload: { messages: [{ role: 'user', content: 'Why?' }] } });
+    expect(llm.structured).toHaveBeenCalledTimes(2);
+    await before.close();
+
+    const after = makeApp(repo, undefined, llm); // empty in-memory caches
+    const again = client(after);
+    expect((await again({ method: 'GET', url: `${base}/explanation` })).json()).toMatchObject({ status: 'ok', tldr: 'Correct: fine.', points: ['A.', 'B.'], cached: true });
+    expect(llm.structured).toHaveBeenCalledTimes(2);
+    expect((await again({ method: 'GET', url: `${base}/coach` })).json()).toEqual({
+      explanation: { status: 'ok', tldr: 'Correct: fine.', points: ['A.', 'B.'], cached: true, ungroundedNumbers: [] },
+      messages: [
+        { role: 'user', content: 'Why?' },
+        { role: 'assistant', tldr: 'Correct: fine.', content: 'Detail.' },
+      ],
+    });
+    expect((await client(after, { guestId: OTHER_GUEST })({ method: 'GET', url: `${base}/coach` })).statusCode).toBe(404);
+    expect((await again({ method: 'GET', url: `/api/hands/${hand.id}/decisions/not-a-decision/coach` })).statusCode).toBe(404);
+
+    // Signing up carries the thread over.
+    const user = client(after, { token: `test-user:${USER}` });
+    await user({ method: 'POST', url: '/api/me/claim-guest', payload: { guestId: GUEST } });
+    expect((await user({ method: 'GET', url: `${base}/coach` })).json().messages).toHaveLength(2);
+    await after.close();
   });
 });
 
@@ -176,6 +215,12 @@ function repoContract(name: string, makeRepo: () => Repo, cleanup?: () => Promis
       await repo.saveHand(record(id, 'awaiting_hero'));
       const decision = { id: `${id}-d1`, nodeKey: 'SIX_MAX|100|RFI|BTN', nodeLabel: 'BTN first in', heroCards: ['As', 'Kd'], handClass: 'AKo', chosenAction: 'raise' as const, options: [], chosenFrequency: 1, bestAction: 'raise' as const, grade: 'best' as const, hintUsed: false, street: 'preflop' as const, board: [], approxFlop: null };
       await repo.saveHand({ ...record(id, 'complete'), decisions: [decision] });
+      const chat = { kind: 'chat', tldr: null, points: null, ungrounded: null } as const;
+      await repo.addCoachMessages(decision.id, { kind: 'guest', guestId }, [
+        { ...chat, role: 'user', content: 'Why?' },
+        { ...chat, role: 'assistant', content: 'Because.', tldr: 'Raise.' },
+      ]);
+      expect((await repo.coachMessages(decision.id)).map((m) => m.content)).toEqual(['Why?', 'Because.']);
       const got = (await repo.getHand(id))!;
       expect(got.status).toBe('complete');
       expect(got.state).toBeNull();
@@ -185,6 +230,7 @@ function repoContract(name: string, makeRepo: () => Repo, cleanup?: () => Promis
       expect(await repo.deleteGuestSessions(guestId)).toBe(1);
       expect(await repo.getHand(id)).toBeNull();
       expect(await repo.sessionOwner(sessionId)).toBeNull();
+      expect(await repo.coachMessages(decision.id)).toEqual([]);
     });
   });
 }

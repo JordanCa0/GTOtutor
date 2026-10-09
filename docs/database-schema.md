@@ -124,12 +124,12 @@ The main table for history, stats, and stars.
 | `kind` | text | yes | `explanation` (the Analyze button) or `chat` (follow-ups) | `chat` |
 | `role` | text | yes | `user` (your question) or `assistant` (the coach) | `assistant` |
 | `tldr` | text | no | The bold one-sentence answer | `Bottom set should bet…` |
-| `content` | text | yes | Your question, or the coach's detail | |
+| `content` | text | yes | Your question, the coach's detail, or (for an explanation) its points one per line | |
 | `points` | JSON | no | Bullet points of an explanation | `["…","…"]` |
 | `ungrounded` | JSON | no | Numbers the coach cited that aren't in the data (shown as a warning) | `["90%"]` |
 | `created_at` | timestamp | yes | When it was sent | |
 
-Saving explanations means each one is paid for once; reopening a decision shows the earlier answer instead of asking Claude again.
+Saving explanations means each one is paid for once; reopening a decision shows the earlier answer instead of asking Claude again. An explanation that cites numbers not in the data isn't saved, so it can be regenerated.
 
 ### `session_reviews`: saved session reviews
 

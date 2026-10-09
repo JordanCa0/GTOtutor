@@ -1,9 +1,11 @@
 import type { ActionLogEntry, ActionType, DecisionFeedback, StartHandRequest } from '@gtotutor/shared-types';
-import { samePlayer, type HandRecord, type Player, type Repo } from '../db/repo.js';
+import { samePlayer, type CoachMessage, type HandRecord, type Player, type Repo } from '../db/repo.js';
 import { HttpError, type HandEngine, type HandState, type StoredHandState } from './handEngine.js';
 
 /** What the coach needs about a hand, whether it's in progress or finished. */
 export interface HandContext {
+  id: string;
+  owner: Player;
   heroPosition: string;
   stackDepthBb: number;
   board: string[];
@@ -72,18 +74,29 @@ export class HandService {
     const hit = this.live.get(handId);
     if (hit) {
       if (!samePlayer(hit.owner, player)) throw notFound();
-      return contextOf(hit.state);
+      return contextOf(handId, hit.owner, hit.state);
     }
     const rec = await this.repo.getHand(handId);
     if (!rec || !samePlayer(rec.owner, player)) throw notFound();
-    if (rec.state) return contextOf(rec.state as StoredHandState);
+    if (rec.state) return contextOf(handId, rec.owner, rec.state as StoredHandState);
     return {
+      id: handId,
+      owner: rec.owner,
       heroPosition: rec.heroPosition,
       stackDepthBb: rec.config.stackDepthBb,
       board: rec.replay?.result.board ?? [],
       actionLog: rec.replay?.actionLog ?? [],
       decisions: rec.decisions,
     };
+  }
+
+  /** A decision's saved coach thread. Takes a context from `context()`, which has checked ownership. */
+  async coachMessages(ctx: HandContext, decisionId: string): Promise<CoachMessage[]> {
+    return this.repo.coachMessages(decisionOf(ctx, decisionId));
+  }
+
+  async addCoachMessages(ctx: HandContext, decisionId: string, messages: CoachMessage[]): Promise<void> {
+    await this.repo.addCoachMessages(decisionOf(ctx, decisionId), ctx.owner, messages);
   }
 
   /** A session's hands; an unknown session is empty, someone else's is not found. */
@@ -128,7 +141,14 @@ export class HandService {
   }
 }
 
-const contextOf = (s: Pick<HandState, 'heroPosition' | 'config' | 'board' | 'actionLog' | 'decisions'>): HandContext => ({
+const decisionOf = (ctx: HandContext, decisionId: string): string => {
+  if (!ctx.decisions.some((d) => d.id === decisionId)) throw new HttpError(404, 'Decision not found.');
+  return decisionId;
+};
+
+const contextOf = (id: string, owner: Player, s: Pick<HandState, 'heroPosition' | 'config' | 'board' | 'actionLog' | 'decisions'>): HandContext => ({
+  id,
+  owner,
   heroPosition: s.heroPosition,
   stackDepthBb: s.config.stackDepthBb,
   board: s.board,

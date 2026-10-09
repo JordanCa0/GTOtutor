@@ -60,6 +60,7 @@ powershell -ExecutionPolicy Bypass -File run-queue.ps1 -Queue queue.txt -Until 0
 
 - `keep-awake.ps1` only keeps the PC awake until a given time.
 - `overnight.sh` is the 2026-10-05 pipeline: preflop calibration rounds, freezing the chart version, then flop solves.
+- `cloud/` runs a queue on a rented EC2 Spot instance instead (about 4x the desktop per hour, paid from AWS credits). See [`cloud/README.md`](cloud/README.md).
 - `apps/api/scripts/pickFlops.ts` writes a coverage-picked flop list for `--flops`.
 
 ## Changing the spot

@@ -4,6 +4,7 @@ import {
   type ChartNodeView,
   type ChatRequest,
   type ChatResponse,
+  type CoachThreadResponse,
   type ExplanationResponse,
   type HandView,
   type HintResponse,
@@ -17,7 +18,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { AccountAdmin } from './auth/accounts.js';
 import type { PlayerResolver } from './auth/player.js';
 import type { ChartService } from './charts/chartService.js';
-import { playerKey } from './db/repo.js';
+import { playerKey, type CoachMessage } from './db/repo.js';
 import { HttpError, isFlopNodeKey, type HandEngine } from './engine/handEngine.js';
 import type { HandContext, HandService } from './engine/handService.js';
 import type { ExplainInput, LlmTeacher, SpotContext } from './teacher/llmTeacher.js';
@@ -75,6 +76,12 @@ const chatSchema = {
   },
 } as const;
 
+/** The saved explanation in a coach thread, shaped like a fresh one. */
+function savedExplanation(thread: CoachMessage[]): Extract<ExplanationResponse, { status: 'ok' }> | null {
+  const m = thread.find((x) => x.kind === 'explanation');
+  return m ? { status: 'ok', tldr: m.tldr ?? '', points: m.points ?? [], cached: true, ungroundedNumbers: m.ungrounded ?? [] } : null;
+}
+
 export function buildApp({ charts, engine, hands, players, teacher, accounts }: AppDeps): FastifyInstance {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
 
@@ -86,7 +93,7 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
     return reply.status(500).send({ error: 'Internal error' });
   });
 
-  const baseSpot = (ctx: HandContext, spot: { nodeKey: string; nodeLabel: string; board: string[]; approxFlop: string | null }) => ({
+  const baseSpot = (ctx: Pick<HandContext, 'heroPosition' | 'stackDepthBb'>, spot: { nodeKey: string; nodeLabel: string; board: string[]; approxFlop: string | null }) => ({
     nodeKey: spot.nodeKey,
     nodeLabel: spot.nodeLabel,
     heroPosition: ctx.heroPosition,
@@ -139,7 +146,7 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
     const pending = engine.pendingDecision(state);
     if (!pending) throw new HttpError(409, 'There is no pending decision to hint at.');
     const spot: SpotContext = {
-      ...baseSpot({ heroPosition: state.heroPosition, stackDepthBb: state.config.stackDepthBb, board: state.board, actionLog: state.actionLog, decisions: state.decisions }, { ...pending, board: state.board }),
+      ...baseSpot({ heroPosition: state.heroPosition, stackDepthBb: state.config.stackDepthBb }, { ...pending, board: state.board }),
       heroCards: pending.heroCards,
       handClass: pending.handClass,
       options: pending.options,
@@ -155,7 +162,33 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
     '/api/hands/:id/decisions/:decisionId/explanation',
     async (req): Promise<ExplanationResponse> => {
       const player = await players.player(req);
-      return teacher.explain(decisionInput(await hands.context(player, req.params.id), req.params.decisionId), playerKey(player));
+      const ctx = await hands.context(player, req.params.id);
+      const input = decisionInput(ctx, req.params.decisionId);
+      // A decision's explanation is paid for once; after that it comes from the database.
+      const saved = savedExplanation(await hands.coachMessages(ctx, req.params.decisionId));
+      if (saved) return saved;
+      const res = await teacher.explain(input, playerKey(player));
+      // Explanations with invented numbers aren't kept, so Retry can replace them.
+      if (res.status === 'ok' && res.ungroundedNumbers.length === 0) {
+        await hands.addCoachMessages(ctx, req.params.decisionId, [
+          { kind: 'explanation', role: 'assistant', tldr: res.tldr, content: res.points.join('\n'), points: res.points, ungrounded: null },
+        ]);
+      }
+      return res;
+    },
+  );
+
+  app.get<{ Params: { id: string; decisionId: string } }>(
+    '/api/hands/:id/decisions/:decisionId/coach',
+    async (req): Promise<CoachThreadResponse> => {
+      const ctx = await hands.context(await players.player(req), req.params.id);
+      const saved = await hands.coachMessages(ctx, req.params.decisionId);
+      return {
+        explanation: savedExplanation(saved),
+        messages: saved
+          .filter((m) => m.kind === 'chat')
+          .map(({ role, content, tldr }) => ({ role, content, ...(tldr ? { tldr } : {}) })),
+      };
     },
   );
 
@@ -169,7 +202,15 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
         throw new HttpError(400, `Questions are limited to ${CHAT_LIMITS.maxUserChars} characters.`);
       }
       const player = await players.player(req);
-      return teacher.chat(decisionInput(await hands.context(player, req.params.id), req.params.decisionId), messages, playerKey(player));
+      const ctx = await hands.context(player, req.params.id);
+      const res = await teacher.chat(decisionInput(ctx, req.params.decisionId), messages, playerKey(player));
+      if (res.status === 'ok') {
+        await hands.addCoachMessages(ctx, req.params.decisionId, [
+          { kind: 'chat', role: 'user', tldr: null, content: messages.at(-1)!.content, points: null, ungrounded: null },
+          { kind: 'chat', role: 'assistant', tldr: res.tldr, content: res.reply, points: null, ungrounded: res.ungroundedNumbers.length ? res.ungroundedNumbers : null },
+        ]);
+      }
+      return res;
     },
   );
 

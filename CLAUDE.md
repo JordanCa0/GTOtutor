@@ -20,7 +20,7 @@ Hosting is on AWS: web on S3 + CloudFront, the API in Docker on one EC2 instance
 - `apps/web`: Vite + React 19. Sign-in lives in `src/auth/` and `src/components/AccountMenu.tsx`.
 - `packages/shared-types`: types shared by the API and the web app.
 - `solver/`: Rust batch flop solver.
-  - Offline only, because of the AGPL license.
+  - Offline only, because of the AGPL license. Batch runs on rented EC2 machines (`solver/cloud/`) count as offline; never run it on the app server.
   - See `solver/README.md`.
 - `preflop/`: Rust preflop solver (our own code, not AGPL).
   - Writes `preflop/charts/<version>.json`. The API loads it with `PREFLOP_CHARTS=<file>`, otherwise it uses the placeholders.

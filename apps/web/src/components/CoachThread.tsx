@@ -17,15 +17,29 @@ interface Props {
 /** The coach's explanation followed by the follow-up conversation, with the question box pinned below. */
 export function CoachThread({ handId, decisionId, messages, onMessages, variant }: Props) {
   const queryKey = ['explanation', decisionId];
+  const queryClient = useQueryClient();
   // Analysis is on demand (each one is a paid API call); once requested it's shared with the reading view.
   const [requested, setRequested] = useState(false);
-  const state = useQueryClient().getQueryState(queryKey);
+  const state = queryClient.getQueryState(queryKey);
   const alreadyStarted = !!state && (state.data !== undefined || state.fetchStatus === 'fetching' || state.error !== null);
   const explanation = useQuery({
     queryKey,
     queryFn: () => api.explanation(handId, decisionId),
     enabled: requested || alreadyStarted,
   });
+  // A thread saved earlier (before a reload, or on another device) comes back without asking the coach again.
+  const saved = useQuery({
+    queryKey: ['coach-thread', decisionId],
+    queryFn: () => api.coachThread(handId, decisionId),
+    staleTime: Infinity,
+  });
+  useEffect(() => {
+    if (!saved.data) return;
+    if (saved.data.explanation && queryClient.getQueryData(queryKey) === undefined) queryClient.setQueryData(queryKey, saved.data.explanation);
+    if (saved.data.messages.length && messages.length === 0) onMessages(saved.data.messages);
+    // Only when the saved thread arrives; later changes are this component's own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved.data]);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // Grow the box with its text (CSS caps the height, then it scrolls).

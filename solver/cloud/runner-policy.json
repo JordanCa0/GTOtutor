@@ -1,0 +1,18 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListRuns",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::SOLVER_BUCKET",
+      "Condition": { "StringLike": { "s3:prefix": "solver-runs/*" } }
+    },
+    {
+      "Sid": "ReadWriteRuns",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Resource": "arn:aws:s3:::SOLVER_BUCKET/solver-runs/*"
+    }
+  ]
+}

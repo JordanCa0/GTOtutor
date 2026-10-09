@@ -3,7 +3,7 @@ import { and, asc, eq, inArray, isNotNull, lt, ne, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { spotTypeOf } from '../teacher/sessionStats.js';
-import type { HandRecord, HandReplay, Player, Repo } from './repo.js';
+import type { CoachMessage, HandRecord, HandReplay, Player, Repo } from './repo.js';
 import * as schema from './schema.js';
 import { coachMessages, decisions, hands, practiceSessions, profiles } from './schema.js';
 
@@ -118,6 +118,25 @@ export class PgRepo implements Repo {
 
   async ensureProfile(userId: string, displayName: string | null): Promise<void> {
     await this.db.insert(profiles).values({ userId, displayName }).onConflictDoNothing();
+  }
+
+  async coachMessages(decisionId: string): Promise<CoachMessage[]> {
+    const rows = await this.db.select().from(coachMessages).where(eq(coachMessages.decisionId, decisionId)).orderBy(asc(coachMessages.createdAt));
+    return rows.map((r) => ({
+      kind: r.kind as CoachMessage['kind'],
+      role: r.role as CoachMessage['role'],
+      tldr: r.tldr,
+      content: r.content,
+      points: r.points as string[] | null,
+      ungrounded: r.ungrounded as string[] | null,
+    }));
+  }
+
+  async addCoachMessages(decisionId: string, owner: Player, messages: CoachMessage[]): Promise<void> {
+    if (!messages.length) return;
+    // A question and its answer are written together; space their timestamps so they stay in order.
+    const now = Date.now();
+    await this.db.insert(coachMessages).values(messages.map((m, i) => ({ decisionId, ...ownerCols(owner), ...m, createdAt: new Date(now + i) })));
   }
 
   /** For checks and scripts: row counts per table. */

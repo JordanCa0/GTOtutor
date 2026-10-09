@@ -199,6 +199,12 @@ export type ChatResponse =
     }
   | { status: 'unavailable'; reason: string };
 
+/** GET …/decisions/:id/coach: the saved coach thread for a decision, so it survives a reload. */
+export interface CoachThreadResponse {
+  explanation: Extract<ExplanationResponse, { status: 'ok' }> | null;
+  messages: ChatMessage[];
+}
+
 export type HintResponse = { status: 'ok'; hint: string; cached: boolean } | { status: 'unavailable'; reason: string };
 
 /** GET /api/me: the signed-in account, or null for a guest. */

@@ -27,6 +27,16 @@ export interface HandRecord {
   decisions: DecisionFeedback[];
 }
 
+/** One saved coach message: an explanation (the Analyze button) or a chat turn. */
+export interface CoachMessage {
+  kind: 'explanation' | 'chat';
+  role: 'user' | 'assistant';
+  tldr: string | null;
+  content: string;
+  points: string[] | null;
+  ungrounded: string[] | null;
+}
+
 /**
  * Persistence for player data. `PgRepo` (Supabase Postgres) in the app, `MemoryRepo` in tests.
  * Ownership is checked by callers (HandService); the repo stores what it's given.
@@ -46,6 +56,10 @@ export interface Repo {
   /** Moves every row a guest owns to a user account. */
   claimGuest(guestId: string, userId: string): Promise<void>;
   ensureProfile(userId: string, displayName: string | null): Promise<void>;
+  /** A decision's coach messages, oldest first. */
+  coachMessages(decisionId: string): Promise<CoachMessage[]>;
+  /** Appends messages to a decision's coach thread, in the order given. */
+  addCoachMessages(decisionId: string, owner: Player, messages: CoachMessage[]): Promise<void>;
 }
 
 /** In-memory Repo with the same semantics, for tests and running without a database. */
@@ -53,6 +67,7 @@ export class MemoryRepo implements Repo {
   private readonly sessions = new Map<string, { owner: Player; lastActive: Date }>();
   private readonly hands = new Map<string, HandRecord>();
   readonly profiles = new Map<string, string | null>();
+  private readonly coach: { decisionId: string; owner: Player; message: CoachMessage }[] = [];
 
   async ensureSession(sessionId: string, player: Player): Promise<Player> {
     const s = this.sessions.get(sessionId);
@@ -99,18 +114,34 @@ export class MemoryRepo implements Repo {
     const isGuest = (p: Player) => p.kind === 'guest' && p.guestId === guestId;
     for (const s of this.sessions.values()) if (isGuest(s.owner)) s.owner = user;
     for (const h of this.hands.values()) if (isGuest(h.owner)) h.owner = user;
+    for (const c of this.coach) if (isGuest(c.owner)) c.owner = user;
   }
 
   async ensureProfile(userId: string, displayName: string | null): Promise<void> {
     if (!this.profiles.has(userId)) this.profiles.set(userId, displayName);
   }
 
+  async coachMessages(decisionId: string): Promise<CoachMessage[]> {
+    return this.coach.filter((c) => c.decisionId === decisionId).map((c) => structuredClone(c.message));
+  }
+
+  async addCoachMessages(decisionId: string, owner: Player, messages: CoachMessage[]): Promise<void> {
+    for (const message of messages) this.coach.push({ decisionId, owner, message: structuredClone(message) });
+  }
+
   private deleteSessions(match: (entry: [string, { owner: Player; lastActive: Date }]) => boolean): number {
     const doomed = [...this.sessions.entries()].filter(match).map(([id]) => id);
+    const doomedDecisions = new Set<string>();
     for (const id of doomed) {
       this.sessions.delete(id);
-      for (const [hid, h] of this.hands) if (h.sessionId === id) this.hands.delete(hid);
+      for (const [hid, h] of this.hands) {
+        if (h.sessionId !== id) continue;
+        for (const d of h.decisions) doomedDecisions.add(d.id);
+        this.hands.delete(hid);
+      }
     }
+    // Coach messages go with their decisions, like the database's cascade.
+    for (let i = this.coach.length - 1; i >= 0; i--) if (doomedDecisions.has(this.coach[i].decisionId)) this.coach.splice(i, 1);
     return doomed.length;
   }
 }

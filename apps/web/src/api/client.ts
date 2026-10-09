@@ -3,6 +3,7 @@ import type {
   ChartNodeView,
   ChatMessage,
   ChatResponse,
+  CoachThreadResponse,
   MeResponse,
   ExplanationResponse,
   HandView,
@@ -40,6 +41,8 @@ export const api = {
   hint: (handId: string) => request<HintResponse>(`/api/hands/${handId}/hint`),
   explanation: (handId: string, decisionId: string) =>
     request<ExplanationResponse>(`/api/hands/${handId}/decisions/${decisionId}/explanation`),
+  coachThread: (handId: string, decisionId: string) =>
+    request<CoachThreadResponse>(`/api/hands/${handId}/decisions/${decisionId}/coach`),
   chat: (handId: string, decisionId: string, messages: ChatMessage[]) =>
     request<ChatResponse>(`/api/hands/${handId}/decisions/${decisionId}/chat`, post({ messages })),
   review: (sessionId: string) => request<SessionReviewResponse>(`/api/sessions/${sessionId}/review`),
