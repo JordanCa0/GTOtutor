@@ -33,6 +33,11 @@ Play heads-up against one archetype for a session, then write notes on how to ex
 
 Work out a player's archetype from their own hands and place them on a 2-D chart: loose ↔ tight (how many hands they play) against passive ↔ aggressive (how often they bet and raise rather than call).
 
+**First version built (2026-10-09)**, on the profile page:
+- **Placement:** one dot for all the player's decisions plus one per spot type, against the charts' own frequencies, so the centre is GTO play. It has a 95% range cross rather than an ellipse.
+- **Code:** `apps/api/src/teacher/playerStyle.ts` and `apps/web/src/components/StyleChart.tsx`.
+- **Still ideas:** the named stats below, drift over time, archetype labels, and professional comparisons.
+
 - **Stats we already have the data for** (every decision is saved):
   - VPIP: voluntarily put money in the pot
   - PFR: preflop raise

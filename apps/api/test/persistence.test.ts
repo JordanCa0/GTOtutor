@@ -1,6 +1,16 @@
-import type { HandView, SessionReviewResponse, SubmitDecisionResponse } from '@gtotutor/shared-types';
+import {
+  MIN_DECISIONS_FOR_REVIEW,
+  type DecisionFeedback,
+  type HandView,
+  type ProfileResponse,
+  type ProfileReviewResponse,
+  type SessionReviewResponse,
+  type StarredResponse,
+  type SubmitDecisionResponse,
+} from '@gtotutor/shared-types';
+import type { FastifyInstance } from 'fastify';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { buildApp } from '../src/app.js';
+import { buildApp, PROFILE_REVIEW_EVERY } from '../src/app.js';
 import { PlayerResolver } from '../src/auth/player.js';
 import { ChartService } from '../src/charts/chartService.js';
 import { buildFixtureChartSet } from '../src/charts/fixtures.js';
@@ -134,6 +144,150 @@ describe('saved coach threads', () => {
   });
 });
 
+describe('starred decisions', () => {
+  it('stars a decision with a note, keeps it private and across a restart, and clears it on unstar', async () => {
+    const repo = new MemoryRepo();
+    const before = makeApp(repo);
+    const mine = client(before);
+    const hand = (await mine(flopPractice)).json<HandView>();
+    const { feedback } = (await mine({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action: 'check' } })).json<SubmitDecisionResponse>();
+    const url = `/api/hands/${hand.id}/decisions/${feedback.id}/star`;
+    expect((await mine({ method: 'GET', url })).json()).toEqual({ starred: false, note: null });
+    const put = await mine({ method: 'PUT', url, payload: { starred: true, note: '  Check back vs this sizing  ' } });
+    expect(put.json()).toEqual({ starred: true, note: 'Check back vs this sizing' });
+    expect((await mine({ method: 'PUT', url, payload: { starred: true, note: 'x'.repeat(501) } })).statusCode).toBe(400);
+    expect((await client(before, { guestId: OTHER_GUEST })({ method: 'PUT', url, payload: { starred: true } })).statusCode).toBe(404);
+    expect((await mine({ method: 'PUT', url: `/api/hands/${hand.id}/decisions/not-a-decision/star`, payload: { starred: true } })).statusCode).toBe(404);
+    await before.close();
+
+    const after = makeApp(repo);
+    const again = client(after);
+    expect((await again({ method: 'GET', url })).json()).toEqual({ starred: true, note: 'Check back vs this sizing' });
+    expect((await client(after, { guestId: OTHER_GUEST })({ method: 'GET', url })).statusCode).toBe(404);
+
+    // Signing up carries the star over; unstarring clears the note.
+    const user = client(after, { token: `test-user:${USER}` });
+    await user({ method: 'POST', url: '/api/me/claim-guest', payload: { guestId: GUEST } });
+    expect((await user({ method: 'GET', url })).json()).toEqual({ starred: true, note: 'Check back vs this sizing' });
+    expect((await user({ method: 'PUT', url, payload: { starred: false, note: 'ignored' } })).json()).toEqual({ starred: false, note: null });
+    expect((await user({ method: 'GET', url })).json()).toEqual({ starred: false, note: null });
+    await after.close();
+  });
+});
+
+describe('saved session reviews', () => {
+  const reviewLlm = () => fakeLlm({ structured: () => ({ summary: 'Solid session.', leaks: [{ title: 'Flop checks', advice: 'Bet more.' }], drill: 'Play BTN vs BB flops.' }) });
+
+  it('asks the coach once per decision count, then serves the saved review after a restart', async () => {
+    const repo = new MemoryRepo();
+    const llm = reviewLlm();
+    const before = makeApp(repo, undefined, llm);
+    const mine = client(before);
+    let decisions = 0;
+    while (decisions < MIN_DECISIONS_FOR_REVIEW) {
+      let hand = (await mine(flopPractice)).json<HandView>();
+      while (hand.status === 'awaiting_hero') {
+        hand = (await mine({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action: hand.legalActions[0].id } })).json<SubmitDecisionResponse>().hand;
+        decisions++;
+      }
+    }
+    const url = '/api/sessions/test-session-0001/review';
+    const first = (await mine({ method: 'GET', url })).json<SessionReviewResponse>();
+    expect(first.coach).toMatchObject({ status: 'ok', summary: 'Solid session.' });
+    expect(llm.structured).toHaveBeenCalledTimes(1);
+    await before.close();
+
+    const after = makeApp(repo, undefined, llm); // empty in-memory caches
+    const again = (await client(after)({ method: 'GET', url })).json<SessionReviewResponse>();
+    expect(again.coach).toEqual(first.coach);
+    expect(again.stats.decisions).toBe(decisions);
+    expect(llm.structured).toHaveBeenCalledTimes(1);
+    expect((await client(after, { guestId: OTHER_GUEST })({ method: 'GET', url })).statusCode).toBe(404);
+    await after.close();
+  });
+});
+
+describe('profile page', () => {
+  const OTHER_USER = '44444444-4444-4444-8444-444444444444';
+  const reviewLlm = () => fakeLlm({ structured: () => ({ summary: 'Steady player.', leaks: [{ title: 'Flop checks', advice: 'Bet more.' }], drill: 'BTN vs BB flops.' }) });
+  const asUser = (app: FastifyInstance, userId = USER) => client(app, { token: `test-user:${userId}` }, `profile-${userId.slice(0, 8)}`);
+
+  /** Plays flop-practice hands until at least `count` more decisions are made; returns them. */
+  async function play(call: ReturnType<typeof client>, count: number): Promise<{ handId: string; decision: DecisionFeedback }[]> {
+    const made: { handId: string; decision: DecisionFeedback }[] = [];
+    while (made.length < count) {
+      let hand = (await call(flopPractice)).json<HandView>();
+      while (hand.status === 'awaiting_hero') {
+        const res = (await call({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action: hand.legalActions[0].id } })).json<SubmitDecisionResponse>();
+        made.push({ handId: hand.id, decision: res.feedback });
+        hand = res.hand;
+      }
+    }
+    return made;
+  }
+
+  it('is for signed-in players only', async () => {
+    const app = makeApp(new MemoryRepo());
+    for (const url of ['/api/me/profile', '/api/me/profile/review', '/api/me/starred']) {
+      expect((await client(app)({ method: 'GET', url })).statusCode).toBe(401);
+    }
+    await app.close();
+  });
+
+  it('shows all-time numbers and starred decisions, newest first, only to their owner', async () => {
+    const app = makeApp(new MemoryRepo());
+    const me = asUser(app);
+    const made = await play(me, 3);
+    const star = (i: number, note: string) => me({ method: 'PUT', url: `/api/hands/${made[i].handId}/decisions/${made[i].decision.id}/star`, payload: { starred: true, note } });
+    await star(0, 'first');
+    await star(2, 'second');
+
+    const profile = (await me({ method: 'GET', url: '/api/me/profile' })).json<ProfileResponse>();
+    expect(profile.stats.decisions).toBe(made.length);
+    // Counted per hand, not as one big hand of every decision.
+    expect(profile.stats.hands).toBe(new Set(made.map((m) => m.handId)).size);
+    expect(profile.starredCount).toBe(2);
+    expect(profile.gto.accuracy).toBeGreaterThanOrEqual(0);
+    expect(profile.gto.accuracy).toBeLessThanOrEqual(1);
+    expect(profile.style.overall.y.n).toBeGreaterThan(0);
+
+    const page1 = (await me({ method: 'GET', url: '/api/me/starred?limit=1' })).json<StarredResponse>();
+    expect(page1.items.map((i) => i.note)).toEqual(['second']);
+    expect(page1.items[0]).toMatchObject({ handId: made[2].handId, decision: { id: made[2].decision.id } });
+    const page2 = (await me({ method: 'GET', url: `/api/me/starred?limit=1&before=${encodeURIComponent(page1.nextBefore!)}` })).json<StarredResponse>();
+    expect(page2.items.map((i) => i.note)).toEqual(['first']);
+    expect((await me({ method: 'GET', url: '/api/me/starred?before=not-a-date' })).statusCode).toBe(400);
+
+    const other = asUser(app, OTHER_USER);
+    expect((await other({ method: 'GET', url: '/api/me/starred' })).json()).toEqual({ items: [], nextBefore: null });
+    expect((await other({ method: 'GET', url: '/api/me/profile' })).json<ProfileResponse>().stats.decisions).toBe(0);
+    await app.close();
+  });
+
+  it('writes the coach review once, keeps it across a restart, and refreshes it after enough new decisions', async () => {
+    const repo = new MemoryRepo();
+    const llm = reviewLlm();
+    const before = makeApp(repo, undefined, llm);
+    const me = asUser(before);
+    const url = '/api/me/profile/review';
+    expect((await me({ method: 'GET', url })).json<ProfileReviewResponse>().coach).toEqual({ status: 'not_enough_data', needed: MIN_DECISIONS_FOR_REVIEW });
+    await play(me, MIN_DECISIONS_FOR_REVIEW);
+    expect((await me({ method: 'GET', url })).json<ProfileReviewResponse>().coach).toMatchObject({ status: 'ok', summary: 'Steady player.' });
+    await me({ method: 'GET', url });
+    expect(llm.structured).toHaveBeenCalledTimes(1);
+    await before.close();
+
+    const after = makeApp(repo, undefined, llm); // empty in-memory caches
+    const again = asUser(after);
+    expect((await again({ method: 'GET', url })).json<ProfileReviewResponse>().coach).toMatchObject({ status: 'ok' });
+    expect(llm.structured).toHaveBeenCalledTimes(1);
+    await play(again, PROFILE_REVIEW_EVERY);
+    await again({ method: 'GET', url });
+    expect(llm.structured).toHaveBeenCalledTimes(2);
+    await after.close();
+  });
+});
+
 describe('guest data lasts one session', () => {
   it('deletes the previous session when a guest starts a new one, and idle sessions after 24 hours', async () => {
     const repo = new MemoryRepo();
@@ -221,6 +375,20 @@ function repoContract(name: string, makeRepo: () => Repo, cleanup?: () => Promis
         { ...chat, role: 'assistant', content: 'Because.', tldr: 'Raise.' },
       ]);
       expect((await repo.coachMessages(decision.id)).map((m) => m.content)).toEqual(['Why?', 'Because.']);
+      expect(await repo.star(decision.id)).toEqual({ starred: false, note: null });
+      await repo.setStar(decision.id, { starred: true, note: 'Look again' });
+      await repo.setStar(decision.id, { starred: true, note: 'Edited note' });
+      expect(await repo.star(decision.id)).toEqual({ starred: true, note: 'Edited note' });
+      const review = { status: 'ok' as const, summary: 'Fine.', leaks: [], drill: 'More flops.', ungroundedNumbers: [] };
+      const stats = { hands: 1, decisions: 1, grades: { best: 1, mixed: 0, mistake: 0 }, hintsUsed: 0, bySpot: [], leaks: [], worstMistakes: [], easyFoldsSkipped: true };
+      expect(await repo.sessionReview(sessionId, 1)).toBeNull();
+      await repo.saveSessionReview(sessionId, 1, stats, review);
+      await repo.saveSessionReview(sessionId, 1, stats, { ...review, summary: 'Replaced?' });
+      expect(await repo.sessionReview(sessionId, 1)).toEqual(review);
+      expect(await repo.sessionReview(sessionId, 2)).toBeNull();
+      // Profile queries are by account, so a guest's rows don't show up in them.
+      expect(await repo.starredDecisions(crypto.randomUUID(), null, 10)).toEqual([]);
+      expect((await repo.playerDecisions(crypto.randomUUID(), 10)).total).toBe(0);
       const got = (await repo.getHand(id))!;
       expect(got.status).toBe('complete');
       expect(got.state).toBeNull();
@@ -231,6 +399,8 @@ function repoContract(name: string, makeRepo: () => Repo, cleanup?: () => Promis
       expect(await repo.getHand(id)).toBeNull();
       expect(await repo.sessionOwner(sessionId)).toBeNull();
       expect(await repo.coachMessages(decision.id)).toEqual([]);
+      expect(await repo.star(decision.id)).toEqual({ starred: false, note: null });
+      expect(await repo.sessionReview(sessionId, 1)).toBeNull();
     });
   });
 }

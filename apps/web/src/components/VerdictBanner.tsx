@@ -1,6 +1,7 @@
 import { bestOption, chosenOption, type ActionType, type DecisionFeedback } from '@gtotutor/shared-types';
 import { optionColor } from './actionColors';
 import { ApproxIcon, CheckIcon, XIcon } from './icons';
+import { StarButton, StarNote } from './StarControl';
 
 const pct = (f: number) => `${Math.round(f * 100)}%`;
 
@@ -21,7 +22,8 @@ export function verdictTitle(feedback: Pick<DecisionFeedback, 'grade' | 'chosenA
 
 const ICONS = { best: CheckIcon, mixed: ApproxIcon, mistake: XIcon } as const;
 
-export function VerdictBanner({ feedback }: { feedback: DecisionFeedback }) {
+/** With `handId`, the decision can be starred (and given a note) from the banner. */
+export function VerdictBanner({ feedback, handId }: { feedback: DecisionFeedback; handId?: string }) {
   const chosen = chosenOption(feedback);
   const best = bestOption(feedback);
   const chosenIdx = feedback.options.indexOf(chosen);
@@ -52,6 +54,7 @@ export function VerdictBanner({ feedback }: { feedback: DecisionFeedback }) {
             {feedback.handClass}, {feedback.nodeLabel}
             {feedback.hintUsed && <span className="badge">Hint used</span>}
           </span>
+          {handId && <StarButton handId={handId} decisionId={feedback.id} />}
         </div>
         <div className="pills">
           {feedback.options.map((o, i) => (
@@ -63,6 +66,7 @@ export function VerdictBanner({ feedback }: { feedback: DecisionFeedback }) {
           ))}
         </div>
         {detail && <p className="verdict-detail">{detail}</p>}
+        {handId && <StarNote handId={handId} decisionId={feedback.id} />}
         {feedback.board.length > 0 && (
           <p className="muted small">
             Board {feedback.board.join(' ')}

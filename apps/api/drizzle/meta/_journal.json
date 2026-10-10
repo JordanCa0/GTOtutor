@@ -15,6 +15,13 @@
       "when": 1791159900335,
       "tag": "0001_security",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791571005819,
+      "tag": "0002_profile_reviews",
+      "breakpoints": true
     }
   ]
 }

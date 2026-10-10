@@ -4,11 +4,16 @@ import type {
   ChatMessage,
   ChatResponse,
   CoachThreadResponse,
+  DecisionStar,
   MeResponse,
+  ProfileResponse,
+  ProfileReviewResponse,
   ExplanationResponse,
   HandView,
   HintResponse,
   SessionReviewResponse,
+  StarredResponse,
+  StarRequest,
   StartHandRequest,
   SubmitDecisionResponse,
 } from '@gtotutor/shared-types';
@@ -47,8 +52,14 @@ export const api = {
     request<CoachThreadResponse>(`/api/hands/${handId}/decisions/${decisionId}/coach`),
   chat: (handId: string, decisionId: string, messages: ChatMessage[]) =>
     request<ChatResponse>(`/api/hands/${handId}/decisions/${decisionId}/chat`, post({ messages })),
+  star: (handId: string, decisionId: string) => request<DecisionStar>(`/api/hands/${handId}/decisions/${decisionId}/star`),
+  setStar: (handId: string, decisionId: string, star: StarRequest) =>
+    request<DecisionStar>(`/api/hands/${handId}/decisions/${decisionId}/star`, { method: 'PUT', body: JSON.stringify(star) }),
   review: (sessionId: string) => request<SessionReviewResponse>(`/api/sessions/${sessionId}/review`),
   chart: (nodeKey: string) => request<ChartNodeView>(`/api/charts/${encodeURIComponent(nodeKey)}`),
   me: () => request<MeResponse>('/api/me'),
+  profile: () => request<ProfileResponse>('/api/me/profile'),
+  profileReview: () => request<ProfileReviewResponse>('/api/me/profile/review'),
+  starred: (before: string | null) => request<StarredResponse>(`/api/me/starred${before ? `?before=${encodeURIComponent(before)}` : ''}`),
   deleteAccount: () => request<{ ok: true }>('/api/me', { method: 'DELETE' }),
 };

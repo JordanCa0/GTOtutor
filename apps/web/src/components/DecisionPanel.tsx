@@ -60,7 +60,7 @@ export function DecisionPanel({ hand, playbackDone, chats, onChat }: Props) {
         <HintPanel key={hand.pendingSpot!.nodeKey + hand.id} hand={hand} />
       ) : decision ? (
         <>
-          <VerdictBanner feedback={decision} />
+          <VerdictBanner feedback={decision} handId={hand.id} />
           <RangeGrid key={decision.id} nodeKey={decision.nodeKey} highlight={decision.handClass} />
           <CoachCard key={`coach-${decision.id}`} handId={hand.id} decision={decision} messages={chats[decision.id] ?? []} onMessages={(m) => onChat(decision.id, m)} />
         </>

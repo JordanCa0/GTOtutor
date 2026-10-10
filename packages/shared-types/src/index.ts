@@ -208,6 +208,20 @@ export type ChatResponse =
     }
   | { status: 'unavailable'; reason: string };
 
+/** A decision the player starred to come back to, with an optional note. */
+export interface DecisionStar {
+  starred: boolean;
+  note: string | null;
+}
+
+/** PUT …/decisions/:id/star. Unstarring clears the note. */
+export interface StarRequest {
+  starred: boolean;
+  note?: string | null;
+}
+
+export const STAR_NOTE_MAX_CHARS = 500;
+
 /** GET …/decisions/:id/coach: the saved coach thread for a decision, so it survives a reload. */
 export interface CoachThreadResponse {
   explanation: Extract<ExplanationResponse, { status: 'ok' }> | null;
@@ -265,4 +279,82 @@ export function chosenOption(d: Pick<DecisionFeedback, 'options' | 'chosenAction
 /** The most frequent option in a decision (see `chosenOption`). */
 export function bestOption(d: Pick<DecisionFeedback, 'options' | 'bestAction' | 'bestIndex'>): ActionOption {
   return d.options[d.bestIndex ?? d.options.findIndex((o) => o.actionId === d.bestAction)];
+}
+
+/**
+ * One axis of the style chart: how far the player's choices lean from the charts', in percentage
+ * points (0 = plays like the charts), over `n` decisions, with its standard error.
+ */
+export interface StyleAxis {
+  value: number;
+  n: number;
+  se: number;
+  /** How often the player continued (x) or bet/raised (y) in these decisions, in percent. */
+  you: number;
+  /** How often the charts do the same in the same spots, in percent. `value` is `you − chart`. */
+  chart: number;
+}
+
+/**
+ * One direction of a loose/tight leak, weighted by the charts' own mixes (no cutoff for "a chart fold").
+ * `rate` is in percent; `weight` is how many hands' worth of chart weight it's measured over.
+ */
+export interface StyleLeakRate {
+  rate: number;
+  weight: number;
+}
+
+export interface StyleLeakRates {
+  /** Of the hands the charts fold, the share the player played anyway. */
+  playedChartFolds: StyleLeakRate;
+  /** Of the hands the charts play, the share the player folded. */
+  foldedChartPlays: StyleLeakRate;
+}
+
+/** A point on the style chart. x: tight (−) to loose (+). y: passive (−) to aggressive (+). */
+export interface StylePoint {
+  x: StyleAxis;
+  y: StyleAxis;
+}
+
+export interface PlayerStyle {
+  overall: StylePoint;
+  bySpot: (StylePoint & { spot: SpotType; label: string })[];
+  /** All decisions together, split into the two directions the x axis nets out. */
+  leaks: StyleLeakRates;
+}
+
+/** How close to the charts and solver: share of decisions graded best or mixed, and EV given up. */
+export interface GtoSummary {
+  accuracy: number;
+  /** Average bb lost per decision against the best-EV action; null when no decision has EVs. */
+  evLossBb: number | null;
+  /** How many decisions had EVs to measure. */
+  evDecisions: number;
+}
+
+/** GET /api/me/profile: all-time numbers for the signed-in player (most recent decisions). */
+export interface ProfileResponse {
+  stats: SessionStats;
+  style: PlayerStyle;
+  gto: GtoSummary;
+  starredCount: number;
+}
+
+/** GET /api/me/profile/review: the coach's write-up of all-time play (saved, refreshed every so often). */
+export interface ProfileReviewResponse {
+  coach: SessionCoachReview;
+}
+
+export interface StarredDecision {
+  handId: string;
+  decision: DecisionFeedback;
+  note: string | null;
+  starredAt: string;
+}
+
+/** GET /api/me/starred: newest first. Pass `nextBefore` back as `before` for the next page. */
+export interface StarredResponse {
+  items: StarredDecision[];
+  nextBefore: string | null;
 }

@@ -135,6 +135,15 @@ export const sessionReviews = pgTable(
   (t) => [primaryKey({ columns: [t.sessionId, t.decisionsCount] })],
 );
 
+/** The coach's all-time review on the profile page: one per account, refreshed every so many decisions. */
+export const profileReviews = pgTable('profile_reviews', {
+  userId: uuid('user_id').primaryKey(), // → auth.users, on delete cascade (added in the migration)
+  decisionsCount: integer('decisions_count').notNull(),
+  stats: jsonb('stats').notNull(),
+  coach: jsonb('coach').notNull(),
+  createdAt,
+});
+
 export const solverSpots = pgTable('solver_spots', {
   name: text('name').primaryKey(),
   chartVersion: text('chart_version'),
