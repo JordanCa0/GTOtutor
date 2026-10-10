@@ -9,9 +9,11 @@
 param(
     # Concurrent solves at most: a hard cap on cost. Skipped if the account's Lambda limit is too low.
     [int]$MaxConcurrency = 10,
-    # 10240 MB gives Lambda's maximum of 6 vCPUs; the solve itself needs well under 1 GB.
+    # 10240 MB gives Lambda's maximum of 6 vCPUs; the solve itself needs well under 1 GB. New accounts
+    # are capped at 3008 MB (about 2 vCPUs) until AWS raises the limit: pass -MemoryMb 3008 until then.
     [int]$MemoryMb = 10240,
-    [int]$TimeoutSeconds = 30
+    # Longer than the API waits (LIVE_SOLVE_TIMEOUT_MS), so a slow solve still lands in the cache.
+    [int]$TimeoutSeconds = 60
 )
 . "$PSScriptRoot\common.ps1"
 Set-Location (Split-Path $PSScriptRoot)

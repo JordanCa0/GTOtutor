@@ -39,6 +39,7 @@ The files are in `deploy/` and `apps/api/Dockerfile`.
 | Web files | `s3://gtotutor-web-<account>/` | |
 | Secrets | SSM `/gtotutor/*` | See step 4 |
 | Logs | CloudWatch `/gtotutor/api` | |
+| Turn/river solver | Lambda `gtotutor-turn-solver` | On since 2026-10-10. arm64, 3008 MB (about 2 vCPUs, the new-account cap), 60 s timeout; the API waits 28 s (`LIVE_SOLVE_TIMEOUT_MS`). Image in ECR `gtotutor-turn-solver`; cache in `turn-cache/` |
 | Server folder | `/opt/gtotutor` | `deploy.env`, `.env` → `deploy.env`, `app.env` (secrets), compose files |
 
 `<account>` is the AWS account ID. Get it with `aws sts get-caller-identity`.
@@ -127,7 +128,7 @@ powershell -ExecutionPolicy Bypass -File cloud\lambda-deploy.ps1
 - It creates what's missing:
   - the ECR repository `gtotutor-turn-solver`;
   - the role `gtotutor-turn-solver` (logs only);
-  - the function: arm64, 10 GB memory for 6 vCPUs, 30 s timeout, no URL.
+  - the function: arm64, 10 GB memory for 6 vCPUs, 60 s timeout, no URL. While the account is capped at 3008 MB, pass `-MemoryMb 3008`.
 - Time it with a saved request: `cloud\lambda-test.ps1 -Request <file>`. The script's header shows how to make one.
 
 **Turn it on** (first time):
@@ -139,7 +140,8 @@ powershell -ExecutionPolicy Bypass -File cloud\lambda-deploy.ps1
 **Turn it off:** delete `/gtotutor/TURN_SOLVER_LAMBDA` and run `deploy.sh`. Hands run out after the flop, as before.
 
 **Capacity:**
-- The account allows 10 Lambda runs at once (a new-account default). That's about 3 players reaching the turn at the same moment.
+- **Memory:** new accounts are capped at 3008 MB (about 2 vCPUs). Turn solves with raises then take 10–26 s (Measured in `docs/postflop-plan.md`). Ask AWS (Service Quotas, or a Support case) for 10,240 MB. Then redeploy with the default `-MemoryMb` and lower `LIVE_SOLVE_TIMEOUT_MS` back to 20000.
+- **Concurrency:** the account allows 10 Lambda runs at once (a new-account default). That's about 3 players reaching the turn at the same moment.
 - Ask for more in **Service Quotas → AWS Lambda → Concurrent executions**.
 - Once the limit is 110 or more, `lambda-deploy.ps1` also caps this function at 10 runs, to bound cost.
 
@@ -204,6 +206,7 @@ Create one parameter per variable under `/gtotutor/`, using the Standard tier (f
 | `/gtotutor/TURN_CACHE_BUCKET` | String | `gtotutor-solver-<account>`: where solves are cached (`turn-cache/`) |
 | `/gtotutor/LIVE_SOLVES_PER_HOUR` | String | Optional, default 300: uncached turn solves per player per hour |
 | `/gtotutor/LIVE_SOLVES_GLOBAL_PER_HOUR` | String | Optional, default 3000: the same, for all players together |
+| `/gtotutor/LIVE_SOLVE_TIMEOUT_MS` | String | `28000` while the function has 2 vCPUs (default 20000): how long a hand waits before running out |
 
 To list the names (no values): `aws ssm get-parameters-by-path --path /gtotutor/ --query 'Parameters[].Name'`.
 

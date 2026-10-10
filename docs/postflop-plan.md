@@ -120,11 +120,11 @@ Production serves this output from a private S3 bucket synced to the API server'
    2. [x] **Solver service** (2026-10-10): `solver/src/bin/live.rs`, a Lambda container image (`solver/lambda/Dockerfile`, arm64) or `live --serve <port>` for development.
       - JSON in and out, the commit in each response, `solver/LICENSE` (AGPL-3.0).
       - `solver/cloud/lambda-deploy.ps1` builds, pushes and deploys it (only pushed, clean commits); `lambda-test.ps1` times it.
-      - [ ] Deploy it and time it on Graviton.
+      - [x] Deployed 2026-10-10 at 3008 MB, the new-account cap (about 2 vCPUs). Lambda times for the raise tree: 26 s (single-raised, check-check), 14 s (bet-call), and 9.6 s for a limped pot without raises. About 2x the desktop on 2 threads. Needs the 10,240 MB limit (6 vCPUs).
    3. [x] **API:** `src/postflop/liveSolve.ts` builds requests, `liveSolver.ts` runs them (S3 cache, rate limits, 20 s timeout, fall back to running the hand out). On with `TURN_SOLVER_LAMBDA` or `TURN_SOLVER_URL`.
    4. [x] **Engine:** turn and river betting from the solve, graded like flop decisions; bot replies pre-drawn on the flop so turn solves start while hero thinks.
    5. [x] **UI:** turn and river decisions, a "Solving the turn…" state, the run-out note, and the source link (AGPL condition 3).
-      - [ ] Turn on in production (`docs/deployment.md`, "Live turn and river solving").
+      - [x] On in production since 2026-10-10 (`docs/deployment.md`, "Live turn and river solving"). The API waits 28 s until the function gets more vCPUs.
    6. [ ] **Later:** 4-bet pot flops solved live too (under 1s each), instead of precomputed.
 8. [~] Real preflop charts: the `preflop/` solver (see `preflop/README.md`), calibrated against flop solves.
    - **Frozen: preflop-v8** (`preflop/charts/FROZEN`), on the rank-based realization model. v7→v8 changed 3.1% of decisions, weighted by how often they come up.
@@ -140,7 +140,7 @@ Production serves this output from a private S3 bucket synced to the API server'
 
 ## Live turn and river solving
 
-**Status (2026-10-10):** built and tested locally (step 7); not yet deployed. Turns take 0.2–5 s on 6 threads (Measured).
+**Status (2026-10-10):** live in production. Turns take 10–26 s on Lambda at 2 vCPUs, and 1–5 s on 6 desktop threads (Measured). Speculative solving hides part of the wait.
 
 - **Inputs come from the stored flop solve.** Each flop file has, for every flop decision, each hand's reach (`weights`). The ranges at the start of the turn are those reaches along the flop line actually played.
 - **Solve in the solved flop's cards.**
@@ -151,6 +151,7 @@ Production serves this output from a private S3 bucket synced to the API server'
 - **The river comes with it.** The server deals the river in advance (the deck is shuffled at the start), so a turn solve returns the river decisions for that one river card, for every turn line. Every river card would be up to 460 MB of JSON.
 - **Cache.** S3 `turn-cache/<spot>/<board>/<hash>.json`, where the hash covers the whole request (ranges, board, river card, tree), so any change is a new entry. Written only by the API, never by clients, so users can't tamper with them.
 - **Speculative solves.** When hero's flop decision comes up, the engine draws the bot's reply to each of hero's options in advance (same frequencies, drawn earlier; never sent to the client). Every option whose line then reaches the turn starts its solve at once, so the turn is usually ready when it's dealt. At most 3 per decision; they count towards the rate limits.
+- **Loading UI (to do).** While a turn or river solve is pending, show skeleton loaders for the action buttons, verdict pills and range chart (see "Skeleton loaders" in `docs/future-ideas.md`).
 - **Time budget.** If the solve isn't back within 20 seconds of the turn (`LIVE_SOLVE_TIMEOUT_MS`), or fails, the hand runs out as before and the player is told why. A restarted server fetches the solve again (a cache hit).
 - **Cost (estimate).**
   - Lambda: 10 GB (for 6 vCPUs) × 1–6 s ≈ $0.0002–0.0008 per uncached solve on arm64, so 10,000 a month is about $2–8.
