@@ -33,9 +33,9 @@ The files are in `deploy/` and `apps/api/Dockerfile`.
 | Domain | `gtotutor.app` | Bought outside AWS; name servers point at the Route 53 hosted zone |
 | API | `https://api.gtotutor.app` | A record → Elastic IP of the `gtotutor-api` instance |
 | Site | `https://gtotutor.app` | CloudFront; `www.gtotutor.app` too |
-| EC2 | `gtotutor-api` | t4g.small (ARM), Amazon Linux 2023, 20 GB gp3, role `gtotutor-api-server` |
+| EC2 | `gtotutor-api` | t4g.small (ARM), Amazon Linux 2023, 40 GB gp3 (grown from 20 on 2026-10-10 for the v9 flops), role `gtotutor-api-server` |
 | Image | ECR `gtotutor-api:latest` | Keeps the last 5 images (`deploy/ecr-lifecycle.json`) |
-| Flop files | `s3://gtotutor-solver-<account>/solver-output/` | Now: `btn_vs_bb_srp_100` |
+| Flop files | `s3://gtotutor-solver-<account>/solver-output/` | `preflop-v9` flops for 48 spots, copied from `solver-runs/preflop-v9*/output/preflop-v9/` (~15 GB when complete). The placeholder-chart flops are archived in `solver-archive/fixture-v2/` |
 | Web files | `s3://gtotutor-web-<account>/` | |
 | Secrets | SSM `/gtotutor/*` | See step 4 |
 | Logs | CloudWatch `/gtotutor/api` | |
@@ -171,7 +171,7 @@ Create one parameter per variable under `/gtotutor/`, using the Standard tier (f
 | `/gtotutor/SUPABASE_SERVICE_ROLE_KEY` | SecureString | Service role key |
 | `/gtotutor/COACH_GLOBAL_LIMIT_PER_HOUR` | String | `200`: new coach answers per hour across all players |
 | `/gtotutor/CLAUDE_MODEL` | String | Optional |
-| `/gtotutor/PREFLOP_CHARTS` | String | Optional: `/app/preflop/charts/preflop-v8.json` |
+| `/gtotutor/PREFLOP_CHARTS` | String | `/app/preflop/charts/preflop-v9.json` (on since 2026-10-10; leave it out for the placeholder charts) |
 
 To list the names (no values): `aws ssm get-parameters-by-path --path /gtotutor/ --query 'Parameters[].Name'`.
 

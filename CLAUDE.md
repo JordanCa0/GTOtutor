@@ -55,6 +55,7 @@ Hosting is on AWS: web on S3 + CloudFront, the API in Docker on one EC2 instance
 - Only the API reads or writes the database (RLS is on with no policies). Every route that touches player data must check the data belongs to the requesting player.
 - Guest data lasts one session; signed-in data is kept until the account is deleted.
 - Commit and push only when asked.
-- The app's default charts are still placeholders (`fixture-v3`: v2 plus limp options from every position, 2026-10-09). Solved charts (`preflop/charts/`) are opt-in through `PREFLOP_CHARTS` until they're reviewed.
+- Production runs the solved charts `preflop-v9` (`PREFLOP_CHARTS`, turned on 2026-10-10), with flops solved from them. Without `PREFLOP_CHARTS`, as in local dev, the app uses the placeholders (`fixture-v3`: v2 plus limp options from every position).
+  - A chart version and its flops must always match: the server's `solver-output/` holds the flops for the charts it runs.
   - Preflop UI copy says "chart", not "solver".
   - Flop strategies are real solver output (computed from the placeholder ranges, or the solved ones under `solver/output/<version>/`), so flop copy may say "solver".
