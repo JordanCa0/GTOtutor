@@ -7,9 +7,10 @@ import { HandEngine } from '../src/engine/handEngine.js';
 import { HandService } from '../src/engine/handService.js';
 import { runoutResolver } from '../src/engine/showdownResolver.js';
 import { CardMapper, parseCards } from '../src/postflop/flopMap.js';
-import { FlopStore } from '../src/postflop/flopStore.js';
-import { liveTree, mapBoardCard, parseRange, turnRequest, turnStart, type LiveOut, type LiveRequest } from '../src/postflop/liveSolve.js';
+import { flopClassStrategy, FlopStore } from '../src/postflop/flopStore.js';
+import { liveTree, mapBoardCard, parseRange, SEAT_HAND_FLOOR, turnRequest, turnStart, type LiveOut, type LiveRequest } from '../src/postflop/liveSolve.js';
 import { LiveSolver, memoryCache, type SolverResponse, type SolverTransport } from '../src/postflop/liveSolver.js';
+import { handClass } from '../src/poker/cards.js';
 import { seededRng } from '../src/poker/rng.js';
 import { fakeSolverOutput } from './fakes.js';
 
@@ -48,6 +49,26 @@ describe('turn solve requests', () => {
     expect(req.turn).toEqual(['33%,75%,125%', '3x']);
     expect(liveTree('sb_vs_bb_limp_100').turn[1]).toBe('');
     expect(req.hands[0].length).toBe(req.ranges[0].length);
+  });
+
+  it("keeps the players' own hands in, even off the solver's line", () => {
+    // BB never checks hand 0 here, but hero did: it still goes into the turn solve.
+    const root = data.byHistory.get('')!;
+    const strategy = root.strategy.map((row, a) => row.map((f, h) => (h === 0 ? (a === 0 ? 0 : 1000) : f)));
+    const offLine = { ...data, byHistory: new Map([...data.byHistory, ['', { ...root, strategy }]]) };
+    expect(turnRequest(offLine, spot, 'btn_vs_bb_srp_100', [0, 0], '9s', '4c')!.hands[0]).not.toContain(data.hands[0][0]);
+    const req = turnRequest(offLine, spot, 'btn_vs_bb_srp_100', [0, 0], '9s', '4c', [0, 0])!;
+    expect(req.ranges[0][req.hands[0].indexOf(data.hands[0][0])]).toBe(SEAT_HAND_FLOOR);
+    // A hand already on the line keeps its own weight.
+    expect(req.ranges[1][req.hands[1].indexOf(data.hands[1][0])]).toBe(0.5);
+  });
+
+  it("shows hero's hand class on the chart where the line never takes it", () => {
+    const node = data.byHistory.get('')!;
+    const hc = handClass(data.hands[0][0].slice(0, 2), data.hands[0][0].slice(2));
+    const unreached = { ...node, weights: data.hands[0].map((_, h) => (handClass(data.hands[0][h].slice(0, 2), data.hands[0][h].slice(2)) === hc ? 0 : 1)) };
+    expect(flopClassStrategy(data, unreached)[hc]).toBeUndefined();
+    expect(flopClassStrategy(data, unreached, hc)[hc]).toHaveLength(node.actions.length);
   });
 
   it('keeps a later card off the solved board and off the mapped turn', () => {

@@ -57,7 +57,9 @@ export const api = {
   setStar: (handId: string, decisionId: string, star: StarRequest) =>
     request<DecisionStar>(`/api/hands/${handId}/decisions/${decisionId}/star`, { method: 'PUT', body: JSON.stringify(star) }),
   review: (sessionId: string) => request<SessionReviewResponse>(`/api/sessions/${sessionId}/review`),
-  chart: (nodeKey: string) => request<ChartNodeView>(`/api/charts/${encodeURIComponent(nodeKey)}`),
+  /** `hand`: hero's class, shown on postflop charts even where the solver's line never takes it. */
+  chart: (nodeKey: string, hand?: string) =>
+    request<ChartNodeView>(`/api/charts/${encodeURIComponent(nodeKey)}${hand ? `?hand=${encodeURIComponent(hand)}` : ''}`),
   me: () => request<MeResponse>('/api/me'),
   profile: () => request<ProfileResponse>('/api/me/profile'),
   profileReview: () => request<ProfileReviewResponse>('/api/me/profile/review'),

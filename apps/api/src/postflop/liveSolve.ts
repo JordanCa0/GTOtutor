@@ -116,16 +116,27 @@ export function mapBoardCard(mapper: CardMapper, card: string, used: string[]): 
   throw new Error(`no free card for ${card}`);
 }
 
-/** The solve request for a turn after `line`, with hands nobody holds left out to keep it small. */
-export function turnRequest(data: LoadedFlop, spot: SpotInfo, spotName: string, line: number[], turn: string, river: string): LiveRequest | null {
+/**
+ * Weight given to a seat's own hand when the line says it never gets here (hero called or bet where
+ * the solver folds or checks). Enough for the solver to play it, too little to change anything else.
+ */
+export const SEAT_HAND_FLOOR = 0.001;
+
+/**
+ * The solve request for a turn after `line`, with hands nobody holds left out to keep it small.
+ * `seats` are the two players' hands (flop file indexes). They always stay in, so a hand that left
+ * the solver's range on the flop still gets turn and river strategies and EVs.
+ */
+export function turnRequest(data: LoadedFlop, spot: SpotInfo, spotName: string, line: number[], turn: string, river: string, seats?: [number, number]): LiveRequest | null {
   const start = turnStart(data, spot, line);
   if (!start) return null;
-  const keep = start.ranges.map((r) => r.flatMap((w, h) => (w > 0 ? [h] : [])));
+  const rounded = start.ranges.map((r, p) => r.map((w, h) => Math.max(Math.round(w * 1e5) / 1e5, h === seats?.[p] ? SEAT_HAND_FLOOR : 0)));
+  const keep = rounded.map((r) => r.flatMap((w, h) => (w > 0 ? [h] : [])));
   const tree = liveTree(spotName);
   return {
     board: [...(data.flop.match(/../g) ?? []), turn],
     hands: [keep[0].map((h) => data.hands[0][h]), keep[1].map((h) => data.hands[1][h])],
-    ranges: [keep[0].map((h) => Math.round(start.ranges[0][h] * 1e5) / 1e5), keep[1].map((h) => Math.round(start.ranges[1][h] * 1e5) / 1e5)],
+    ranges: [keep[0].map((h) => rounded[0][h]), keep[1].map((h) => rounded[1][h])],
     potBb: start.potBb,
     stackBb: start.stackBb,
     chipsPerBb: spot.chips_per_bb,

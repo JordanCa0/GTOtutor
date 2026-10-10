@@ -132,18 +132,28 @@ export function flopRangeSummary(data: LoadedFlop, node: FlopNode): number[] {
   return node.strategy.map((row) => row.reduce((s, f, h) => s + (f / 1000) * w[h], 0) / total);
 }
 
-/** Per hand class (e.g. "AKs"), the weighted average strategy at a node; classes not in the range are left out. */
-export function flopClassStrategy(data: LoadedFlop, node: FlopNode): Record<string, number[]> {
+/**
+ * Per hand class (e.g. "AKs"), the weighted average strategy at a node; classes not in the range are
+ * left out. `show` (hero's class) is kept even when the line says it never gets here, e.g. after
+ * hero called where the solver folds: the solver still plays every hand at every node, so its
+ * combos are averaged evenly.
+ */
+export function flopClassStrategy(data: LoadedFlop, node: FlopNode, show?: string): Record<string, number[]> {
   const hands = data.hands[node.player];
   const w = nodeWeights(node, hands.length);
   const sums = new Map<string, { w: number; f: number[] }>();
-  hands.forEach((h, i) => {
-    if (w[i] <= 0) return;
-    const hc = handClass(h.slice(0, 2), h.slice(2));
+  const add = (hc: string, i: number, weight: number) => {
     const s = sums.get(hc) ?? { w: 0, f: node.strategy.map(() => 0) };
-    s.w += w[i];
-    node.strategy.forEach((row, a) => (s.f[a] += (row[i] / 1000) * w[i]));
+    s.w += weight;
+    node.strategy.forEach((row, a) => (s.f[a] += (row[i] / 1000) * weight));
     sums.set(hc, s);
+  };
+  const unreached: number[] = [];
+  hands.forEach((h, i) => {
+    const hc = handClass(h.slice(0, 2), h.slice(2));
+    if (w[i] > 0) add(hc, i, w[i]);
+    else if (hc === show) unreached.push(i);
   });
+  if (show && !sums.has(show)) unreached.forEach((i) => add(show, i, 1));
   return Object.fromEntries([...sums].map(([hc, s]) => [hc, s.f.map((x) => Math.round((x / s.w) * 1000) / 1000)]));
 }

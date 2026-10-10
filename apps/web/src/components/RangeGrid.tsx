@@ -14,7 +14,7 @@ const pct = (x: number) => `${Math.round(x * 100)}%`;
 const kind = (hc: string) => (hc.length === 2 ? 'pair' : hc[2] === 's' ? 'suited' : 'offsuit');
 
 export function RangeGrid({ nodeKey, highlight }: { nodeKey: string; highlight: string }) {
-  const { data, isPending, error } = useQuery({ queryKey: ['chart', nodeKey], queryFn: () => api.chart(nodeKey) });
+  const { data, isPending, error } = useQuery({ queryKey: ['chart', nodeKey, highlight], queryFn: () => api.chart(nodeKey, highlight) });
   const [expanded, setExpanded] = useState(false);
   // The hand shown in the enlarged view's side panel; opens on the hero's hand each time.
   const [selected, setSelected] = useState(highlight);

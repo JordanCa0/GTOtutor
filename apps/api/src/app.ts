@@ -354,9 +354,11 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
     return { ok: true };
   });
 
-  app.get<{ Params: { nodeKey: string } }>('/api/charts/:nodeKey', async (req): Promise<ChartNodeView> => {
+  /** `?hand=AKs`: postflop, keep that hand class in the view even where the solver's line never takes it. */
+  app.get<{ Params: { nodeKey: string }; Querystring: { hand?: string } }>('/api/charts/:nodeKey', async (req): Promise<ChartNodeView> => {
     if (isFlopNodeKey(req.params.nodeKey)) {
-      const view = engine.flopChartView(req.params.nodeKey);
+      const hand = req.query.hand && /^[2-9TJQKA]{2}[so]?$/.test(req.query.hand) ? req.query.hand : undefined;
+      const view = engine.flopChartView(req.params.nodeKey, hand);
       if (!view) throw new HttpError(404, 'Flop strategy not found.');
       return view;
     }

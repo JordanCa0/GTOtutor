@@ -313,7 +313,8 @@ export class HandEngine {
           label: a.label,
           toBb: a.toBb,
           frequency: node.strategy[i][h] / 1000,
-          evBb: node.ev_bb ? node.ev_bb[i][h] : null,
+          // The solver reports 0 for a hand that never gets here (hero left its line earlier): no EV then.
+          evBb: node.ev_bb && (node.weights?.[h] ?? 1) > 0 ? node.ev_bb[i][h] : null,
         })),
         approxFlop: pf.lookup.approxFlop,
       };
@@ -354,8 +355,11 @@ export class HandEngine {
     return node.actions.map((a, i) => ({ label: parseSolverAction(a).label, share: shares[i] }));
   }
 
-  /** A flop node as a 13x13 strategy view (averaged per hand class over the solved flop). */
-  flopChartView(nodeKey: string): ChartNodeView | null {
+  /**
+   * A flop, turn or river node as a 13x13 strategy view (averaged per hand class over the solved
+   * board). `show` is hero's hand class, kept in the view even off the solver's line.
+   */
+  flopChartView(nodeKey: string, show?: string): ChartNodeView | null {
     const live = this.liveNode(nodeKey);
     if (live) {
       const { key } = live;
@@ -363,7 +367,7 @@ export class HandEngine {
         nodeKey,
         label: `${key.street === 'turn' ? 'Turn' : 'River'} ${live.data.board.join('')}${key.history ? '' : ', first decision'} (live solver)`,
         actions: live.node.actions.map(parseSolverAction),
-        strategy: flopClassStrategy({ hands: live.data.hands } as LoadedFlop, live.node),
+        strategy: flopClassStrategy({ hands: live.data.hands } as LoadedFlop, live.node, show),
         dataSource: { kind: 'solver', note: 'Turn and river strategy from a live solve.' },
       };
     }
@@ -374,7 +378,7 @@ export class HandEngine {
       nodeKey,
       label: `Flop ${flop.flop}${flop.history.length ? '' : ', first decision'} (solver, ${flop.spot.replaceAll('_', ' ')})`,
       actions: node.actions.map(parseSolverAction),
-      strategy: flopClassStrategy(data, node),
+      strategy: flopClassStrategy(data, node, show),
       dataSource: { kind: 'solver', note: 'Flop strategy from the offline solver.' },
     };
   }
@@ -871,7 +875,7 @@ export class HandEngine {
     const solvedFlop = pf.lookup.data.flop.match(/../g)!;
     const mappedTurn = mapBoardCard(pf.lookup.mapper, turn, solvedFlop);
     const mappedRiver = mapBoardCard(pf.lookup.mapper, river, [...solvedFlop, mappedTurn]);
-    const request = turnRequest(pf.lookup.data, spot, pf.spot, line, mappedTurn, mappedRiver);
+    const request = turnRequest(pf.lookup.data, spot, pf.spot, line, mappedTurn, mappedRiver, pf.hands);
     return request && { request, label: pf.spot };
   }
 
