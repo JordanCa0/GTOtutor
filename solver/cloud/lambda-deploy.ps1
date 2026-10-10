@@ -38,10 +38,10 @@ if (-not (Test-Aws ecr describe-repositories --region $Region --repository-names
 }
 
 # 3. Build and push. --provenance=false: Lambda accepts a plain image manifest, not an index.
-$password = Invoke-Aws ecr get-login-password --region $Region
-$password | docker login --username AWS --password-stdin $registry | Out-Null
+# Piped through cmd: PowerShell 5.1 re-encodes text piped into a native program, which ECR rejects.
+cmd /c "aws ecr get-login-password --region $Region | docker login --username AWS --password-stdin $registry" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'docker login to ECR failed' }
-docker buildx build --platform linux/arm64 --provenance=false -f lambda/Dockerfile --build-arg "GIT_COMMIT=$commit" -t "${repo}:$commit" --push .
+docker buildx build --platform linux/arm64 --provenance=false --sbom=false -f lambda/Dockerfile --build-arg "GIT_COMMIT=$commit" -t "${repo}:$commit" --push .
 if ($LASTEXITCODE -ne 0) { throw 'image build failed' }
 
 # 4. Execution role: CloudWatch logs only. No S3, no database, no secrets (AGPL condition 5).
