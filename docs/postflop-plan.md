@@ -12,7 +12,7 @@ Decided 2026-09-30 to 10-01. This is a copy for machines without the Obsidian va
 - **Turn and river: solved live on AWS by a separate solver service** (decided 2026-10-09; replaces browser solving).
   - When a hand reaches the turn, the API asks the solver service to solve the rest of the hand. It starts as soon as the card is dealt; design in "Live turn and river solving" below.
   - The service runs on AWS Lambda, so it costs nothing when idle and scales with players.
-  - Results go into a shared cache, so players who reach the same spot, flop line and turn reuse one solve.
+  - Results go into a shared cache, kept by the API in S3, so players who reach the same spot, flop line, turn and river reuse one solve.
   - Phones get the same solves as desktops.
   - Any failed or slow solve falls back to running the hand out, as today.
   - Precomputing turns was rejected: about 340,000 turn solves per spot, and terabytes of storage.
@@ -34,9 +34,9 @@ postflop-solver is AGPL-3.0. Its network clause (section 13) says that if users 
    - Add a `LICENSE` file (AGPL-3.0) to `solver/`, and keep the upstream copyright notices.
 3. **A link in the app.** An "About / credits" or footer link says live turn and river strategies come from postflop-solver (AGPL-3.0). It points to the solver source **at the exact commit deployed**; the service reports its commit with each response.
 4. **Changes are published.** Any change to postflop-solver itself goes in a public fork or patch, pinned like today. Deploy only commits that are pushed to GitHub.
-5. **Only data crosses the boundary.** The service gets the spot, board, ranges and tree settings, and returns strategies and EVs.
+5. **Only data crosses the boundary.** The service gets the board, ranges, pot, stacks and tree settings, and returns strategies and EVs.
    - It has no database access, no player data and no secrets.
-   - Its IAM role can only read and write the solve cache.
+   - Its IAM role can only write its own logs: the API keeps the solve cache.
    - Only the API can invoke it: no public URL.
 6. **App code stays separately licensed.** The rest of the repo has no license yet, so all rights are reserved by default. Choose one deliberately, and don't let AGPL code move into `apps/` or `packages/`.
 7. **Legal read before charging money,** as before. Ask specifically whether a paid app that calls a separate AGPL service needs anything beyond conditions 1–6.
@@ -83,6 +83,22 @@ Desktop, one flop (Kh7d2c) unless noted:
   - SB as out-of-position raiser vs BB: 0.98.
   - Realization depends on preflop role as well as position, so calibration keys on both.
 
+- **Live turn solves** (2026-10-10, desktop, `solver/src/bin/turn-bench.rs`):
+  - **Inputs:** preflop-v9 flops, the turn plus every river, solved to 1% of pot.
+  - **Ranges:** turn-start ranges are rebuilt as preflop weight × each flop action's frequency on the line. This reproduces the solver's stored reach to within 1% (`live::tests`).
+  - **Trees:** a = one size, no raises; b = turn 33/75%, river 50/100%; c = turn 33/75/125%, river 50/100%/all-in, one raise (3x); d = c without the raise; e = b with one raise.
+
+  | Tree | SRP check-check, 6 threads (1 thread) | SRP bet-call, 6 threads | SB limped pot, 6 threads (2 threads) | Memory |
+  |---|---|---|---|---|
+  | a | 0.06s | 0.10s | 0.07s | 6–8 MB |
+  | b | 0.15s (0.59s) | 0.16–0.23s | 0.19s | 15–16 MB |
+  | c | 4.8s (21s) | 2.5–3.0s | 18s (45s) | 100–250 MB |
+  | d | 0.73s (1.8s on 2) | — | 1.9s (4.2s) | 32 MB |
+  | e | 1.9s (5.3s on 2) | — | 3.5s (9.1s) | 106–170 MB |
+
+  - **Export:** walking every river card is 8 MB (tree a) to 460 MB (c, limped pot) of JSON, so a solve returns river decisions only for the river cards asked for (`riverCards`). The server deals the river in advance.
+  - **Result:** turns are far faster than the 8 s gate for every tree except c in limped pots. Graviton (Lambda) timings are still to come, in Phase 2.
+
 ## Data on disk
 
 `solver/output/btn_vs_bb_srp_100`: the first 584 flops in the fixed order were solved with the old tree and have no `weights`/`equity`/`ev_bb` per node. Later flops use the current tree and have them; each file's `tree` field says which. Re-solving the 584 with the current tree would take about 2.3 hours.
@@ -98,15 +114,17 @@ Production serves this output from a private S3 bucket synced to the API server'
 5. [~] Engine: real flop betting from the solver for spots with solved flops; turn and river still run out automatically.
 6. [~] UI: board, flop decisions, verdict with EVs and the borrowed flop, flop strategy grid per hand class. The coach gets the board and an approximation note.
 7. [ ] Live turn and river solving on AWS (design in "Live turn and river solving"):
-   1. [ ] **Measure first.** Add a mode to `solver/` that solves the turn and river from a stored flop line.
+   1. [x] **Measure first** (2026-10-10, see Measured: under 2 s for trees a, b and d). Add a mode to `solver/` that solves the turn and river from a stored flop line.
       - Time it on the desktop and on Graviton (one core, and 2–6 cores), with memory per solve.
       - Go ahead only if a turn takes a few seconds; otherwise reconsider the tree or the plan.
-   2. [ ] **Solver service:** a Lambda function (arm64) built from `solver/`.
-      - JSON in and out, a commit id in each response, and the AGPL conditions above.
-      - Infrastructure scripts like `solver/cloud/`.
-   3. [ ] **API:** call the service when the turn is dealt; read and write the S3 solve cache; enforce timeouts and fall back to running the hand out; rate limits.
-   4. [ ] **Engine:** turn and river betting from the result, graded like flop decisions.
-   5. [ ] **UI:** turn and river decisions, a "solving…" state, and the source link (AGPL condition 3).
+   2. [x] **Solver service** (2026-10-10): `solver/src/bin/live.rs`, a Lambda container image (`solver/lambda/Dockerfile`, arm64) or `live --serve <port>` for development.
+      - JSON in and out, the commit in each response, `solver/LICENSE` (AGPL-3.0).
+      - `solver/cloud/lambda-deploy.ps1` builds, pushes and deploys it (only pushed, clean commits); `lambda-test.ps1` times it.
+      - [ ] Deploy it and time it on Graviton.
+   3. [x] **API:** `src/postflop/liveSolve.ts` builds requests, `liveSolver.ts` runs them (S3 cache, rate limits, 20 s timeout, fall back to running the hand out). On with `TURN_SOLVER_LAMBDA` or `TURN_SOLVER_URL`.
+   4. [x] **Engine:** turn and river betting from the solve, graded like flop decisions; bot replies pre-drawn on the flop so turn solves start while hero thinks.
+   5. [x] **UI:** turn and river decisions, a "Solving the turn…" state, the run-out note, and the source link (AGPL condition 3).
+      - [ ] Turn on in production (`docs/deployment.md`, "Live turn and river solving").
    6. [ ] **Later:** 4-bet pot flops solved live too (under 1s each), instead of precomputed.
 8. [~] Real preflop charts: the `preflop/` solver (see `preflop/README.md`), calibrated against flop solves.
    - **Frozen: preflop-v8** (`preflop/charts/FROZEN`), on the rank-based realization model. v7→v8 changed 3.1% of decisions, weighted by how often they come up.
@@ -122,24 +140,23 @@ Production serves this output from a private S3 bucket synced to the API server'
 
 ## Live turn and river solving
 
-**Status (2026-10-09):** planned. Step 7 first measures whether turns are fast enough.
+**Status (2026-10-10):** built and tested locally (step 7); not yet deployed. Turns take 0.2–5 s on 6 threads (Measured).
 
 - **Inputs come from the stored flop solve.** Each flop file has, for every flop decision, each hand's reach (`weights`). The ranges at the start of the turn are those reaches along the flop line actually played.
 - **Solve in the solved flop's cards.**
   - When the real flop was mapped to a nearest solved flop, the turn card is mapped the same way (`CardMapper` in `apps/api/src/postflop/flopMap.ts`).
   - The turn is solved on the mapped board, so the ranges and the board match.
   - Hands map back to the real cards, as they do on the flop.
-- **Tree:** the same as the flop solve's later streets. One bet size on the turn and river, no raises. Accuracy target: 1% of the pot.
-- **The river comes with it.** A turn solve covers every river card.
-  - Keep its river strategies in the cache entry if the size allows.
-  - Otherwise solve the river separately when it's dealt (expected under a second).
-- **Cache.** S3 entries keyed by chart version, spot, solved flop, flop line, turn card and tree. Written only by the solver service, never by clients, so users can't tamper with them. Popular spots warm up quickly.
-- **Time budget.** Start the solve when the turn is dealt. If it isn't back within about 20 seconds, or fails, the hand runs out as today and the player is told why.
+- **Tree:** turn 33/75/125%, river 50/100%/all-in, one 3x raise (chosen 2026-10-10). Limped pots drop the raise, because their wide ranges made it take 18 s. Accuracy target: 1% of the pot. The flop was solved with one-size later streets, so the turn re-solves with a richer tree, as commercial tools do.
+- **The river comes with it.** The server deals the river in advance (the deck is shuffled at the start), so a turn solve returns the river decisions for that one river card, for every turn line. Every river card would be up to 460 MB of JSON.
+- **Cache.** S3 `turn-cache/<spot>/<board>/<hash>.json`, where the hash covers the whole request (ranges, board, river card, tree), so any change is a new entry. Written only by the API, never by clients, so users can't tamper with them.
+- **Speculative solves.** When hero's flop decision comes up, the engine draws the bot's reply to each of hero's options in advance (same frequencies, drawn earlier; never sent to the client). Every option whose line then reaches the turn starts its solve at once, so the turn is usually ready when it's dealt. At most 3 per decision; they count towards the rate limits.
+- **Time budget.** If the solve isn't back within 20 seconds of the turn (`LIVE_SOLVE_TIMEOUT_MS`), or fails, the hand runs out as before and the player is told why. A restarted server fetches the solve again (a cache hit).
 - **Cost (estimate).**
-  - Lambda: about $0.0001 per turn solve (2 GB for ~3 s), so 10,000 solves a month is about $1.
+  - Lambda: 10 GB (for 6 vCPUs) × 1–6 s ≈ $0.0002–0.0008 per uncached solve on arm64, so 10,000 a month is about $2–8.
   - S3: pennies.
-  - Limits: a per-player and a global cap on uncached solves, like the coach's.
-- **Security.** Only the API can invoke the function (IAM). Its role reaches only the cache prefix. No database access, no secrets (AGPL condition 5).
+  - Limits: uncached solves per player (`LIVE_SOLVES_PER_HOUR`, default 300) and overall (`LIVE_SOLVES_GLOBAL_PER_HOUR`, default 3000), like the coach's; plus the function's concurrency cap.
+- **Security.** Only the API can invoke the function (IAM); it has no URL. Its role can only write logs. No database access, no secrets (AGPL condition 5).
 
 ## Cost estimates (projections, not measured)
 

@@ -85,5 +85,9 @@ export function fakeSolverOutput({ threeBets = false } = {}): string {
     ],
   };
   writeFileSync(join(dir, 'Kh7d2c.json'), JSON.stringify(file));
+  // What the solver saves next to its flops; live turn solves read the ranges, pot and stacks from it.
+  const ranks = 'AKQJT98765432';
+  const classes = [...ranks].flatMap((a, i) => [...ranks].slice(i).map((b, j) => (j === 0 ? a + b : [a + b + 's', a + b + 'o']))).flat();
+  writeFileSync(join(dir, '_spot.json'), JSON.stringify({ name: 'btn_vs_bb_srp_100', chips_per_bb: 20, pot_bb: 5.5, stack_bb: 97.5, oop_range: classes.join(','), ip_range: classes.join(',') }));
   return root;
 }

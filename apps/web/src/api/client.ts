@@ -42,6 +42,7 @@ const post = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.strin
 
 export const api = {
   startHand: (req: StartHandRequest) => request<HandView>('/api/hands', post(req)),
+  hand: (handId: string) => request<HandView>(`/api/hands/${handId}`),
   // The size only matters when several options share a type (e.g. flop bets); the server ignores it otherwise.
   decide: (handId: string, action: ActionType, toBb?: number | null) =>
     request<SubmitDecisionResponse>(`/api/hands/${handId}/decisions`, post(toBb == null ? { action } : { action, toBb })),

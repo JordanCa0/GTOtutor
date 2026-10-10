@@ -53,6 +53,7 @@ The files are in `deploy/` and `apps/api/Dockerfile`.
 | Settings or secrets | Change them in Parameter Store, then run `deploy.sh` |
 | Database schema | Migrate first, then deploy the API |
 | Deploy files (`deploy/*`) | Push to GitHub, download them again on the server, then run `deploy.sh` |
+| Turn/river solver (`solver/src`) | Commit and push, then run `solver\cloud\lambda-deploy.ps1` (see "Live turn and river solving") |
 
 **The order matters.** When a change touches both sides: migrate the database, then deploy the API, then the web app. A new API with the old web page usually works; a new web page calling an old API often doesn't.
 
@@ -115,6 +116,33 @@ bash deploy.sh
 ```
 GitHub can serve the old copy for a few minutes after a push. Check with `grep` that the change arrived before running `deploy.sh`.
 
+### Live turn and river solving
+The turn and river are solved live by the Lambda function `gtotutor-turn-solver`. It's a separate AGPL-3.0 program built from `solver/` (`docs/postflop-plan.md`). The API invokes it and keeps the results in `s3://gtotutor-solver-<account>/turn-cache/`.
+
+**Deploy or update the function** (on your PC with Docker Desktop running, from `solver/`):
+```powershell
+powershell -ExecutionPolicy Bypass -File cloud\lambda-deploy.ps1
+```
+- It deploys only a commit that is pushed to GitHub with no local changes in `solver/`. The app links to that commit's source, as the license requires.
+- It creates what's missing:
+  - the ECR repository `gtotutor-turn-solver`;
+  - the role `gtotutor-turn-solver` (logs only);
+  - the function: arm64, 10 GB memory for 6 vCPUs, 30 s timeout, no URL.
+- Time it with a saved request: `cloud\lambda-test.ps1 -Request <file>`. The script's header shows how to make one.
+
+**Turn it on** (first time):
+1. Add the `TurnSolveCache` and `InvokeTurnSolver` statements from `deploy/ec2-role-policy.json` to the `gtotutor-api-server` policy.
+2. Set `TURN_SOLVER_LAMBDA` and `TURN_CACHE_BUCKET` in Parameter Store (step 4).
+3. Push an API image with live solving, then run `deploy.sh`.
+4. Check that the API log says "live turn and river solving is on". Play a flop-practice hand to the turn.
+
+**Turn it off:** delete `/gtotutor/TURN_SOLVER_LAMBDA` and run `deploy.sh`. Hands run out after the flop, as before.
+
+**Capacity:**
+- The account allows 10 Lambda runs at once (a new-account default). That's about 3 players reaching the turn at the same moment.
+- Ask for more in **Service Quotas → AWS Lambda → Concurrent executions**.
+- Once the limit is 110 or more, `lambda-deploy.ps1` also caps this function at 10 runs, to bound cost.
+
 ### Useful commands on the server
 ```sh
 cd /opt/gtotutor
@@ -172,12 +200,18 @@ Create one parameter per variable under `/gtotutor/`, using the Standard tier (f
 | `/gtotutor/COACH_GLOBAL_LIMIT_PER_HOUR` | String | `200`: new coach answers per hour across all players |
 | `/gtotutor/CLAUDE_MODEL` | String | Optional |
 | `/gtotutor/PREFLOP_CHARTS` | String | `/app/preflop/charts/preflop-v9.json` (on since 2026-10-10; leave it out for the placeholder charts) |
+| `/gtotutor/TURN_SOLVER_LAMBDA` | String | `gtotutor-turn-solver`: turns on live turn and river solving. Leave it out and hands run out after the flop. |
+| `/gtotutor/TURN_CACHE_BUCKET` | String | `gtotutor-solver-<account>`: where solves are cached (`turn-cache/`) |
+| `/gtotutor/LIVE_SOLVES_PER_HOUR` | String | Optional, default 300: uncached turn solves per player per hour |
+| `/gtotutor/LIVE_SOLVES_GLOBAL_PER_HOUR` | String | Optional, default 3000: the same, for all players together |
 
 To list the names (no values): `aws ssm get-parameters-by-path --path /gtotutor/ --query 'Parameters[].Name'`.
 
 ### 5. IAM role for the instance
 1. Create the policy `gtotutor-api-server` (IAM → Policies → JSON) from `deploy/ec2-role-policy.json`, replacing `SOLVER_BUCKET`, `REGION` and `ACCOUNT_ID`. It allows only:
    - reading `solver-output/` in the solver bucket;
+   - reading and writing `turn-cache/` there (live turn solves);
+   - invoking the `gtotutor-turn-solver` function;
    - reading `/gtotutor*` parameters;
    - pulling `gtotutor-api`;
    - writing `/gtotutor/*` logs.

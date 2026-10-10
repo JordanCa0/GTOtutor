@@ -202,6 +202,18 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
     },
   });
 
+  // Waiting for a live turn solve: ask again every second until the hand moves on (the server gives up after ~20s).
+  useEffect(() => {
+    if (!hand.solving) return;
+    const t = setInterval(() => {
+      api
+        .hand(hand.id)
+        .then((h) => !h.solving && onHand(h))
+        .catch(() => undefined);
+    }, 1000);
+    return () => clearInterval(t);
+  }, [hand.id, hand.solving, onHand]);
+
   const acting = actingAt(hand, playback);
   const result = hand.result;
   const complete = hand.status === 'complete';
@@ -301,6 +313,10 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
                 Skip animation
               </button>
             </div>
+          ) : !complete && hand.solving ? (
+            <div className="waiting">
+              <span className="muted pulse">Solving the {hand.solving}…</span>
+            </div>
           ) : !complete ? (
             <div className="actions">
               {slotted.map(({ slot, action }) =>
@@ -348,6 +364,7 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
               <div className="result-strip">
                 <span className="muted small">
                   Result <b className={result.heroNetBb > 0 ? 'up' : result.heroNetBb < 0 ? 'down' : ''}>{result.heroNetBb > 0 ? '+' : ''}{result.heroNetBb}bb</b>. {result.summary}
+                  {hand.liveNote && <> {hand.liveNote}</>}
                 </span>
                 <button className="primary" onClick={onNext} disabled={dealing} autoFocus>
                   {dealing ? 'Dealing…' : 'Deal next hand'}
@@ -357,6 +374,7 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
             )
           )}
           {(decide.error || error) && <p className="error small">{decide.error?.message ?? error}</p>}
+          {hand.solverCommit && <SolverCredit commit={hand.solverCommit} />}
         </div>
 
         <ActionLog entries={hand.actionLog.slice(0, playback.steps)} board={hand.board} />
@@ -366,6 +384,26 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
         <DecisionPanel hand={hand} playbackDone={done} chats={chats} onChat={onChat} />
       </aside>
     </main>
+  );
+}
+
+/**
+ * Where the turn and river strategies come from: postflop-solver (AGPL-3.0), run as a separate
+ * service whose source, at the deployed commit, is public (docs/postflop-plan.md, AGPL condition 3).
+ */
+function SolverCredit({ commit }: { commit: string }) {
+  const ref = /^[0-9a-f]{7,40}$/.test(commit) ? commit : 'main';
+  return (
+    <p className="muted small solver-credit">
+      Turn and river solved live with{' '}
+      <a href="https://github.com/b-inary/postflop-solver" target="_blank" rel="noreferrer">
+        postflop-solver
+      </a>{' '}
+      (AGPL-3.0).{' '}
+      <a href={`https://github.com/JordanCa0/GTOtutor/tree/${ref}/solver`} target="_blank" rel="noreferrer">
+        Solver source{ref === 'main' ? '' : ` (${ref.slice(0, 7)})`}
+      </a>
+    </p>
   );
 }
 

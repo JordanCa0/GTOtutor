@@ -3,8 +3,8 @@ name = "gtotutor-solver"
 version = "0.1.0"
 edition = "2021"
 publish = false
-# Links b-inary/postflop-solver (AGPL-3.0). This crate runs offline only; the app ships the
-# exported strategy data, never this binary. See README.md.
+# Links b-inary/postflop-solver (AGPL-3.0). Batch runs offline (main.rs); the `live` binary is the
+# separate turn/river solver service, reached only through JSON (docs/postflop-plan.md, "AGPL conditions").
 license = "AGPL-3.0-or-later"
 
 [dependencies]
@@ -13,6 +13,18 @@ postflop-solver = { git = "https://github.com/b-inary/postflop-solver", rev = "9
 rayon = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# The live solver service only (--features service).
+base64 = { version = "0.22", optional = true }
+flate2 = { version = "1", optional = true }
+tiny_http = { version = "0.12", optional = true }
+ureq = { version = "3", default-features = false, optional = true }
+
+[features]
+service = ["dep:base64", "dep:flate2", "dep:tiny_http", "dep:ureq"]
+
+[[bin]]
+name = "live"
+required-features = ["service"]
 
 [profile.release]
 codegen-units = 1

@@ -22,7 +22,7 @@ export function ActionLog({ entries, board }: { entries: ActionLogEntry[]; board
         <Fragment key={i}>
           {i > 0 && a.street !== entries[i - 1].street && (
             <li className="muted street-mark">
-              {STREET_NAMES[a.street]} {a.street === 'flop' && board.slice(0, 3).join(' ')}
+              {STREET_NAMES[a.street]} {a.street === 'flop' ? board.slice(0, 3).join(' ') : a.street === 'turn' ? board[3] : a.street === 'river' ? board[4] : null}
             </li>
           )}
           <li className={`${a.isHero ? 'hero' : ''} ${a.action === 'fold' ? 'fold' : ''}`}>

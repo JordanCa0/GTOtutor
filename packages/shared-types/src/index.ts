@@ -151,6 +151,12 @@ export interface HandView {
   decisions: DecisionFeedback[];
   result: HandResult | null;
   dataSource: DataSource;
+  /** Set while the hand waits for its live turn solve (or, after a server restart, the river's). */
+  solving?: 'turn' | 'river' | null;
+  /** Why the turn and river ran out instead of being played (the live solve failed or was too slow). */
+  liveNote?: string | null;
+  /** Commit of the solver service behind this hand's turn and river strategies, for the source link (AGPL). */
+  solverCommit?: string | null;
 }
 
 export interface SubmitDecisionRequest {
@@ -235,7 +241,7 @@ export interface MeResponse {
   user: { id: string; email: string | null; name: string | null } | null;
 }
 
-export type SpotType = 'RFI' | 'LIMPED' | 'VS_OPEN' | 'VS_3BET' | 'VS_4BET_PLUS' | 'FLOP';
+export type SpotType = 'RFI' | 'LIMPED' | 'VS_OPEN' | 'VS_3BET' | 'VS_4BET_PLUS' | 'FLOP' | 'TURN_RIVER';
 export type LeakType = 'over_fold' | 'over_call' | 'over_raise' | 'under_raise';
 
 export interface SessionMistake {

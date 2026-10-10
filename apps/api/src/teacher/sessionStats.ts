@@ -7,6 +7,7 @@ const SPOT_LABELS: Record<SpotType, string> = {
   VS_3BET: 'Facing a 3-bet',
   VS_4BET_PLUS: 'Facing a 4-bet or all-in',
   FLOP: 'Flop decisions',
+  TURN_RIVER: 'Turn and river decisions',
 };
 
 const LEAK_LABELS: Record<LeakType, string> = {
@@ -20,6 +21,7 @@ export const spotLabel = (spot: SpotType) => SPOT_LABELS[spot];
 
 export function spotTypeOf(nodeKey: string): SpotType {
   if (nodeKey.startsWith('FLOP|')) return 'FLOP';
+  if (nodeKey.startsWith('LIVE|')) return 'TURN_RIVER';
   const type = nodeKey.split('|')[2];
   if (type === 'RFI') return 'RFI';
   if (type === 'VS_LIMP' || type === 'VS_ISO') return 'LIMPED';

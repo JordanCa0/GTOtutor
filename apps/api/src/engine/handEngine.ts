@@ -20,7 +20,9 @@ import type { ChartService } from '../charts/chartService.js';
 import type { ChartNode } from '../charts/types.js';
 import { FACING_TYPES, makeNodeKey, NOCALL_SUFFIX } from '../charts/nodeKeys.js';
 import { fullDeck, handClass, shuffle } from '../poker/cards.js';
+import { handIndex, mapHand, parseCards } from '../postflop/flopMap.js';
 import { flopClassStrategy, flopRangeSummary, historyKey, parseSolverAction, type FlopLookup, type FlopNode, type FlopStore, type LoadedFlop } from '../postflop/flopStore.js';
+import { mapBoardCard, turnRequest, type LiveOut, type LiveRequest } from '../postflop/liveSolve.js';
 import type { Rng } from '../poker/rng.js';
 import type { ShowdownResolver } from './showdownResolver.js';
 
@@ -72,30 +74,85 @@ export interface HandState {
   postflop: PostflopState | null;
   /** Dealt in flop practice mode (straight to a BTN vs BB flop). */
   flopPractice: boolean;
+  /** Why the turn and river ran out instead of being played (the live solve failed, was too slow, or hit a limit). */
+  liveNote?: string | null;
+  /** The solver service commit behind this hand's turn and river strategies (AGPL source link). */
+  solverCommit?: string | null;
 }
 
-/** A hand as stored in the database: the flop's solved data is looked up again on restore. */
+/** A hand as stored in the database: the flop's solved data is looked up again on restore, the live solve fetched again. */
 export type StoredHandState = Omit<HandState, 'postflop'> & {
-  postflop: Pick<PostflopState, 'spot' | 'seats' | 'history' | 'base' | 'streetBets'> | null;
+  postflop:
+    | (Pick<PostflopState, 'spot' | 'seats' | 'history' | 'base' | 'streetBets'> &
+        Partial<Pick<PostflopState, 'street' | 'flopLine' | 'turnLine' | 'predraw' | 'forced'>>)
+    | null;
 };
 
-/** A heads-up flop played from solver output (`solver/output/<spot>`). */
+/** A live turn solve: the turn decisions and, for the river card the deck holds, every river decision. */
+interface LiveData {
+  id: string;
+  /** The solved board (the solved flop plus the mapped turn). */
+  board: string[];
+  hands: [string[], string[]];
+  handIndexes: [Map<string, number>, Map<string, number>];
+  turn: Map<string, FlopNode>;
+  /** River decisions per turn line ("0.1"), for the dealt river card. */
+  rivers: Map<string, Map<string, FlopNode>>;
+  /** Each seat's hand in `hands`. */
+  seatHands: [number, number];
+}
+
+/**
+ * A heads-up postflop hand: the flop played from solver output (`solver/output/<spot>`), then, with
+ * live solving on, the turn and river from a live solve of the same spot.
+ */
 interface PostflopState {
   spot: string;
   lookup: FlopLookup;
   /** [OOP, IP]: solver player 0 and 1. */
   seats: [Position, Position];
-  /** Each seat's hand, as an index into the solved file's hand list. */
+  /** Each seat's hand, as an index into the solved flop file's hand list. */
   hands: [number, number];
-  /** Action indexes taken so far on the flop. */
+  street: 'flop' | 'turn' | 'river';
+  /** Action indexes taken so far on the current street. */
   history: number[];
-  /** What each player had in when the flop came. */
+  /** The flop's actions once the turn is dealt, and the turn's once the river is. */
+  flopLine: number[] | null;
+  turnLine: number[] | null;
+  /**
+   * Drawn when hero's flop decision comes up: the bot's reply to each of hero's options, so the
+   * lines that will reach the turn are known (and solved) while hero thinks. Same frequencies as
+   * drawing after hero acts. Never sent to the client.
+   */
+  predraw: Record<number, number> | null;
+  /** The bot's next action, fixed by `predraw` once hero has chosen. */
+  forced: number | null;
+  /** The turn and river strategies once the live solve arrives (not stored). */
+  live: LiveData | null;
+  /** What each player had in when the current street started. */
   base: number;
   streetBets: Partial<Record<Position, number>>;
 }
 
+/** A turn solve to run: the request and what it is for. */
+export interface LiveSolveJob {
+  request: LiveRequest;
+  /** Groups cache entries: the spot name. */
+  label: string;
+}
+
 const FLOP_KEY = 'FLOP';
-export const isFlopNodeKey = (nodeKey: string) => nodeKey.startsWith(`${FLOP_KEY}|`);
+const LIVE_KEY = 'LIVE';
+/** Node keys whose strategy comes from the flop solver (FLOP) or a live turn/river solve (LIVE). */
+export const isFlopNodeKey = (nodeKey: string) => nodeKey.startsWith(`${FLOP_KEY}|`) || nodeKey.startsWith(`${LIVE_KEY}|`);
+
+/** LIVE|<solve id>|<turn or river>|<turn line, river only>|<history on the street> */
+function parseLiveNodeKey(nodeKey: string): { id: string; street: 'turn' | 'river'; turnLine: string; history: string } | null {
+  const [kind, id, street, turnLine, history] = nodeKey.split('|');
+  if (kind !== LIVE_KEY || !/^[0-9a-f]{32}$/.test(id ?? '') || (street !== 'turn' && street !== 'river')) return null;
+  if (!/^(\d+(\.\d+)*)?$/.test(turnLine ?? 'x') || !/^(\d+(\.\d+)*)?$/.test(history ?? 'x')) return null;
+  return { id, street, turnLine, history };
+}
 
 export function parseFlopNodeKey(nodeKey: string): { spot: string; flop: string; history: number[] } | null {
   const [kind, spot, flop, history] = nodeKey.split('|');
@@ -167,7 +224,15 @@ export class HandEngine {
     private readonly resolver: ShowdownResolver,
     /** Solved flops; without it (or for unsolved spots) hands run out after preflop. */
     private readonly flops: FlopStore | null = null,
+    /**
+     * Play the turn and river from live solves (HandService runs them). Off: they run out after
+     * the flop betting, as before.
+     */
+    private readonly liveStreets = false,
   ) {}
+
+  /** Recent live solves by id, so the coach and the chart view can read their nodes. */
+  private readonly recentLive = new Map<string, LiveData>();
 
   start(req: StartHandRequest): HandState {
     if (req.tableSize !== 'SIX_MAX' || req.stackDepthBb !== 100) {
@@ -224,18 +289,22 @@ export class HandEngine {
 
   /** The chart's answer for hero's pending decision, before hero chooses. */
   pendingDecision(state: HandState): PendingDecision | null {
-    if (!state.heroToAct) return null;
+    // A restored hand on the turn or river has no strategies until its solve is fetched again.
+    if (!state.heroToAct || this.awaitingSolve(state)) return null;
     const hero = state.players.find((p) => p.isHero)!;
     const hc = handClass(hero.cards[0], hero.cards[1]);
     if (state.postflop) {
       const pf = state.postflop;
-      const node = this.flopNode(pf)!;
-      const h = pf.hands[node.player];
+      const node = this.streetNode(pf)!;
+      const h = this.seatHand(pf, node.player);
       const actions = this.flopActions(pf, node);
       return {
-        nodeKey: [FLOP_KEY, pf.spot, pf.lookup.data.flop, historyKey(pf.history)].join('|'),
+        nodeKey:
+          pf.street === 'flop'
+            ? [FLOP_KEY, pf.spot, pf.lookup.data.flop, historyKey(pf.history)].join('|')
+            : [LIVE_KEY, pf.live!.id, pf.street, pf.street === 'river' ? historyKey(pf.turnLine!) : '', historyKey(pf.history)].join('|'),
         nodeLabel: this.flopLabel(state, hero.position),
-        street: 'flop',
+        street: pf.street,
         actions,
         heroCards: [...hero.cards],
         handClass: hc,
@@ -267,6 +336,13 @@ export class HandEngine {
 
   /** Share of the whole range taking each action at a node, for the coach. */
   rangeSummary(nodeKey: string): { label: string; share: number }[] {
+    const live = this.liveNode(nodeKey);
+    if (live) {
+      const shares = flopRangeSummary({ hands: live.data.hands } as LoadedFlop, live.node);
+      return live.node.actions.map((a, i) => ({ label: parseSolverAction(a).label, share: shares[i] }));
+    }
+    // A live solve that is no longer in memory: no whole-range numbers for the coach.
+    if (nodeKey.startsWith(`${LIVE_KEY}|`)) return [];
     const flop = parseFlopNodeKey(nodeKey);
     if (!flop) {
       const node = this.charts.getNode(nodeKey);
@@ -280,6 +356,17 @@ export class HandEngine {
 
   /** A flop node as a 13x13 strategy view (averaged per hand class over the solved flop). */
   flopChartView(nodeKey: string): ChartNodeView | null {
+    const live = this.liveNode(nodeKey);
+    if (live) {
+      const { key } = live;
+      return {
+        nodeKey,
+        label: `${key.street === 'turn' ? 'Turn' : 'River'} ${live.data.board.join('')}${key.history ? '' : ', first decision'} (live solver)`,
+        actions: live.node.actions.map(parseSolverAction),
+        strategy: flopClassStrategy({ hands: live.data.hands } as LoadedFlop, live.node),
+        dataSource: { kind: 'solver', note: 'Turn and river strategy from a live solve.' },
+      };
+    }
     const flop = parseFlopNodeKey(nodeKey);
     if (!flop || !this.flops?.solvedFlops(flop.spot).includes(flop.flop)) return null;
     const { data, node } = this.solvedNode(flop);
@@ -308,19 +395,41 @@ export class HandEngine {
     const { postflop, ...rest } = state;
     return structuredClone({
       ...rest,
-      postflop: postflop && { spot: postflop.spot, seats: postflop.seats, history: postflop.history, base: postflop.base, streetBets: postflop.streetBets },
+      postflop: postflop && {
+        spot: postflop.spot,
+        seats: postflop.seats,
+        history: postflop.history,
+        base: postflop.base,
+        streetBets: postflop.streetBets,
+        street: postflop.street,
+        flopLine: postflop.flopLine,
+        turnLine: postflop.turnLine,
+        predraw: postflop.predraw,
+        forced: postflop.forced,
+      },
     });
   }
 
   restore(stored: StoredHandState): HandState {
     const { postflop, ...rest } = structuredClone(stored);
     if (!postflop) return { ...rest, postflop: null };
-    const lookup = this.flops?.lookup(postflop.spot, rest.board);
+    const lookup = this.flops?.lookup(postflop.spot, rest.board.slice(0, 3));
     if (!lookup) throw new HttpError(410, 'The solved flop data for this hand is no longer available.');
     const cards = (pos: Position) => rest.players.find((p) => p.position === pos)!.cards;
+    // On the turn or river the live solve is fetched again (HandService; usually a cache hit).
     return {
       ...rest,
-      postflop: { ...postflop, lookup, hands: [this.flops!.handFor(lookup, 0, cards(postflop.seats[0])), this.flops!.handFor(lookup, 1, cards(postflop.seats[1]))] },
+      postflop: {
+        street: 'flop',
+        flopLine: null,
+        turnLine: null,
+        predraw: null,
+        forced: null,
+        ...postflop,
+        live: null,
+        lookup,
+        hands: [this.flops!.handFor(lookup, 0, cards(postflop.seats[0])), this.flops!.handFor(lookup, 1, cards(postflop.seats[1]))],
+      },
     };
   }
 
@@ -362,7 +471,11 @@ export class HandEngine {
     state.hintUsedPending = false;
     state.decisions.push(feedback);
     if (state.postflop) {
-      this.applyFlop(state, this.flopNode(state.postflop)!, chosenIdx);
+      const pf = state.postflop;
+      this.applyFlop(state, this.streetNode(pf)!, chosenIdx);
+      // The bot's reply was drawn when this decision came up (see `predraw`).
+      pf.forced = pf.predraw?.[chosenIdx] ?? null;
+      pf.predraw = null;
     } else {
       const hero = state.players[this.nextToActIndex(state)!];
       this.apply(state, hero, pending.actions[chosenIdx]);
@@ -409,6 +522,9 @@ export class HandEngine {
       decisions: state.decisions,
       result: state.result,
       dataSource: this.charts.dataSource,
+      solving: this.awaitingSolve(state) ? (state.postflop!.street as 'turn' | 'river') : null,
+      liveNote: state.liveNote ?? null,
+      solverCommit: state.solverCommit ?? null,
     };
   }
 
@@ -609,15 +725,30 @@ export class HandEngine {
       lookup,
       seats: [seats[0].position, seats[1].position],
       hands: [this.flops.handFor(lookup, 0, seats[0].cards), this.flops.handFor(lookup, 1, seats[1].cards)],
+      street: 'flop',
       history: [],
+      flopLine: null,
+      turnLine: null,
+      predraw: null,
+      forced: null,
+      live: null,
       base: live[0].committed,
       streetBets: {},
     };
     return true;
   }
 
-  private flopNode(pf: PostflopState): FlopNode | undefined {
-    return pf.lookup.data.byHistory.get(historyKey(pf.history));
+  /** The decision at the current point of the street, or undefined when the street's betting is over. */
+  private streetNode(pf: PostflopState): FlopNode | undefined {
+    const key = historyKey(pf.history);
+    if (pf.street === 'flop') return pf.lookup.data.byHistory.get(key);
+    if (pf.street === 'turn') return pf.live?.turn.get(key);
+    return pf.live?.rivers.get(historyKey(pf.turnLine!))?.get(key);
+  }
+
+  /** A seat's hand index in the current street's data. */
+  private seatHand(pf: PostflopState, player: 0 | 1): number {
+    return pf.street === 'flop' ? pf.hands[player] : pf.live!.seatHands[player];
   }
 
   /** The node's actions with amounts for the table (a call shows what it calls). */
@@ -627,31 +758,164 @@ export class HandEngine {
   }
 
   private flopLabel(state: HandState, pos: Position): string {
-    const prior = state.actionLog.filter((a) => a.street === 'flop');
-    const last = prior.at(-1);
-    if (!last) return `${pos} first to act on the flop`;
-    if (last.action === 'check') return `${pos} on the flop after ${last.position} checks`;
-    if (last.action === 'bet') return `${pos} facing a ${last.streetBb}bb flop bet`;
-    if (last.action === 'raise') return `${pos} facing a flop raise to ${last.streetBb}bb`;
-    return `${pos} facing a flop all-in`;
+    const street = state.postflop?.street ?? 'flop';
+    const last = state.actionLog.filter((a) => a.street === street).at(-1);
+    if (!last) return `${pos} first to act on the ${street}`;
+    if (last.action === 'check') return `${pos} on the ${street} after ${last.position} checks`;
+    if (last.action === 'bet') return `${pos} facing a ${last.streetBb}bb ${street} bet`;
+    if (last.action === 'raise') return `${pos} facing a ${street} raise to ${last.streetBb}bb`;
+    return `${pos} facing a ${street} all-in`;
   }
 
-  /** Plays villain flop actions until hero must act or the flop betting ends. */
+  /** Plays villain actions until hero must act, the street's betting ends, or a live solve is awaited. */
   private advanceFlop(state: HandState): void {
     const pf = state.postflop!;
     for (;;) {
-      const node = this.flopNode(pf);
-      // No node: the flop betting is over (call, check-check or fold).
-      if (!node) return this.finish(state);
+      if (pf.street !== 'flop' && !pf.live) return;
+      const node = this.streetNode(pf);
+      // No node: the street's betting is over (call, check-check or fold).
+      if (!node) return this.nextStreet(state);
       const player = state.players.find((p) => p.position === pf.seats[node.player])!;
       if (player.isHero) {
         state.heroToAct = true;
+        if (pf.street === 'flop' && this.liveStreets) this.predrawReplies(pf, node);
         return;
       }
-      const h = pf.hands[node.player];
-      this.applyFlop(state, node, this.sample(node.strategy.map((row) => row[h])));
+      const h = this.seatHand(pf, node.player);
+      const idx = pf.forced ?? this.sample(node.strategy.map((row) => row[h]));
+      pf.forced = null;
+      this.applyFlop(state, node, idx);
       if (player.folded) return this.finish(state);
     }
+  }
+
+  /**
+   * After a street's betting: with live solving on and both players still with chips behind, the
+   * turn is dealt and the hand waits for its solve (`attachLiveSolve`); the river comes with it.
+   * Otherwise the board runs out.
+   */
+  private nextStreet(state: HandState): void {
+    const pf = state.postflop!;
+    const canPlay = this.liveStreets && pf.street !== 'river' && !state.players.some((p) => !p.folded && p.allIn);
+    if (!canPlay) return this.finish(state);
+    const committed = state.players.find((p) => !p.folded)!.committed;
+    if (pf.street === 'flop') {
+      pf.flopLine = pf.history;
+      state.board.push(state.deck.shift()!);
+      pf.street = 'turn';
+    } else {
+      pf.turnLine = pf.history;
+      state.board.push(state.deck.shift()!);
+      pf.street = 'river';
+      if (!pf.live?.rivers.has(historyKey(pf.turnLine))) return this.runOut(state, 'The river strategy was missing from the solve, so the hand ran out.');
+    }
+    pf.history = [];
+    pf.base = committed;
+    pf.streetBets = {};
+    this.advanceFlop(state);
+  }
+
+  /** Draws the bot's reply to each of hero's flop options now (same frequencies as drawing it later). */
+  private predrawReplies(pf: PostflopState, node: FlopNode): void {
+    if (pf.predraw) return;
+    const predraw: Record<number, number> = {};
+    node.actions.forEach((_, i) => {
+      const next = pf.lookup.data.byHistory.get(historyKey([...pf.history, i]));
+      if (!next) return;
+      const h = pf.hands[next.player];
+      predraw[i] = this.sample(next.strategy.map((row) => row[h]));
+    });
+    pf.predraw = predraw;
+  }
+
+  /** The hand is waiting for its turn (or, after a restart, river) solve. */
+  awaitingSolve(state: HandState): boolean {
+    const pf = state.postflop;
+    return !!pf && pf.street !== 'flop' && !pf.live && !state.result;
+  }
+
+  /** The solve the hand is waiting for; null if it can't be built (then the hand runs out). */
+  pendingSolve(state: HandState): LiveSolveJob | null {
+    const pf = state.postflop;
+    if (!pf || !this.awaitingSolve(state)) return null;
+    // The river is dealt in advance: the next card of the deck, or already on the board after a restart.
+    const river = state.board[4] ?? state.deck[0];
+    return this.solveJob(state, pf.flopLine!, state.board[3], river);
+  }
+
+  /**
+   * Turn solves worth starting while hero decides on the flop: for each of hero's options, the line
+   * with the bot's pre-drawn reply, when that line reaches the turn. The turn and river cards are
+   * already known from the deck.
+   */
+  speculativeSolves(state: HandState): LiveSolveJob[] {
+    const pf = state.postflop;
+    if (!pf || pf.street !== 'flop' || !state.heroToAct || !pf.predraw) return [];
+    const node = this.streetNode(pf)!;
+    const jobs: LiveSolveJob[] = [];
+    node.actions.forEach((_, i) => {
+      const line = [...pf.history, i];
+      if (pf.predraw![i] !== undefined) line.push(pf.predraw![i]);
+      // Another flop decision for hero still to come: that one gets its own speculation.
+      if (pf.lookup.data.byHistory.has(historyKey(line))) return;
+      const job = this.solveJob(state, line, state.deck[0], state.deck[1]);
+      if (job) jobs.push(job);
+    });
+    return jobs;
+  }
+
+  private solveJob(state: HandState, line: number[], turn: string, river: string): LiveSolveJob | null {
+    const pf = state.postflop!;
+    const spot = this.flops?.spotInfo(pf.spot);
+    if (!spot) return null;
+    const solvedFlop = pf.lookup.data.flop.match(/../g)!;
+    const mappedTurn = mapBoardCard(pf.lookup.mapper, turn, solvedFlop);
+    const mappedRiver = mapBoardCard(pf.lookup.mapper, river, [...solvedFlop, mappedTurn]);
+    const request = turnRequest(pf.lookup.data, spot, pf.spot, line, mappedTurn, mappedRiver);
+    return request && { request, label: pf.spot };
+  }
+
+  /** The live solve arrived: play on from the turn (or the river, after a restart). */
+  attachLiveSolve(state: HandState, solve: { id: string; commit: string; out: LiveOut }): void {
+    const pf = state.postflop;
+    if (!pf || !this.awaitingSolve(state)) return;
+    const { out } = solve;
+    const handIndexes: [Map<string, number>, Map<string, number>] = [handIndex(out.hands[0]), handIndex(out.hands[1])];
+    const seatCards = (p: 0 | 1) => parseCards(state.players.find((x) => x.position === pf.seats[p])!.cards.join(''));
+    const data: LiveData = {
+      id: solve.id,
+      board: out.board,
+      hands: out.hands,
+      handIndexes,
+      turn: new Map(out.nodes.map((n) => [historyKey(n.history), n])),
+      rivers: new Map(out.rivers.map((r) => [historyKey(r.turnLine), new Map(r.nodes.map((n) => [historyKey(n.history), n]))])),
+      // Hands are translated like on the flop; one that clashes with the mapped turn card gets the closest hand in range.
+      seatHands: [mapHand(seatCards(0), pf.lookup.mapper, out.hands[0], handIndexes[0]), mapHand(seatCards(1), pf.lookup.mapper, out.hands[1], handIndexes[1])],
+    };
+    if (data.seatHands.some((h) => h < 0)) return this.runOut(state, 'A hand was missing from the turn solve, so the hand ran out.');
+    this.recentLive.delete(data.id);
+    this.recentLive.set(data.id, data);
+    if (this.recentLive.size > 500) this.recentLive.delete(this.recentLive.keys().next().value!);
+    pf.live = data;
+    state.solverCommit = solve.commit;
+    if (pf.street === 'river' && !data.rivers.has(historyKey(pf.turnLine!))) return this.runOut(state, 'The river strategy was missing from the solve, so the hand ran out.');
+    this.advance(state);
+  }
+
+  /** The live solve failed or was too slow: the board runs out as before, and the player is told why. */
+  runOut(state: HandState, note: string): void {
+    if (state.result) return;
+    state.liveNote = note;
+    this.finish(state);
+  }
+
+  private liveNode(nodeKey: string): { key: NonNullable<ReturnType<typeof parseLiveNodeKey>>; data: LiveData; node: FlopNode } | null {
+    const key = parseLiveNodeKey(nodeKey);
+    const data = key && this.recentLive.get(key.id);
+    if (!key || !data) return null;
+    const nodes = key.street === 'turn' ? data.turn : data.rivers.get(key.turnLine);
+    const node = nodes?.get(key.history);
+    return node ? { key, data, node } : null;
   }
 
   private applyFlop(state: HandState, node: FlopNode, idx: number): void {
@@ -666,7 +930,7 @@ export class HandEngine {
     player.committed = round2(pf.base + street);
     if (player.committed >= state.config.stackDepthBb) player.allIn = true;
     pf.history.push(idx);
-    state.actionLog.push({ position: pos, action: action.id, toBb: player.committed, isHero: player.isHero, street: 'flop', streetBb: street });
+    state.actionLog.push({ position: pos, action: action.id, toBb: player.committed, isHero: player.isHero, street: pf.street, streetBb: street });
   }
 
   private finish(state: HandState): void {

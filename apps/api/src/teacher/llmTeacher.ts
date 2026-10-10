@@ -55,7 +55,7 @@ export interface ExplainInput extends SpotContext {
   decision: DecisionFeedback;
 }
 
-const COACH_BASE = `You are the coach inside GTOtutor, a No-Limit Hold'em cash-game trainer, teaching an intermediate player about preflop and flop decisions. You receive the strategy chart's numbers for the exact spot; treat them as ground truth and explain them rather than recomputing or second-guessing them.
+const COACH_BASE = `You are the coach inside GTOtutor, a No-Limit Hold'em cash-game trainer, teaching an intermediate player about preflop and postflop decisions. You receive the strategy chart's numbers for the exact spot; treat them as ground truth and explain them rather than recomputing or second-guessing them.
 
 Reason about hand strength relative to the ranges involved, position, blockers, playability, the opponent's likely range, and stack depth. Only cite percentages that appear in the provided data, and never invent EVs, win rates, or equities. If the data source is described as placeholder ranges, call it "the chart", not solver output. Write plain language without headings or markdown.
 
@@ -131,7 +131,9 @@ export function buildSpotContext(spot: SpotContext): string {
     ...(position ? [position] : []),
     ...(spot.board.length
       ? [
-          `Board: ${spot.board.join(' ')}. Strategy numbers come from a solver run on ${spot.approxFlop ? `the similar flop ${spot.approxFlop} (this exact flop isn't solved, so treat the numbers as approximate)` : 'this flop'}; only flop strategy is available, and the turn and river are dealt out without betting.`,
+          spot.board.length === 3
+            ? `Board: ${spot.board.join(' ')}. Strategy numbers come from a solver run on ${spot.approxFlop ? `the similar flop ${spot.approxFlop} (this exact flop isn't solved, so treat the numbers as approximate)` : 'this flop'}.`
+            : `Board: ${spot.board.join(' ')}. Strategy numbers come from a live ${spot.board.length === 4 ? 'turn' : 'river'} solve${spot.approxFlop ? ` on the similar flop ${spot.approxFlop} with the turn and river cards translated to it (treat the numbers as approximate)` : ''}, with turn bets of 33/75/125% of the pot and river bets of 50/100% or all-in.`,
         ]
       : []),
     `Spot: ${spot.nodeLabel}`,

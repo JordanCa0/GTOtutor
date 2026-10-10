@@ -1,0 +1,8 @@
+# Only Cargo.toml, Cargo.lock, USAGE.txt and src/ are needed (lambda/Dockerfile).
+target
+output
+spots
+cloud
+*.txt
+!USAGE.txt
+*.log

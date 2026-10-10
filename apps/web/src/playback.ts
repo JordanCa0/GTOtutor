@@ -38,35 +38,40 @@ export const initialPlayback = (handId: string): PlaybackState => ({
   awarded: false,
 });
 
+/** Board cards showing during each street. */
+const BOARD_FOR = { preflop: 0, flop: 3, turn: 4, river: 5 } as const;
+
 export function finalPlayback(hand: HandView): PlaybackState {
   const complete = hand.status === 'complete';
   const lastStreet = hand.actionLog.at(-1)?.street ?? 'preflop';
   return {
     handId: hand.id,
     steps: hand.actionLog.length,
-    // Mid-hand on the flop, preflop bets already sit in the pot.
-    gathered: complete || (hand.board.length > 0 && lastStreet === 'preflop'),
+    // Mid-hand on a new street with no action yet, the earlier bets already sit in the pot.
+    gathered: complete || BOARD_FOR[lastStreet] < hand.board.length,
     board: Math.max(hand.result?.board.length ?? 0, hand.board.length),
     showdown: complete && hand.result?.showdown !== null,
     awarded: complete,
   };
 }
 
-/** Sweeps the bets and deals the flop before the first flop action (or before hero's first flop decision). */
-function flopStep(p: PlaybackState, hand: HandView): { state: PlaybackState; delay: number } | null {
-  if (p.board >= 3 || hand.board.length < 3) return null;
+/**
+ * Sweeps the bets and deals the next street's card(s) before its first action, or before hero's
+ * decision (or the live solve being waited for) on it.
+ */
+function streetStep(p: PlaybackState, hand: HandView): { state: PlaybackState; delay: number } | null {
   const next = hand.actionLog[p.steps];
-  const flopNext = next ? next.street === 'flop' : hand.status === 'awaiting_hero';
-  if (!flopNext) return null;
+  const want = next ? BOARD_FOR[next.street] : hand.status === 'awaiting_hero' ? hand.board.length : 0;
+  if (p.board >= want || hand.board.length < want) return null;
   if (!p.gathered) return { state: { ...p, gathered: true }, delay: TIMING.gather };
-  return { state: { ...p, board: 3 }, delay: TIMING.flop };
+  return { state: { ...p, board: p.board === 0 ? 3 : p.board + 1 }, delay: p.board === 0 ? TIMING.flop : TIMING.street };
 }
 
 /** The next playback step and how long to wait before showing it, or null when caught up. */
 export function nextPlayback(p: PlaybackState, hand: HandView): { state: PlaybackState; delay: number } | null {
   const log = hand.actionLog;
-  const flop = flopStep(p, hand);
-  if (flop) return flop;
+  const street = streetStep(p, hand);
+  if (street) return street;
   if (p.steps < log.length) {
     const delay = p.steps === 0 ? TIMING.deal : log[p.steps].isHero ? TIMING.heroAction : TIMING.villainAction;
     // New bets on a later street sit in front of the players again until swept.

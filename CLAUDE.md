@@ -1,6 +1,6 @@
 # GTOtutor
 
-A browser poker trainer: play preflop spots, get a verdict against range charts, and learn from a Claude-powered coach. Flop decisions are played and graded from offline solver output for spots that have it; turn and river still run out automatically. See `docs/postflop-plan.md`.
+A browser poker trainer: play preflop spots, get a verdict against range charts, and learn from a Claude-powered coach. Flop decisions are played and graded from offline solver output for spots that have it. With a solver service configured, the turn and river are solved live and played too; otherwise they run out automatically. See `docs/postflop-plan.md`.
 
 20bb and 60bb (equal and mixed stacks) are planned in `docs/stack-depths-plan.md`. Limping from every position and 33/66/100% flop bets (`preflop-v9`) are planned in `docs/game-tree-v9-plan.md`, to be done first.
 
@@ -15,13 +15,14 @@ Hosting is on AWS: web on S3 + CloudFront, the API in Docker on one EC2 instance
 - `apps/api`: Fastify + TypeScript.
   - Hand engine, charts, Claude coach (`src/teacher/`).
   - Flop play: `src/postflop/` loads `solver/output/<spot>/` and maps any flop to the nearest solved one.
+  - Turn and river: `src/postflop/liveSolve.ts` builds the solve request, and `liveSolver.ts` runs it (cache, limits, timeout). `HandService` starts solves, including speculative ones while hero decides on the flop.
   - Data: `src/db/` (Drizzle schema, migrations in `drizzle/`, `Repo` with Postgres and in-memory versions); `src/engine/handService.ts` saves hands; `src/auth/` resolves the player (Supabase token or `X-Guest-Id`).
   - Tests use vitest.
 - `apps/web`: Vite + React 19. Sign-in lives in `src/auth/` and `src/components/AccountMenu.tsx`.
   - UI rules (units, spacing, colour, layout, motion) are in `docs/frontend-design.md`; follow them for any UI change.
 - `packages/shared-types`: types shared by the API and the web app.
-- `solver/`: Rust batch flop solver.
-  - AGPL-3.0. It may run live only as a separate solver service (planned: AWS Lambda for turn and river), under the conditions in `docs/postflop-plan.md` ("AGPL conditions").
+- `solver/`: Rust batch flop solver, plus the live turn/river solver service (`src/bin/live.rs`; AWS Lambda `gtotutor-turn-solver`, deployed with `solver/cloud/lambda-deploy.ps1`).
+  - AGPL-3.0 (`solver/LICENSE`). It runs live only as that separate service, under the conditions in `docs/postflop-plan.md` ("AGPL conditions").
     - Never link it into, import it from, or run it inside the API or web app; they talk to it only through JSON requests.
     - Its source must stay public, with a link in the app to the deployed commit.
     - Batch runs on rented EC2 machines (`solver/cloud/`) are fine.
@@ -34,6 +35,12 @@ Hosting is on AWS: web on S3 + CloudFront, the API in Docker on one EC2 instance
 
 - `npm run dev` starts both servers: web on :5173, API on :3001.
 - `npm test`, `npm run typecheck`, `npm run build`.
+- Live turn and river solving in development:
+  1. Build it: `cargo build --release --features service` in `solver/`.
+  2. Run `solver/target/release/live --serve 7879`.
+  3. Set `TURN_SOLVER_URL=http://127.0.0.1:7879/solve` in `apps/api/.env`.
+  4. It needs solved flops with a `_spot.json` (any `solver/output/<version>/<spot>/`, via `SOLVER_OUTPUT_DIR`).
+- `cargo run --release --bin turn-bench` (in `solver/`) times turn solves for several bet-size trees.
 - `npx tsx apps/api/scripts/exportSolverSpots.ts` regenerates `solver/spots/*.json` from the placeholder charts.
   - Add `--charts preflop/charts/<version>.json` to write `solver/spots/<version>/` instead.
   - Solve those into `solver/output/<version>/` so solves from different charts never mix.

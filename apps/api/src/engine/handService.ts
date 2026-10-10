@@ -1,5 +1,6 @@
 import type { ActionLogEntry, ActionType, DecisionFeedback, DecisionStar, SessionStats, StartHandRequest } from '@gtotutor/shared-types';
-import { samePlayer, type CoachMessage, type HandRecord, type Player, type Repo, type SavedCoachReview } from '../db/repo.js';
+import { playerKey, samePlayer, type CoachMessage, type HandRecord, type Player, type Repo, type SavedCoachReview } from '../db/repo.js';
+import { LiveSolveError, type LiveSolver } from '../postflop/liveSolver.js';
 import { HttpError, type HandEngine, type HandState, type StoredHandState } from './handEngine.js';
 
 /** What the coach needs about a hand, whether it's in progress or finished. */
@@ -22,11 +23,16 @@ const notFound = () => new HttpError(404, 'Hand not found.');
  */
 export class HandService {
   private readonly live = new Map<string, { owner: Player; state: HandState }>();
+  /** Hands waiting for their live turn solve: settles once the solve is attached (or the hand ran out) and saved. */
+  private readonly solving = new Map<string, Promise<void>>();
 
   constructor(
     private readonly engine: HandEngine,
     private readonly repo: Repo,
     private readonly maxLive = 2000,
+    /** Live turn and river solves; the engine must have live streets on too. */
+    private readonly solver: LiveSolver | null = null,
+    private readonly log: (msg: string) => void = () => {},
   ) {}
 
   async start(player: Player, req: StartHandRequest): Promise<HandState> {
@@ -38,6 +44,7 @@ export class HandService {
     const state = this.engine.start(req);
     this.remember(player, state);
     await this.save(player, state);
+    this.startSolves(player, state);
     return state;
   }
 
@@ -53,6 +60,8 @@ export class HandService {
     if (!rec.state) throw new HttpError(409, 'This hand is finished.');
     const state = this.engine.restore(rec.state as StoredHandState);
     this.remember(player, state);
+    // On the turn or river after a restart: fetch the solve again (usually from the cache).
+    this.startSolves(player, state);
     return state;
   }
 
@@ -60,7 +69,42 @@ export class HandService {
     const state = await this.get(player, handId);
     const feedback = this.engine.decide(state, action, toBb);
     await this.save(player, state);
+    this.startSolves(player, state);
     return { state, feedback };
+  }
+
+  /** Resolves once the hand's pending live solve (if any) has been attached and saved. For tests and shutdown. */
+  async settled(handId: string): Promise<void> {
+    await this.solving.get(handId);
+  }
+
+  /**
+   * Starts the live solves a hand needs: the turn it is waiting for, and, while hero decides on the
+   * flop, the turns hero's options lead to (so the solve is usually ready when the turn comes).
+   */
+  private startSolves(owner: Player, state: HandState): void {
+    const solver = this.solver;
+    if (!solver) return;
+    const who = playerKey(owner);
+    if (this.engine.awaitingSolve(state) && !this.solving.has(state.id)) {
+      const job = this.engine.pendingSolve(state);
+      const done = (job ? solver.solve(job.request, job.label, who) : Promise.reject(new LiveSolveError('failed', 'no request')))
+        .then(
+          (solve) => this.engine.attachLiveSolve(state, solve),
+          (err: unknown) => {
+            this.log(`live solve for hand ${state.id} failed: ${(err as Error).message}`);
+            this.engine.runOut(state, runOutNote(err));
+          },
+        )
+        .then(() => this.save(owner, state))
+        .catch((err: unknown) => this.log(`saving hand ${state.id} after its live solve failed: ${(err as Error).message}`))
+        .finally(() => this.solving.delete(state.id));
+      this.solving.set(state.id, done);
+    }
+    // At most three: one per option of hero's flop decision that reaches the turn.
+    for (const job of this.engine.speculativeSolves(state).slice(0, 3)) {
+      solver.solve(job.request, job.label, who).catch(() => undefined);
+    }
   }
 
   async markHintUsed(player: Player, handId: string): Promise<void> {
@@ -187,6 +231,14 @@ export class HandService {
       decisions: state.decisions,
     });
   }
+}
+
+/** What the player is told when the turn and river run out instead. */
+function runOutNote(err: unknown): string {
+  const reason = err instanceof LiveSolveError ? err.reason : 'failed';
+  if (reason === 'limit') return 'Live turn solving is busy right now, so the turn and river were run out.';
+  if (reason === 'timeout') return 'The turn took too long to solve, so the turn and river were run out.';
+  return 'The turn could not be solved, so the turn and river were run out.';
 }
 
 const decisionOf = (ctx: HandContext, decisionId: string): string => {

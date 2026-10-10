@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { ActionType, LegalAction } from '@gtotutor/shared-types';
 import { handClass } from '../poker/cards.js';
 import { CardMapper, handIndex, mapHand, nearestFlop, parseCards } from './flopMap.js';
+import type { SpotInfo } from './liveSolve.js';
 
 /** One flop decision from the solver (see solver/README.md for the file format). */
 export interface FlopNode {
@@ -58,6 +59,7 @@ export function parseSolverAction(label: string): LegalAction {
 export class FlopStore {
   private readonly lists = new Map<string, string[]>();
   private readonly cache = new Map<string, LoadedFlop>();
+  private readonly spots = new Map<string, SpotInfo | null>();
 
   constructor(
     private readonly root: string,
@@ -103,6 +105,15 @@ export class FlopStore {
       mapper: new CardMapper(real, parseCards(nearest.flop)),
       approxFlop: nearest.distance > 0 ? nearest.flop : null,
     };
+  }
+
+  /** The ranges, pot and stacks the spot was solved with (`<spot>/_spot.json`, written by the solver); null if missing. */
+  spotInfo(spot: string): SpotInfo | null {
+    if (!this.spots.has(spot)) {
+      const path = join(this.root, spot, '_spot.json');
+      this.spots.set(spot, existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as SpotInfo) : null);
+    }
+    return this.spots.get(spot)!;
   }
 
   /** Index of a real hand (e.g. ["As", "Kd"]) in the solved file's hand list for `player`. */

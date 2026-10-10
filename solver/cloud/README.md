@@ -8,7 +8,7 @@ Runs a solver queue on a rented EC2 instance instead of the desktop. It's the sa
 - **Paid from AWS credits** while they last.
   - Rough cost: $0.01–0.02 per vCPU-hour on Spot, so about $1 per hour for 64 cores.
   - The rest of 100bb (`queue-cloud-preflop-v8.txt`, ~95 desktop-hours) is about $15–30.
-- **License:** the AGPL solver may run on rented machines for offline batch work. It must never run on the app's server; that rule is unchanged.
+- **License:** the AGPL solver may run on rented machines for offline batch work. It must never run on the app's server. Live turn and river solving runs as its own Lambda function instead (`lambda-deploy.ps1`, `lambda-test.ps1`; see `docs/deployment.md`, "Live turn and river solving").
 
 ```
 desktop                         S3: gtotutor-solver-<account>/solver-runs/<version>/        EC2 Spot instance

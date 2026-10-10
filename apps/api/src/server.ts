@@ -11,6 +11,7 @@ import { HandEngine } from './engine/handEngine.js';
 import { HandService } from './engine/handService.js';
 import { runoutResolver } from './engine/showdownResolver.js';
 import { FlopStore } from './postflop/flopStore.js';
+import { liveSolverFromEnv } from './postflop/liveSolver.js';
 import { cryptoRng } from './poker/rng.js';
 import { LlmTeacher, claudeCoachLlm } from './teacher/llmTeacher.js';
 
@@ -24,7 +25,9 @@ try {
 const charts = new ChartService(chartsFromEnv());
 // Solved flops, one folder per spot (see solver/README.md). Spots without a folder run out after preflop.
 const flops = new FlopStore(process.env.SOLVER_OUTPUT_DIR || fileURLToPath(new URL('../../../solver/output', import.meta.url)));
-const engine = new HandEngine(charts, cryptoRng, runoutResolver, flops);
+// Live turn and river solving (docs/postflop-plan.md): off unless a solver service is configured.
+const liveSolver = await liveSolverFromEnv();
+const engine = new HandEngine(charts, cryptoRng, runoutResolver, flops, liveSolver !== null);
 
 // Player data lives in Supabase Postgres; without DATABASE_URL it's kept in memory (lost on restart).
 const repo: Repo = process.env.DATABASE_URL ? new PgRepo(createDb(process.env.DATABASE_URL)) : new MemoryRepo();
@@ -34,7 +37,7 @@ const model = process.env.CLAUDE_MODEL || 'claude-opus-5';
 const app = buildApp({
   charts,
   engine,
-  hands: new HandService(engine, repo),
+  hands: new HandService(engine, repo, undefined, liveSolver, (msg) => app.log.warn(msg)),
   players: new PlayerResolver(supabaseUrl ? supabaseVerifier(supabaseUrl) : null, repo),
   teacher: new LlmTeacher(
     claudeCoachLlm(model),
@@ -45,6 +48,7 @@ const app = buildApp({
   accounts: supabaseUrl && serviceKey ? supabaseAccountAdmin(supabaseUrl, serviceKey) : undefined,
 });
 if (!process.env.DATABASE_URL) app.log.warn('DATABASE_URL is not set: player data is kept in memory only.');
+app.log.info(liveSolver ? 'live turn and river solving is on' : 'live turn and river solving is off: hands run out after the flop');
 if (!supabaseUrl) app.log.warn('SUPABASE_URL is not set: sign-in is disabled; everyone plays as a guest.');
 
 // Guest data lasts one session: sessions with no new hand for 24 hours are deleted.
