@@ -58,6 +58,12 @@ powershell -ExecutionPolicy Bypass -File cloud\fetch.ps1                  # down
 - The instance installs Rust, clones the repo, and builds the solver (about 5 minutes). Then it splits the queue across its solver processes, each taking the next spot when it finishes one. The most played spots come first.
 - `status.ps1` shows progress as soon as the build is done, refreshed every 5 minutes. `fetch.ps1` is safe to run at any time: it only downloads new flops and never deletes local ones.
 
+**Two instances at once** (needs a 128-vCPU Spot quota):
+- Split the queue so that **no spot appears in both halves**.
+- Give each half its own `-Run` name, for example `-Run preflop-v9` and `-Run preflop-v9-b`.
+- Each run gets its own S3 folder, status and DONE marker. Pass the same `-Run` to `status.ps1` and `fetch.ps1`.
+- Both runs download into the same `output/<version>/`.
+
 **If AWS reclaims the Spot instance:** `status.ps1` shows it terminated, without a "queue finished" line. Run `launch.ps1` again; finished flops are already in S3 and get skipped.
 
 **If launching fails:**

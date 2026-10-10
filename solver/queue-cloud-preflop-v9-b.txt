@@ -1,0 +1,42 @@
+# Full flop re-solve on frozen charts preflop-v9, cloud run B of 2 (split by spot; run B: preflop-v9-b).
+# Pass A: 187 coverage-picked flops per spot, most played first. Rare UTG-BTN limped pots are left out.
+--spot spots/preflop-v9/co_vs_bb_srp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/sb_vs_bb_srp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/utg_vs_bb_srp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/utg_vs_btn_srp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/hj_vs_btn_srp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/hj_vs_co_srp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/sb_vs_bb_iso_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/btn_vs_sb_3bp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/co_vs_sb_3bp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/hj_vs_btn_3bp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/hj_vs_co_3bp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/hj_vs_sb_3bp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/utg_vs_sb_srp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/utg_vs_sb_3bp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/utg_vs_bb_3bp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/sb_vs_bb_l3b_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/hj_vs_sb_srp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/btn_vs_sb_4bp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/co_vs_sb_srp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/hj_vs_sb_4bp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/utg_vs_bb_4bp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/btn_vs_bb_4bp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/hj_vs_btn_4bp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/co_vs_bb_4bp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/hj_vs_co_4bp_100.json --out output/preflop-v9 --flops flops-184.txt
+--spot spots/preflop-v9/sb_vs_bb_4bp_100.json --out output/preflop-v9 --flops flops-184.txt
+# Pass B: every flop for spots at least 1% of flops, most played first.
+--spot spots/preflop-v9/co_vs_bb_srp_100.json --out output/preflop-v9
+--spot spots/preflop-v9/sb_vs_bb_srp_100.json --out output/preflop-v9
+--spot spots/preflop-v9/utg_vs_bb_srp_100.json --out output/preflop-v9
+--spot spots/preflop-v9/utg_vs_btn_srp_100.json --out output/preflop-v9
+--spot spots/preflop-v9/hj_vs_btn_srp_100.json --out output/preflop-v9
+--spot spots/preflop-v9/hj_vs_co_srp_100.json --out output/preflop-v9
+--spot spots/preflop-v9/sb_vs_bb_iso_100.json --out output/preflop-v9
+--spot spots/preflop-v9/btn_vs_sb_3bp_100.json --out output/preflop-v9
+--spot spots/preflop-v9/co_vs_sb_3bp_100.json --out output/preflop-v9
+--spot spots/preflop-v9/hj_vs_btn_3bp_100.json --out output/preflop-v9
+--spot spots/preflop-v9/hj_vs_co_3bp_100.json --out output/preflop-v9
+--spot spots/preflop-v9/hj_vs_sb_3bp_100.json --out output/preflop-v9
+--spot spots/preflop-v9/utg_vs_sb_srp_100.json --out output/preflop-v9

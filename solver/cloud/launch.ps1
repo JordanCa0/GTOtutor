@@ -6,6 +6,9 @@
 # Re-running after an interruption resumes: finished flops are already in S3 and are skipped.
 param(
     [string]$Version = 'preflop-v8',
+    # Name of this run: its S3 folder (solver-runs/<run>), status and DONE marker. Several runs of one
+    # version can go side by side as long as their queues share no spot. Default: the version.
+    [string]$Run = '',
     [string]$Queue = 'queue-cloud-preflop-v8.txt',
     # 64 vCPUs: 4 solver processes x 16 threads. Graviton (c7g/c8g) or AMD (c7a) both work.
     [string]$InstanceType = 'c7g.16xlarge',
@@ -21,12 +24,13 @@ param(
 Set-Location (Split-Path $PSScriptRoot)
 
 $bucket = Get-SolverBucket
-$prefix = "solver-runs/$Version"
+if (-not $Run) { $Run = $Version }
+$prefix = "solver-runs/$Run"
 $s3 = "s3://$bucket/$prefix"
 
 # Refuse to start a second instance on the same run: both would solve the same flops.
-$running = Invoke-Aws ec2 describe-instances --region $Region --filters "Name=tag:Name,Values=$NameTag" 'Name=instance-state-name,Values=pending,running' --query 'Reservations[].Instances[].InstanceId' --output text
-if ($running) { throw "a solver instance is already running ($running). Check it with cloud\status.ps1." }
+$running = Invoke-Aws ec2 describe-instances --region $Region --filters "Name=tag:Name,Values=$NameTag" "Name=tag:SolverRun,Values=$Run" 'Name=instance-state-name,Values=pending,running' --query 'Reservations[].Instances[].InstanceId' --output text
+if ($running) { throw "run $Run already has a running instance ($running). Check it with cloud\status.ps1 -Run $Run." }
 
 # The queue and every spot it names.
 if (-not (Test-Path $Queue)) { throw "queue $Queue not found" }
@@ -80,7 +84,7 @@ $spec = @{
     MetadataOptions                   = @{ HttpTokens = 'required'; HttpEndpoint = 'enabled' }
     BlockDeviceMappings               = @(@{ DeviceName = '/dev/xvda'; Ebs = @{ VolumeSize = 30; VolumeType = 'gp3'; Encrypted = $true; DeleteOnTermination = $true } })
     TagSpecifications                 = @(
-        @{ ResourceType = 'instance'; Tags = @(@{ Key = 'Name'; Value = $NameTag }, @{ Key = 'SolverRun'; Value = $Version }) },
+        @{ ResourceType = 'instance'; Tags = @(@{ Key = 'Name'; Value = $NameTag }, @{ Key = 'SolverRun'; Value = $Run }) },
         @{ ResourceType = 'volume'; Tags = @(@{ Key = 'Name'; Value = $NameTag }) }
     )
 }
@@ -94,4 +98,4 @@ Write-Lf $specFile ($spec | ConvertTo-Json -Depth 10)
 $id = Invoke-Aws ec2 run-instances --region $Region --cli-input-json "file://$specFile" --user-data "file://$userDataFile" --query 'Instances[0].InstanceId' --output text
 $market = if ($OnDemand) { 'on-demand' } else { 'spot' }
 Write-Output "launched $id ($InstanceType, $arch, $market, powers off after at most $MaxHours h)"
-Write-Output 'It builds the solver first (~5 min), then solves. Check progress: cloud\status.ps1'
+Write-Output "It builds the solver first (~5 min), then solves. Check progress: cloud\status.ps1 -Version $Version -Run $Run"

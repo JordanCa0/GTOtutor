@@ -115,6 +115,12 @@ Each round solved 60 flops for each of 7 spots and 40 for the SB limped and isol
 - **Pass B:** every flop for the 24 spots at 1% of flops or more.
 - **The SB limped pot is now the most common flop spot** (14.5%), ahead of BTN vs BB (11.5%).
 
+**Re-solve as run (2026-10-10):**
+- **Speed:** each cloud solver process is only ~1.5× the desktop on the 3-size tree: single-raised pots take 21–27 s per flop, the SB limped pot 76 s. That would have been ~67 h in total.
+- **Trimmed:** the 32 rare UTG–BTN limped-pot spots were dropped from pass A. Those hands run out after preflop.
+- **Split:** the rest is split by spot into two runs of ~29 h each, `queue-cloud-preflop-v9-a.txt` (`-Run preflop-v9`) and `-b` (`-Run preflop-v9-b`, once the 128-vCPU Spot quota is approved).
+- **Cost:** about 8 at /usr/bin/bash.65/h Spot.
+
 ## Solving cost (estimates; phase 1 replaces them with measurements)
 
 | | Desktop hours |
