@@ -6,6 +6,7 @@ import { ActionLog } from './components/ActionLog';
 import { DecisionPanel } from './components/DecisionPanel';
 import { SessionReview } from './components/SessionReview';
 import { AccountMenu } from './components/AccountMenu';
+import { optionColor } from './components/actionColors';
 import { HelpIcon, SlidersIcon } from './components/icons';
 import { Presence } from './components/Presence';
 import { SettingsMenu } from './components/SettingsMenu';
@@ -193,16 +194,31 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
   const result = hand.result;
   const complete = hand.status === 'complete';
 
-  // One entry per button, in display order. A spot can offer several aggressive options (raise and all-in,
-  // or flop bets of 33/66/100%): the slot takes the first, and each other one gets its own button after the
-  // three fixed ones, with a number shortcut (all-in keeps "a").
-  const slotted = ACTION_SLOTS.map((slot) => ({ slot, action: hand.legalActions.find((a) => slot.ids.includes(a.id)) }));
-  const extras = hand.legalActions.filter((a) => slotted.every((s) => s.action !== a));
+  // One entry per slot, in display order. Several sizes of one type (flop bets of 33/66/100%) fill the raise
+  // slot together as one segmented group, smallest first, with shortcuts 1, 2, 3 (R also takes the smallest),
+  // so the bar stays one row whatever the spot. Any other extra option (all-in next to a raise) gets its own
+  // button after the slots. With nothing to fold to, the empty Fold slot is left out to make room.
+  const sizedType = (['bet', 'raise'] as const).find((id) => hand.legalActions.filter((a) => a.id === id).length > 1);
+  const sizes = hand.legalActions.filter((a) => a.id === sizedType).sort((a, b) => (a.toBb ?? 0) - (b.toBb ?? 0));
+  const canCheck = hand.legalActions.some((a) => a.id === 'check');
+  const slotted = ACTION_SLOTS.map((slot) => ({
+    slot,
+    action: slot.key === 'raise' && sizes.length ? sizes[0] : hand.legalActions.find((a) => slot.ids.includes(a.id)),
+  })).filter(({ slot, action }) => action || !(slot.key === 'fold' && canCheck));
+  const extras = hand.legalActions.filter((a) => !sizes.includes(a) && slotted.every((s) => s.action !== a));
   const shortcuts = new Map<string, LegalAction>();
   for (const { slot, action } of slotted) if (action) shortcuts.set(slot.key[0], action);
-  let digit = 2;
+  sizes.forEach((a, i) => shortcuts.set(String(i + 1), a));
+  let digit = sizes.length ? sizes.length + 1 : 2;
   for (const a of extras) shortcuts.set(a.id === 'allin' && !shortcuts.has('a') ? 'a' : String(digit++), a);
-  const keyFor = (action: LegalAction) => [...shortcuts].find(([, v]) => v === action)?.[0];
+  // The key shown on a button: a size shows its digit (R stays a hidden alias for the smallest).
+  const keyFor = (action: LegalAction) => {
+    const keys = [...shortcuts].filter(([, v]) => v === action).map(([k]) => k);
+    return sizes.includes(action) ? keys.find((k) => /\d/.test(k)) : keys[0];
+  };
+  // A bet reads as a share of the pot ("Bet 33%", with the chips below); a raise keeps its "Raise to" label.
+  const sizeText = (a: LegalAction) =>
+    a.id === 'bet' && a.toBb !== null && hand.potBb > 0 ? { main: `Bet ${Math.round((a.toBb / hand.potBb) * 100)}%`, sub: `${a.toBb}bb` } : { main: a.label, sub: null };
 
   const canAct = done && !complete && !decide.isPending;
   const canDeal = done && complete && !dealing;
@@ -276,7 +292,28 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
           ) : !complete ? (
             <div className="actions">
               {slotted.map(({ slot, action }) =>
-                action ? (
+                slot.key === 'raise' && sizes.length ? (
+                  <div key={slot.key} className="act-group" role="group" aria-label={sizedType === 'bet' ? 'Bet sizes' : 'Raise sizes'}>
+                    {sizes.map((a) => {
+                      const { main, sub } = sizeText(a);
+                      return (
+                        <button
+                          key={a.toBb}
+                          className="act act-size"
+                          style={{ ['--c' as string]: optionColor(hand.legalActions, hand.legalActions.indexOf(a)) }}
+                          disabled={decide.isPending}
+                          onClick={() => decide.mutate(a)}
+                        >
+                          <span className="act-size-text">
+                            {main}
+                            {sub && <small>{sub}</small>}
+                          </span>
+                          <ShortcutKey k={keyFor(a)} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : action ? (
                   <button key={slot.key} className={`act act-${slot.key}`} disabled={decide.isPending} onClick={() => decide.mutate(action)}>
                     {action.label}
                     <ShortcutKey k={keyFor(action)} />

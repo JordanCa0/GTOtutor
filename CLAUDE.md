@@ -18,6 +18,7 @@ Hosting is on AWS: web on S3 + CloudFront, the API in Docker on one EC2 instance
   - Data: `src/db/` (Drizzle schema, migrations in `drizzle/`, `Repo` with Postgres and in-memory versions); `src/engine/handService.ts` saves hands; `src/auth/` resolves the player (Supabase token or `X-Guest-Id`).
   - Tests use vitest.
 - `apps/web`: Vite + React 19. Sign-in lives in `src/auth/` and `src/components/AccountMenu.tsx`.
+  - UI rules (units, spacing, colour, layout, motion) are in `docs/frontend-design.md`; follow them for any UI change.
 - `packages/shared-types`: types shared by the API and the web app.
 - `solver/`: Rust batch flop solver.
   - AGPL-3.0. It may run live only as a separate solver service (planned: AWS Lambda for turn and river), under the conditions in `docs/postflop-plan.md` ("AGPL conditions").
