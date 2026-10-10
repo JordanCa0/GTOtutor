@@ -44,6 +44,12 @@ foreach ($s in $spots) {
     }
 }
 Invoke-Aws s3 cp $Queue "$s3/queue.txt" --only-show-errors | Out-Null
+# Flop lists the queue names (--flops <file>) go up too; the instance puts them next to the queue.
+$lists = @(Get-Content $Queue | ForEach-Object { if ($_ -match '--flops\s+(\S+)') { $Matches[1] } } | Sort-Object -Unique)
+foreach ($l in $lists) {
+    if (-not (Test-Path $l)) { throw "flop list $l (from $Queue) not found" }
+    Invoke-Aws s3 cp $l "$s3/inputs/$l" --only-show-errors | Out-Null
+}
 if (Test-Aws s3api head-object --bucket $bucket --key "$prefix/DONE") { Invoke-Aws s3 rm "$s3/DONE" --only-show-errors | Out-Null }
 Write-Output 'uploaded spots, queue and partial output'
 

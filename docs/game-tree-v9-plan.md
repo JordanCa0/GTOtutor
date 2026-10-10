@@ -1,6 +1,6 @@
 # Game tree v9 plan: limping from every position, flop bets 33/66/100%
 
-**Status (2026-10-09): phases 1–3 done (measured; limping; bet sizes in the app). Phase 4 (calibrating preflop-v9) in progress: round 1 (preflop-v9a) flops on the cloud.** Two game-tree changes, made together so everything is re-solved once:
+**Status (2026-10-10): phases 1–4 done; `preflop-v9` frozen (calibration round 4, 2.7% change). Phase 5 (every-flop re-solve) running in the cloud.** Two game-tree changes, made together so everything is re-solved once:
 
 - **Limping from every position.** Today only the SB can limp.
 - **Three flop bet sizes: 33%, 66% and 100% of the pot,** each with a 3× raise. Today the flop has one size (33%).
@@ -93,6 +93,27 @@ BTN vs BB single-raised pot on v8 ranges, the same 20 flops (`--limit 20`), desk
    1. Export the spots (`--charts preflop/charts/preflop-v9.json`).
    2. Write a queue ordered by `spotFrequency.ts`: every flop for spots that are at least 1% of flops, and ~184 flops for the rest.
 6. **Ship.** Upload the v9 flops to the server bucket, grow the server disk, and turn on the solved charts after review (CLAUDE.md keeps them opt-in until then).
+
+## Calibration (phase 4, 2026-10-09)
+
+Each round solved 60 flops for each of 7 spots and 40 for the SB limped and isolated pots, on the 3-size tree, in the cloud (about 1¼ hours per round on 64 cores). Realization was averaged over the v9 rounds only, since v2–v7 used the 1-size flop tree.
+
+| Round | Realization from | Change vs previous round (weighted) |
+|---|---|---|
+| v9a | v8's `rank-v2-v7.json` | 2.3% vs v8 |
+| v9b | v9a flops | 8.5% (limp floor on; SB limps 18% → 42%) |
+| v9c | v9a–v9b flops | 4.9% |
+| v9d | v9a–v9c flops | **2.7%**: frozen as `preflop-v9` |
+
+**`preflop-v9` vs v8:** 9.6% of decisions change.
+- **Opens:** UTG 23% → 19%, HJ 28% → 23%, CO 34% → 30%, BTN 43% → 41%. The early-position opens tightened, as the open doubt in `docs/postflop-plan.md` expected.
+- **SB:** limps 40%, raises 28%.
+- **Remaining round-to-round movement** is in rarely reached limp-re-raise and 4-bet lines.
+
+**Re-solve queue** (`solver/queue-cloud-preflop-v9.txt`):
+- **Pass A:** 187 coverage-picked flops (`flops-184.txt`) for all 80 spots.
+- **Pass B:** every flop for the 24 spots at 1% of flops or more.
+- **The SB limped pot is now the most common flop spot** (14.5%), ahead of BTN vs BB (11.5%).
 
 ## Solving cost (estimates; phase 1 replaces them with measurements)
 

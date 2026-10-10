@@ -1,0 +1,10 @@
+# Calibration round on charts preflop-v9b (game tree v9, limp floor 1%), for the cloud runner.
+--spot spots/preflop-v9b/btn_vs_bb_4bp_100.json --out output/preflop-v9b --limit 60
+--spot spots/preflop-v9b/sb_vs_bb_4bp_100.json --out output/preflop-v9b --limit 60
+--spot spots/preflop-v9b/btn_vs_bb_3bp_100.json --out output/preflop-v9b --limit 60
+--spot spots/preflop-v9b/co_vs_btn_3bp_100.json --out output/preflop-v9b --limit 60
+--spot spots/preflop-v9b/sb_vs_bb_srp_100.json --out output/preflop-v9b --limit 60
+--spot spots/preflop-v9b/co_vs_bb_srp_100.json --out output/preflop-v9b --limit 60
+--spot spots/preflop-v9b/btn_vs_bb_srp_100.json --out output/preflop-v9b --limit 60
+--spot spots/preflop-v9b/sb_vs_bb_iso_100.json --out output/preflop-v9b --limit 40
+--spot spots/preflop-v9b/sb_vs_bb_limp_100.json --out output/preflop-v9b --limit 40

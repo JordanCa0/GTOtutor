@@ -1,0 +1,21 @@
+{
+  "name": "utg_vs_bb_l3b_100",
+  "description": "UTG limps, BB raises 4.5, UTG 3-bets 11, BB calls; 100bb. Ranges from charts preflop-v9.",
+  "chips_per_bb": 20,
+  "pot_bb": 22.5,
+  "stack_bb": 89,
+  "oop_range": "65s:0.006,AKo:0.001,AKs:0.032,JJ:0.002,KK:0.131,QQ:0.038,TT:0.001",
+  "ip_range": "AKs:0.035,AQs:0.001,ATs:0.001,JTs:0.003,KK:0.109,QTs:0.001,T9s:0.003",
+  "flop": [
+    "33%,66%,100%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

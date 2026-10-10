@@ -71,6 +71,8 @@ cd "$WORK"
 aws s3 sync "$S3/spots" spots --quiet
 aws s3 sync "$S3/output" output --quiet
 aws s3 cp "$S3/queue.txt" queue.txt --quiet
+# Flop lists named by the queue (--flops), uploaded by launch.ps1.
+aws s3 sync "$S3/inputs" . --quiet
 # Strip carriage returns: a queue saved with Windows line endings would otherwise put one at the end
 # of every --out path (a folder named "preflop-v8\r").
 tr -d '\r' < queue.txt | grep -vE '^\s*(#|$)' > jobs.txt || true

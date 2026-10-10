@@ -1,0 +1,21 @@
+{
+  "name": "utg_vs_btn_l3b_100",
+  "description": "UTG limps, BTN raises 4.5, UTG 3-bets 11, BTN calls; 100bb. Ranges from charts preflop-v9.",
+  "chips_per_bb": 20,
+  "pot_bb": 23.5,
+  "stack_bb": 89,
+  "oop_range": "44:0.008,55:0.011,66:0.004,77:0.008,88:0.067,99:0.129,65s:0.005,98s:0.003,AJs:0.006,AKo:0.007,AKs:0.379,AQo:0.001,AQs:0.020,J9s:0.002,JJ:0.007,JTs:0.009,KJs:0.004,KK:0.285,KQs:0.001,KTs:0.002,QJs:0.004,QQ:0.069,QTs:0.007,T9s:0.008,TT:0.012",
+  "ip_range": "44:0.235,55:0.053,66:0.006,77:0.755,88:0.790,99:0.928,98s:0.005,A3s:0.009,A4s:0.721,A5s:0.085,A7s:0.004,A8s:0.798,A9s:0.741,AJs:0.956,AKo,AKs,AQo:0.470,AQs:0.983,ATs:0.857,JJ,JTs:0.450,KJs:0.093,KQs:0.348,KTs:0.026,QJs:0.658,QQ,QTs:0.055,T9s:0.107,TT:0.998",
+  "flop": [
+    "33%,66%,100%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}
