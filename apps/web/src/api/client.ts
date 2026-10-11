@@ -63,6 +63,7 @@ export const api = {
   me: () => request<MeResponse>('/api/me'),
   profile: () => request<ProfileResponse>('/api/me/profile'),
   profileReview: () => request<ProfileReviewResponse>('/api/me/profile/review'),
+  profileReviewChat: (messages: ChatMessage[]) => request<ChatResponse>('/api/me/profile/review/chat', post({ messages })),
   starred: (before: string | null) => request<StarredResponse>(`/api/me/starred${before ? `?before=${encodeURIComponent(before)}` : ''}`),
   deleteAccount: () => request<{ ok: true }>('/api/me', { method: 'DELETE' }),
 };

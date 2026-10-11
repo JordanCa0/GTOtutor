@@ -5,6 +5,7 @@ import {
   type ProfileResponse,
   type ProfileReviewResponse,
   type SessionReviewResponse,
+  type SessionStats,
   type StarredResponse,
   type SubmitDecisionResponse,
 } from '@gtotutor/shared-types';
@@ -209,7 +210,7 @@ describe('saved session reviews', () => {
 
 describe('profile page', () => {
   const OTHER_USER = '44444444-4444-4444-8444-444444444444';
-  const reviewLlm = () => fakeLlm({ structured: () => ({ summary: 'Steady player.', leaks: [{ title: 'Flop checks', advice: 'Bet more.' }], drill: 'BTN vs BB flops.' }) });
+  const reviewLlm = () => fakeLlm({ structured: () => ({ brief: 'You play steadily.', summary: 'Steady player.', leaks: [{ title: 'Flop checks', advice: 'Bet more.' }], drill: 'BTN vs BB flops.' }) });
   const asUser = (app: FastifyInstance, userId = USER) => client(app, { token: `test-user:${userId}` }, `profile-${userId.slice(0, 8)}`);
 
   /** Plays flop-practice hands until at least `count` more decisions are made; returns them. */
@@ -231,6 +232,8 @@ describe('profile page', () => {
     for (const url of ['/api/me/profile', '/api/me/profile/review', '/api/me/starred']) {
       expect((await client(app)({ method: 'GET', url })).statusCode).toBe(401);
     }
+    const ask = { method: 'POST' as const, url: '/api/me/profile/review/chat', payload: { messages: [{ role: 'user', content: 'What first?' }] } };
+    expect((await client(app)(ask)).statusCode).toBe(401);
     await app.close();
   });
 
@@ -285,6 +288,26 @@ describe('profile page', () => {
     await again({ method: 'GET', url });
     expect(llm.structured).toHaveBeenCalledTimes(2);
     await after.close();
+  });
+
+  it('writes a review saved before the brief existed once more, and answers questions about it', async () => {
+    const repo = new MemoryRepo();
+    const llm = fakeLlm({
+      structured: (_system: string, messages: { content: string }[]) =>
+        messages[0].content.startsWith('All-time stats')
+          ? { brief: 'You play steadily.', summary: 'Steady player.', leaks: [], drill: 'BTN vs BB flops.' }
+          : { tldr: 'Start with BTN vs BB flops.', detail: 'That is where most of your decisions are.' },
+    });
+    const app = makeApp(repo, undefined, llm);
+    const me = asUser(app);
+    const ask = { method: 'POST' as const, url: '/api/me/profile/review/chat', payload: { messages: [{ role: 'user', content: 'What first?' }] } };
+    expect((await me(ask)).statusCode).toBe(409);
+    await play(me, MIN_DECISIONS_FOR_REVIEW);
+    const total = (await me({ method: 'GET', url: '/api/me/profile' })).json<ProfileResponse>().stats.decisions;
+    await repo.saveProfileReview(USER, total, {} as SessionStats, { status: 'ok', summary: 'Old review.', leaks: [], drill: 'Old drill.', ungroundedNumbers: [] });
+    expect((await me({ method: 'GET', url: '/api/me/profile/review' })).json<ProfileReviewResponse>().coach).toMatchObject({ brief: 'You play steadily.' });
+    expect((await me(ask)).json()).toMatchObject({ status: 'ok', tldr: 'Start with BTN vs BB flops.' });
+    await app.close();
   });
 });
 

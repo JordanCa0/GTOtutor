@@ -51,6 +51,8 @@ export function Table({ hand, playback, onSkip }: Props) {
   const result = hand.result;
   const winners = playback.awarded ? (result?.winners ?? []) : [];
   const showdown = new Map((playback.showdown ? (result?.showdown ?? []) : []).map((s) => [s.position, s]));
+  // Hero folded to a bet or raise: that player's cards flip once the pot is pushed.
+  const reveal = playback.awarded ? result?.foldReveal : null;
   const stack = hand.config.stackDepthBb;
 
   const chipTarget = (pos: Position): Point => {
@@ -95,7 +97,8 @@ export function Table({ hand, playback, onSkip }: Props) {
         const sd = showdown.get(seat.position);
         const isWinner = winners.includes(seat.position);
         const won = isWinner && result ? result.potBb / result.winners.length : 0;
-        const cards = seat.isHero ? seat.cards : sd ? sd.cards : null;
+        const shown = sd ?? (reveal?.position === seat.position ? reveal : null);
+        const cards = seat.isHero ? seat.cards : shown ? shown.cards : null;
         const dealOrder = (i - hand.seats.findIndex((s) => s.position === 'SB') + n) % n;
         return (
           <div
@@ -117,7 +120,7 @@ export function Table({ hand, playback, onSkip }: Props) {
                   key={cards ? cards[k] : `back-${k}`}
                   card={cards ? cards[k] : null}
                   size={seat.isHero ? 'md' : 'sm'}
-                  className={`dealt ${sd && !seat.isHero ? 'flip' : ''}`}
+                  className={`dealt ${shown && !seat.isHero ? 'flip' : ''}`}
                   style={{ ['--deal-delay' as string]: `${(k * n + dealOrder) * 32}ms` }}
                 />
               ))}
@@ -135,6 +138,7 @@ export function Table({ hand, playback, onSkip }: Props) {
               )}
             </div>
             {sd && <div className={`hand-name ${sd.isWinner ? 'win' : ''}`}>{sd.handName}</div>}
+            {!sd && shown?.handName && <div className="hand-name">{shown.handName}</div>}
             {isWinner && <div className="win-tag">+{Math.round(won * 100) / 100}</div>}
           </div>
         );

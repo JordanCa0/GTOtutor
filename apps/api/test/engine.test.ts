@@ -53,6 +53,28 @@ describe('hand engine', () => {
     expect(view.seats.filter((s) => s.cards !== null).map((s) => s.position)).toEqual(['CO']);
   });
 
+  it('shows the cards of the raise hero folded to, and nothing for a fold with no raise to face', () => {
+    const engine = newEngine(8);
+    let seen = 0;
+    for (let i = 0; i < 300 && seen < 20; i++) {
+      const state = engine.start({ ...req, heroPosition: 'BB', skipEasyFolds: false });
+      if (!engine.view(state).legalActions.some((a) => a.id === 'fold')) continue;
+      engine.decide(state, 'fold');
+      const reveal = engine.view(state).result!.foldReveal!;
+      const raiser = [...state.actionLog].reverse().find((a) => !a.isHero && a.action !== 'fold' && a.action !== 'call');
+      expect(reveal.position).toBe(raiser!.position);
+      expect(reveal.cards).toEqual(state.players.find((p) => p.position === reveal.position)!.cards);
+      // A hand name only when there is a board (other players can play on after hero folds).
+      expect(reveal.handName === null).toBe(engine.view(state).result!.board.length === 0);
+      seen++;
+    }
+    expect(seen).toBe(20);
+    // UTG has nothing to fold to.
+    const utg = engine.start({ ...req, heroPosition: 'UTG', skipEasyFolds: false });
+    engine.decide(utg, 'fold');
+    expect(engine.view(utg).result!.foldReveal).toBeNull();
+  });
+
   it('grades pure folds: folding is best, opening is a mistake', () => {
     const engine = newEngine(5);
     const rfi = charts.getNode('SIX_MAX|100|RFI|UTG');

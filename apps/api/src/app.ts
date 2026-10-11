@@ -302,13 +302,28 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
     if (total < MIN_DECISIONS_FOR_REVIEW) return { coach: { status: 'not_enough_data', needed: MIN_DECISIONS_FOR_REVIEW - total } };
     // Written once, then kept until enough new decisions have been played to say something new.
     const saved = await hands.profileReview(userId);
-    if (saved && total - saved.decisionsCount < PROFILE_REVIEW_EVERY) return { coach: saved.coach };
+    // Reviews from before the short brief existed are written once more to get one.
+    if (saved && saved.coach.brief && total - saved.decisionsCount < PROFILE_REVIEW_EVERY) return { coach: saved.coach };
     const stats = computeSessionStats(played, false);
     const coach = await teacher.review(`profile-${userId}`, stats, playerKey({ kind: 'user', userId }), 'all-time');
     // Reviews with invented numbers aren't kept, so the next visit can replace them.
     if (coach.status === 'ok' && coach.ungroundedNumbers.length === 0) await hands.saveProfileReview(userId, total, stats, coach);
     // A failed refresh still shows the last good review.
     return { coach: coach.status === 'ok' || !saved ? coach : saved.coach };
+  });
+
+  /** Follow-up questions about the all-time review. The conversation lives in the page, not the database. */
+  app.post<{ Body: ChatRequest }>('/api/me/profile/review/chat', { schema: { body: chatSchema } }, async (req): Promise<ChatResponse> => {
+    const { userId } = await signedIn(req);
+    const { messages } = req.body;
+    if (messages.at(-1)!.role !== 'user') throw new HttpError(400, 'The last message must be from the user.');
+    if (messages.some((m) => m.role === 'user' && m.content.length > CHAT_LIMITS.maxUserChars)) {
+      throw new HttpError(400, `Questions are limited to ${CHAT_LIMITS.maxUserChars} characters.`);
+    }
+    const saved = await hands.profileReview(userId);
+    if (!saved) throw new HttpError(409, 'There is no review to ask about yet.');
+    const { hands: played } = await hands.playerDecisions(userId, PROFILE_DECISIONS);
+    return teacher.reviewChat(computeSessionStats(played, false), saved.coach, messages, playerKey({ kind: 'user', userId }));
   });
 
   app.get<{ Querystring: { before?: string; limit?: number } }>(

@@ -304,6 +304,10 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 .step { background: transparent; border: 1px solid var(--line-2); border-radius: 999px; padding: var(--sp-1) var(--sp-3); font-size: var(--fs-xs); color: var(--muted); display: inline-flex; gap: var(--sp-1); align-items: center; }
 .step.on { border-color: var(--line-3); color: var(--text); background: rgba(255, 255, 255, 0.05); }
 .step .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+/* Hero's next decision is waiting while they look at an earlier one: a gold glow that breathes (opacity only). */
+.step.ready { position: relative; border-color: var(--gold); color: var(--gold); }
+.step.ready::after, .next-ready::after { content: ''; position: absolute; inset: -1px; border-radius: inherit; box-shadow: 0 0 0 2px rgba(212, 175, 106, 0.45), 0 0 14px 2px rgba(212, 175, 106, 0.55); pointer-events: none; animation: glow 1.6s ease-in-out infinite alternate; }
+@keyframes glow { from { opacity: 0.25; } to { opacity: 1; } }
 .grade-best .dot { background: var(--good); }
 .grade-mixed .dot { background: var(--ok); }
 .grade-mistake .dot { background: var(--bad); }
@@ -364,6 +368,9 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 .range-hint { margin: var(--sp-2) 0 0; }
 .range-modal { position: relative; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r-lg); padding: var(--sp-4); max-width: 96vw; max-height: 94dvh; overflow: auto; box-shadow: var(--shadow-float); animation: modal-in 200ms var(--ease) both; }
 .range-close { position: absolute; top: 0.75rem; right: 0.75rem; }
+/* Floats over the enlarged chart when hero's next decision arrives; fixed, so it stays out of the backdrop's grid. */
+.next-ready { position: fixed; left: 50%; bottom: var(--sp-5); translate: -50% 0; border-radius: 999px; animation: next-in 300ms var(--ease) both; }
+@keyframes next-in { from { opacity: 0; transform: translateY(8px); } }
 .range.large { grid-template-columns: auto minmax(180px, 260px); gap: var(--sp-4); }
 /* Cell labels only exist in the enlarged view. */
 .range.large .range-grid { width: min(78vh, 72vw); font-size: clamp(0.55rem, 1.5vh, 0.95rem); }
@@ -447,12 +454,26 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 .spot-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .spot-table th, .spot-table td { text-align: left; padding: var(--sp-1) var(--sp-2); border-bottom: 1px solid var(--line); }
 .spot-table th { color: var(--muted); font-weight: 600; font-size: var(--fs-xs); }
+.spot-table .rate-good, .spot-table .rate-ok, .spot-table .rate-bad { font-weight: 600; font-variant-numeric: tabular-nums; }
+.rate-good { color: var(--good); }
+.rate-ok { color: var(--ok); }
+.rate-bad { color: var(--bad); }
 .mistakes { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--sp-2); font-size: var(--fs-sm); }
 .mistakes li { display: flex; gap: var(--sp-2); align-items: center; }
 .mini-cards { display: inline-flex; gap: 2px; flex: none; }
 .review-coach p { line-height: 1.65; }
 .review-coach .leak, .review-coach .drill { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); margin-top: var(--sp-2); }
 .review-coach .drill { border-color: var(--line-2); }
+.review-brief { font-size: var(--fs-md); line-height: 1.65; margin: var(--sp-1) 0 0; }
+.coach-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) 0 var(--sp-1); animation: pop 0.3s var(--ease) both; }
+.review-more { margin-top: var(--sp-3); }
+.review-chat { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-3); }
+.review-chat .chat-input { padding: var(--sp-2) 0 0; }
+.review-chat .notice { padding: 0; }
+/* The coach typing: a caret that blinks after the last character (opacity only). */
+.type-caret { display: inline-block; width: 2px; height: 1em; margin-left: 2px; vertical-align: -0.12em; background: currentColor; animation: caret 0.9s steps(1) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .leak-list { padding-left: var(--sp-4); margin: var(--sp-1) 0 var(--sp-2); font-size: var(--fs-sm); }
 
 /* ---------- Coach answer: TL;DR + points ---------- */
@@ -580,12 +601,12 @@ button.primary.danger { background: #c25a4b; color: #fff; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-property: opacity, color, background-color, border-color !important; }
   .board-card, .dealt, .flip, .action-bubble, .bet, .hand-name, .win-tag, .result-strip, .action-log li, .hand-verdict,
-  .verdict, .verdict-icon, .range, .coach-card, .bubble, .spot-card, .hint, .title-preview > *,
+  .verdict, .verdict-icon, .range, .coach-card, .bubble, .spot-card, .hint, .title-preview > *, .next-ready, .coach-actions,
   .modal, .reader, .range-modal, .auth-card, .modal-backdrop .setup, .settings-pop, .account-menu, .auth-toast, .tour-card {
     animation-name: fade !important; animation-duration: 150ms !important;
   }
   .modal-backdrop[data-closing] > * { animation: none !important; }
-  .pulse, .cell.me { animation: none !important; }
+  .pulse, .cell.me, .step.ready::after, .next-ready::after, .type-caret { animation: none !important; }
   .seat.acting .seat-info::after { animation: none !important; opacity: 1; }
   :is(.primary, .ghost, .secondary, .icon-btn, .suggestion, .google-btn, .act):active { transform: none !important; }
 }

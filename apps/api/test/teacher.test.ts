@@ -219,4 +219,21 @@ describe('session review', () => {
     await teacher.review('session-1', stats, 'ip');
     expect(llm.structured).toHaveBeenCalledTimes(1);
   });
+
+  it('answers questions about a review with its stats and text, grounded against the stats', async () => {
+    const review = { status: 'ok' as const, brief: 'You call too much.', summary: 'Solid overall.', leaks: [{ title: 'Loose calls', advice: 'Fold more vs early opens.' }], drill: 'Play 20 BB hands.', ungroundedNumbers: [] };
+    const llm = fakeLlm({ structured: { tldr: 'Start with folding more against early opens.', detail: 'You matched 50% and called 73% too often.' } });
+    const teacher = new LlmTeacher(llm, 'test', 10);
+    const res = await teacher.reviewChat(stats, review, [{ role: 'user', content: 'What first?' }], 'ip');
+    expect(res).toMatchObject({ status: 'ok', tldr: 'Start with folding more against early opens.', ungroundedNumbers: ['73%'] });
+    const [system] = llm.structured.mock.calls[0] as unknown as [string];
+    expect(system).toContain('You call too much.');
+    expect(system).toContain('"decisions": 8');
+  });
+
+  it('turns away off-topic questions about a review', async () => {
+    const review = { status: 'ok' as const, summary: 'Solid.', leaks: [], drill: 'Play.', ungroundedNumbers: [] };
+    const teacher = new LlmTeacher(fakeLlm({ structured: { tldr: 'OFF_TOPIC', detail: '' } }), 'test', 10);
+    expect(await teacher.reviewChat(stats, review, [{ role: 'user', content: 'Write my essay' }], 'ip')).toMatchObject({ tldr: null, reply: OFF_TOPIC_REPLY });
+  });
 });

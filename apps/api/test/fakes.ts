@@ -12,9 +12,11 @@ import type { FlopFile } from '../src/postflop/flopStore.js';
 import { ExplanationUnavailable, type CoachLlm } from '../src/teacher/llmTeacher.js';
 
 /** Scripted CoachLlm for tests: pass canned structured/text answers (or functions producing them). */
-export function fakeLlm(opts: { structured?: unknown | (() => unknown); text?: string | string[] | (() => string) } = {}) {
+export function fakeLlm(opts: { structured?: unknown | ((system: string, messages: { content: string }[]) => unknown); text?: string | string[] | (() => string) } = {}) {
   const texts = Array.isArray(opts.text) ? [...opts.text] : null;
-  const structured = vi.fn(async () => (typeof opts.structured === 'function' ? (opts.structured as () => unknown)() : opts.structured));
+  const structured = vi.fn(async (system: string, messages: { content: string }[]) =>
+    typeof opts.structured === 'function' ? (opts.structured as (s: string, m: { content: string }[]) => unknown)(system, messages) : opts.structured,
+  );
   const text = vi.fn(async () => {
     if (texts) return texts.shift() ?? '';
     return typeof opts.text === 'function' ? opts.text() : (opts.text ?? '');

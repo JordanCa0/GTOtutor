@@ -13,6 +13,10 @@ import { Backdrop } from "./Presence";
 const pct = (n: number, d: number) =>
   d ? `${Math.round((n / d) * 100)}%` : "—";
 
+/** How often a spot matched the chart, as a status colour: 70% and up good, 50% and up mixed, below that bad. */
+const rateClass = (n: number, d: number) =>
+  !d ? undefined : n / d >= 0.7 ? "rate-good" : n / d >= 0.5 ? "rate-ok" : "rate-bad";
+
 interface Props {
   sessionId: string;
   decisionsPlayed: number;
@@ -144,7 +148,9 @@ export function StatsSection({
             <tr key={s.spot}>
               <td>{s.label}</td>
               <td>{s.decisions}</td>
-              <td>{pct(s.best, s.decisions)}</td>
+              <td className={rateClass(s.best, s.decisions)}>
+                {pct(s.best, s.decisions)}
+              </td>
               <td>{s.mistakes}</td>
             </tr>
           ))}

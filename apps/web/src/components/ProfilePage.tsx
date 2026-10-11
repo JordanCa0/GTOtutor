@@ -8,7 +8,8 @@ import { CoachLoader } from './CoachLoader';
 import { PlayingCard } from './PlayingCard';
 import { Backdrop, Presence } from './Presence';
 import { RangeGrid } from './RangeGrid';
-import { CoachSection, StatsSection } from './SessionReview';
+import { ProfileCoach } from './ProfileCoach';
+import { StatsSection } from './SessionReview';
 import { StyleCard } from './StyleChart';
 import { VerdictBanner, verdictTitle } from './VerdictBanner';
 
@@ -111,7 +112,7 @@ function ProfileBody({ onOpen }: { onOpen: (item: StarredDecision) => void }) {
         <h2>Leaks</h2>
         <div className="review-grid">
           <StatsSection stats={stats} headline={false} />
-          <CoachSection stats={stats} coach={review.isPending ? undefined : review.data?.coach ?? { status: 'unavailable', reason: review.error?.message ?? 'No review.' }} onRetry={() => review.refetch()} drillTitle="What to practise next" />
+          <ProfileCoach stats={stats} coach={review.isPending ? undefined : review.data?.coach ?? { status: 'unavailable', reason: review.error?.message ?? 'No review.' }} onRetry={() => review.refetch()} />
         </div>
       </section>
 

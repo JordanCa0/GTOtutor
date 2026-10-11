@@ -133,6 +133,11 @@ export interface HandResult {
   potBb: number;
   heroNetBb: number;
   summary: string;
+  /**
+   * Hero folded to a bet or raise: the cards of the player who made it, shown once the pot is
+   * pushed so hero can judge the fold. handName is null before the flop. Missing on older hands.
+   */
+  foldReveal?: { position: Position; cards: string[]; handName: string | null } | null;
 }
 
 export interface HandView {
@@ -268,7 +273,8 @@ export interface SessionStats {
 export const MIN_DECISIONS_FOR_REVIEW = 5;
 
 export type SessionCoachReview =
-  | { status: 'ok'; summary: string; leaks: { title: string; advice: string }[]; drill: string; ungroundedNumbers: string[] }
+  /** brief: a 3-4 line overview, shown first on the profile page. Missing on reviews written before 2026-10-10. */
+  | { status: 'ok'; brief?: string; summary: string; leaks: { title: string; advice: string }[]; drill: string; ungroundedNumbers: string[] }
   | { status: 'unavailable'; reason: string }
   | { status: 'not_enough_data'; needed: number };
 

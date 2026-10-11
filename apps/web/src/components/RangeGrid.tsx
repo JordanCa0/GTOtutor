@@ -13,9 +13,24 @@ export const combos = (hc: string) => (hc.length === 2 ? 6 : hc[2] === 's' ? 4 :
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const kind = (hc: string) => (hc.length === 2 ? 'pair' : hc[2] === 's' ? 'suited' : 'offsuit');
 
-export function RangeGrid({ nodeKey, highlight }: { nodeKey: string; highlight: string }) {
+interface RangeGridProps {
+  nodeKey: string;
+  highlight: string;
+  /** Tells the parent when the enlarged view opens or closes. */
+  onOpenChange?: (open: boolean) => void;
+  /** Hero's next decision is waiting: the enlarged view offers a way to it. */
+  onNext?: () => void;
+}
+
+export function RangeGrid({ nodeKey, highlight, onOpenChange, onNext }: RangeGridProps) {
   const { data, isPending, error } = useQuery({ queryKey: ['chart', nodeKey, highlight], queryFn: () => api.chart(nodeKey, highlight) });
   const [expanded, setExpanded] = useState(false);
+  useEffect(() => onOpenChange?.(expanded), [expanded]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onOpenChange?.(false), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const goNext = () => {
+    setExpanded(false);
+    onNext?.();
+  };
   // The hand shown in the enlarged view's side panel; opens on the hero's hand each time.
   const [selected, setSelected] = useState(highlight);
   const open = () => {
@@ -25,10 +40,16 @@ export function RangeGrid({ nodeKey, highlight }: { nodeKey: string; highlight: 
 
   useEffect(() => {
     if (!expanded) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setExpanded(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setExpanded(false);
+      else if (e.key === 'Enter' && onNext && !(e.target as HTMLElement).closest('button')) {
+        e.preventDefault();
+        goNext();
+      }
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [expanded]);
+  });
 
   if (isPending) return <div className="range placeholder" />;
   if (error) return <p className="error small">{error.message}</p>;
@@ -44,6 +65,20 @@ export function RangeGrid({ nodeKey, highlight }: { nodeKey: string; highlight: 
             </button>
             <RangeView data={data} highlight={highlight} large selected={selected} onSelect={setSelected} />
           </div>
+          {onNext && (
+            <button
+              className="primary next-ready"
+              onClick={(e) => {
+                e.stopPropagation();
+                goNext();
+              }}
+            >
+              Go to your next decision
+              <kbd className="key" aria-hidden>
+                ↵
+              </kbd>
+            </button>
+          )}
         </Backdrop>
       </Presence>
     </>

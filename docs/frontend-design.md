@@ -96,6 +96,8 @@ Rules:
 | Verdict, chart, coach card appearing | Every decision | 300–450ms `--ease`, fade and small rise |
 | Modals, popovers | Occasionally | 200ms `--ease`; popovers grow from their trigger, modals from the centre |
 | Cards dealt, chips sliding | Part of the game | Can be longer; the user can skip them |
+| Coach text typing out (profile review and its answers) | Occasionally | At least 90 characters a second, never more than 3s per block; click to show it all; reduced motion shows it at once |
+| Next decision waiting (gold glow on "Now" and the chart's "Go to your next decision") | While studying an earlier decision | 1.6s opacity breathe on a pseudo-element's shadow; the pill rises in over 300ms |
 
 - Use `--ease` (a strong ease-out) for things appearing. Never use `ease-in`.
 - Animate only `transform` and `opacity` (and `translate`); never width, height or padding.

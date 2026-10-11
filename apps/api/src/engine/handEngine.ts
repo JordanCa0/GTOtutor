@@ -20,6 +20,7 @@ import type { ChartService } from '../charts/chartService.js';
 import type { ChartNode } from '../charts/types.js';
 import { FACING_TYPES, makeNodeKey, NOCALL_SUFFIX } from '../charts/nodeKeys.js';
 import { fullDeck, handClass, shuffle } from '../poker/cards.js';
+import { bestHand } from '../poker/evaluator.js';
 import { handIndex, mapHand, parseCards } from '../postflop/flopMap.js';
 import { flopClassStrategy, flopRangeSummary, historyKey, parseSolverAction, type FlopLookup, type FlopNode, type FlopStore, type LoadedFlop } from '../postflop/flopStore.js';
 import { mapBoardCard, turnRequest, type LiveOut, type LiveRequest } from '../postflop/liveSolve.js';
@@ -974,7 +975,20 @@ export class HandEngine {
       potBb: pot,
       heroNetBb: round2(heroWon - hero.committed),
       summary,
+      foldReveal: hero.folded ? this.foldReveal(state, board) : null,
     };
     state.heroToAct = false;
+  }
+
+  /** The bet or raise hero folded to: who made it, with their cards. */
+  private foldReveal(state: HandState, board: string[]): HandResult['foldReveal'] {
+    const fold = state.actionLog.findIndex((a) => a.isHero && a.action === 'fold');
+    const to = state.actionLog
+      .slice(0, Math.max(fold, 0))
+      .reverse()
+      .find((a) => !a.isHero && (a.action === 'bet' || a.action === 'raise' || a.action === 'allin'));
+    if (fold < 0 || !to) return null;
+    const cards = [...state.players.find((p) => p.position === to.position)!.cards];
+    return { position: to.position, cards, handName: board.length >= 3 ? bestHand([...cards, ...board]).name : null };
   }
 }
