@@ -727,10 +727,10 @@ export class HandEngine {
     if (key.endsWith(NOCALL_SUFFIX)) {
       const raise = node.actions.some((a) => a.id === 'raise') ? (RAISE_NAMES[state.raiseLevel] ?? 'Raise') : node.actions.some((a) => a.id === 'allin') ? 'All-in' : null;
       if (!raise) return { title: 'Fold only', text: 'Someone already called, and pots stay heads-up after the flop.' };
-      return { title: `${raise} or fold`, text: `Someone already called, so you can't call too: pots stay heads-up after the flop.` };
+      return { title: `${raise} or fold`, text: `Someone already called, so you play a ${raise.toLowerCase()}-or-fold strategy: pots stay heads-up after the flop, so calling isn't an option.` };
     }
     if (state.raiseLevel === 0 && state.limper && hero.position !== 'BB') {
-      return { title: 'Raise or fold', text: "Someone limped, so you can't limp too: pots stay heads-up after the flop." };
+      return { title: 'Raise or fold', text: "Someone limped, so you play a raise-or-fold strategy: pots stay heads-up after the flop, so limping behind isn't an option." };
     }
     return null;
   }
