@@ -47,7 +47,6 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
   const [opponent, setOpponent] = useState<Position | 'any'>(initial?.opponentPosition ?? 'any');
   const [skipEasyFolds, setSkipEasyFolds] = useState(initial?.skipEasyFolds ?? true);
   const [simplePots, setSimplePots] = useState(initial?.simplePots ?? false);
-  const [flopPractice, setFlopPractice] = useState(initial?.flopPractice ?? false);
 
   useEffect(() => {
     if (!onClose) return;
@@ -104,12 +103,12 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
 
       <fieldset>
         <legend>Opponent</legend>
-        {position === 'random' || flopPractice ? (
+        {position === 'random' ? (
           // Greyed until hero picks a seat, with why on hover or tap: the wrapper takes focus, as the disabled chips can't.
           <span className="setup-tip pos-tip" tabIndex={0} aria-describedby="opponent-tip">
             <JellyRadio {...JELLY_THEME} disabled ariaLabel="Opponent" items={OPPONENT_ITEMS} value="any" onChange={() => {}} />
             <span role="tooltip" id="opponent-tip" className="tooltip tip-below">
-              {flopPractice ? 'Flop practice is always BTN vs BB.' : 'Select your position to choose an opponent.'}
+              Select your position to choose an opponent.
             </span>
           </span>
         ) : (
@@ -149,18 +148,11 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
             </small>
           </span>
         </label>
-        <label className="toggle">
-          <input type="checkbox" checked={flopPractice} onChange={(e) => setFlopPractice(e.target.checked)} />
-          <span>
-            Flop practice (testing)
-            <small>Every hand starts at a BTN vs BB flop. You play BTN or BB (picked at random unless you chose one); preflop is skipped.</small>
-          </span>
-        </label>
       </fieldset>
 
       <p className="muted small">Cash game only for now. Tournament/ICM, other table sizes, and other stack depths come with the solver.</p>
 
-      <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, heroPosition: position, ...(position !== 'random' && !flopPractice && opponent !== 'any' && { opponentPosition: opponent }), skipEasyFolds, simplePots, flopPractice })}>
+      <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, heroPosition: position, ...(position !== 'random' && opponent !== 'any' && { opponentPosition: opponent }), skipEasyFolds, simplePots })}>
         {starting ? 'Dealing…' : onClose ? 'Deal with these settings' : 'Deal a hand'}
       </button>
       {error && <p className="error">{error}</p>}

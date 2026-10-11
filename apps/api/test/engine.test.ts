@@ -334,7 +334,7 @@ describe('hand engine', () => {
     }
   });
 
-  it('rejects an opponent without a fixed hero seat, or in hero's seat', () => {
+  it("rejects an opponent without a fixed hero seat, or in hero's seat", () => {
     expect(() => newEngine(1).start({ ...req, heroPosition: 'random', opponentPosition: 'BTN' })).toThrow(/Choose your position/);
     expect(() => newEngine(1).start({ ...req, heroPosition: 'BTN', opponentPosition: 'BTN' })).toThrow(/your seat/);
     expect(newEngine(1).start({ ...req, heroPosition: 'random', opponentPosition: 'any' }).heroToAct).toBe(true);
