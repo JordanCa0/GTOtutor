@@ -6,6 +6,7 @@ import {
   type ProfileReviewResponse,
   type SessionReviewResponse,
   type SessionStats,
+  type SessionStatsResponse,
   type StarredResponse,
   type SubmitDecisionResponse,
 } from '@gtotutor/shared-types';
@@ -192,6 +193,11 @@ describe('saved session reviews', () => {
         decisions++;
       }
     }
+    // The numbers alone come back without asking the coach.
+    const stats = (await mine({ method: 'GET', url: '/api/sessions/test-session-0001/stats' })).json<SessionStatsResponse>().stats;
+    expect(stats.decisions).toBe(decisions);
+    expect(llm.structured).not.toHaveBeenCalled();
+    expect((await client(before, { guestId: OTHER_GUEST })({ method: 'GET', url: '/api/sessions/test-session-0001/stats' })).statusCode).toBe(404);
     const url = '/api/sessions/test-session-0001/review';
     const first = (await mine({ method: 'GET', url })).json<SessionReviewResponse>();
     expect(first.coach).toMatchObject({ status: 'ok', summary: 'Solid session.' });

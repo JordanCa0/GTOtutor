@@ -1,8 +1,10 @@
-import type { ChatMessage, DecisionFeedback, HandView } from '@gtotutor/shared-types';
+import type { ChatMessage, DecisionFeedback, HandView, StreakUpdate } from '@gtotutor/shared-types';
 import { useEffect, useRef, useState } from 'react';
 import { CoachCard } from './CoachCard';
 import { HintPanel } from './HintPanel';
 import { RangeGrid } from './RangeGrid';
+import { RangeSkeleton, Skeleton, SkeletonGroup, useSkeleton } from './Skeleton';
+import { StreakBadge } from './Streak';
 import { VerdictBanner } from './VerdictBanner';
 
 interface Props {
@@ -10,9 +12,10 @@ interface Props {
   playbackDone: boolean;
   chats: Record<string, ChatMessage[]>;
   onChat: (decisionId: string, messages: ChatMessage[]) => void;
+  streak?: StreakUpdate | null;
 }
 
-export function DecisionPanel({ hand, playbackDone, chats, onChat }: Props) {
+export function DecisionPanel({ hand, playbackDone, chats, onChat, streak = null }: Props) {
   const showPending = hand.status === 'awaiting_hero' && playbackDone && hand.pendingSpot !== null;
   const itemCount = hand.decisions.length + (showPending ? 1 : 0);
   const [selected, setSelected] = useState(itemCount - 1);
@@ -26,15 +29,18 @@ export function DecisionPanel({ hand, playbackDone, chats, onChat }: Props) {
     if (newHand || !chartOpen) setSelected(itemCount - 1);
   }, [itemCount, hand.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const skeleton = useSkeleton(itemCount === 0);
   const complete = hand.status === 'complete' && playbackDone;
   const matched = hand.decisions.filter((d) => d.grade === 'best').length;
   const mistakes = hand.decisions.filter((d) => d.grade === 'mistake').length;
 
   if (itemCount === 0) {
     return (
-      <div className="panel-empty">
-        <p className="muted pulse">Dealing…</p>
-      </div>
+      <SkeletonGroup visible={skeleton.visible} label="Dealing" className="skeleton-stack">
+        <Skeleton kind="block" height="4.5rem" />
+        <RangeSkeleton />
+        <Skeleton kind="block" height="3rem" />
+      </SkeletonGroup>
     );
   }
 
@@ -69,6 +75,7 @@ export function DecisionPanel({ hand, playbackDone, chats, onChat }: Props) {
         <HintPanel key={hand.pendingSpot!.nodeKey + hand.id} hand={hand} />
       ) : decision ? (
         <>
+          {selected === hand.decisions.length - 1 && <StreakBadge streak={streak} />}
           <VerdictBanner feedback={decision} handId={hand.id} />
           <RangeGrid
             key={decision.id}

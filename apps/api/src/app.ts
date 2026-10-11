@@ -14,6 +14,7 @@ import {
   type ProfileResponse,
   type ProfileReviewResponse,
   type SessionReviewResponse,
+  type SessionStatsResponse,
   type StarredResponse,
   type StarRequest,
   type StartHandRequest,
@@ -138,6 +139,8 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
       options: decision.options,
       actionsBefore: ctx.actionLog.slice(0, cut),
       priorDecisions: ctx.decisions.slice(0, k),
+      // Both ranges at the decision, so the coach can explain the whole spot (not sent with hints).
+      spot: engine.spotRanges(decision.nodeKey, decision.villainRange),
     };
   };
 
@@ -154,8 +157,8 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
     '/api/hands/:id/decisions',
     { schema: { body: decisionSchema } },
     async (req): Promise<SubmitDecisionResponse> => {
-      const { state, feedback } = await hands.decide(await players.player(req), req.params.id, req.body.action, req.body.toBb);
-      return { feedback, hand: engine.view(state) };
+      const { state, feedback, streak } = await hands.decide(await players.player(req), req.params.id, req.body.action, req.body.toBb);
+      return { feedback, hand: engine.view(state), streak };
     },
   );
 
@@ -247,6 +250,15 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
       const star: DecisionStar = req.body.starred ? { starred: true, note } : { starred: false, note: null };
       await hands.setStar(ctx, req.params.decisionId, star);
       return star;
+    },
+  );
+
+  app.get<{ Params: { sessionId: string } }>(
+    '/api/sessions/:sessionId/stats',
+    { schema: { params: { type: 'object', properties: { sessionId: sessionIdSchema } } } },
+    async (req): Promise<SessionStatsResponse> => {
+      const records = await hands.sessionHands(await players.player(req), req.params.sessionId);
+      return { stats: computeSessionStats(records, records.some((h) => h.config.easyFoldsSkipped)) };
     },
   );
 

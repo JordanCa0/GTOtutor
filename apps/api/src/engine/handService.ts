@@ -1,6 +1,7 @@
-import type { ActionLogEntry, ActionType, DecisionFeedback, DecisionStar, SessionStats, StartHandRequest } from '@gtotutor/shared-types';
+import type { ActionLogEntry, ActionType, DecisionFeedback, DecisionStar, SessionStats, StartHandRequest, StreakUpdate } from '@gtotutor/shared-types';
 import { playerKey, samePlayer, type CoachMessage, type HandRecord, type Player, type Repo, type SavedCoachReview } from '../db/repo.js';
 import { LiveSolveError, type LiveSolver } from '../postflop/liveSolver.js';
+import { isStreakMilestone, nextStreak, streakOf } from '../teacher/sessionStats.js';
 import { HttpError, type HandEngine, type HandState, type StoredHandState } from './handEngine.js';
 
 /** What the coach needs about a hand, whether it's in progress or finished. */
@@ -25,6 +26,8 @@ export class HandService {
   private readonly live = new Map<string, { owner: Player; state: HandState }>();
   /** Hands waiting for their live turn solve: settles once the solve is attached (or the hand ran out) and saved. */
   private readonly solving = new Map<string, Promise<void>>();
+  /** Each session's current streak; rebuilt from its saved decisions after a restart. */
+  private readonly streaks = new Map<string, { current: number; best: number }>();
 
   constructor(
     private readonly engine: HandEngine,
@@ -65,12 +68,31 @@ export class HandService {
     return state;
   }
 
-  async decide(player: Player, handId: string, action: ActionType, toBb?: number): Promise<{ state: HandState; feedback: DecisionFeedback }> {
+  async decide(player: Player, handId: string, action: ActionType, toBb?: number): Promise<{ state: HandState; feedback: DecisionFeedback; streak: StreakUpdate }> {
     const state = await this.get(player, handId);
     const feedback = this.engine.decide(state, action, toBb);
     await this.save(player, state);
     this.startSolves(player, state);
-    return { state, feedback };
+    return { state, feedback, streak: await this.streak(state.sessionId!, feedback) };
+  }
+
+  /** The session's streak after `feedback` (already saved). */
+  private async streak(sessionId: string, feedback: DecisionFeedback): Promise<StreakUpdate> {
+    let before = this.streaks.get(sessionId);
+    if (!before) {
+      const earlier = (await this.repo.sessionHands(sessionId)).flatMap((h) => h.decisions).filter((d) => d.id !== feedback.id);
+      before = streakOf(earlier);
+    }
+    const after = nextStreak(before, feedback.grade);
+    this.streaks.delete(sessionId);
+    this.streaks.set(sessionId, after);
+    if (this.streaks.size > this.maxLive) this.streaks.delete(this.streaks.keys().next().value!);
+    return {
+      count: after.current,
+      best: after.best,
+      milestone: after.current > before.current && isStreakMilestone(after.current) ? after.current : null,
+      ended: feedback.grade === 'mistake' && before.current > 0 ? before.current : null,
+    };
   }
 
   /** Resolves once the hand's pending live solve (if any) has been attached and saved. For tests and shutdown. */

@@ -85,6 +85,52 @@ Recreate a hand, from a real game or a hypothetical one, and have it solved and 
   - Until then, the replayer should say clearly which decisions are solved, approximated or unsolved.
 - **Saving:** replayed hands could live with saved hands ("My hands" in `docs/accounts-and-data.md`) and be shared by link.
 
+## ~~Skeleton loaders~~
+
+**Built 2026-10-10.** `Skeleton.tsx` (`Skeleton`, `RangeSkeleton`, `useSkeleton`) on the range charts, the hint's villain range, the decision panel, the live-solve buttons, the profile page and the session review, whose numbers now load apart from the coach. Rules in `docs/frontend-design.md`.
+
+## ~~Coach sees the whole solver output~~
+
+**Built 2026-10-10.** Explanations and chat get both ranges by hand group, the hands next to hero's, and a `get_hand_strategy` lookup tool in chat; hints get none of it. See "What the coach sees" in `docs/postflop-plan.md`.
+
+## ~~Streaks: reward runs of good decisions~~
+
+**Built 2026-10-10.** Best adds 1, mixed keeps it, a mistake ends it. A climbing chime, a "×N" multiplier that pops, and chip showers at 5, 10, 15, 20, 25 and every 25 after, more gold as they climb (Celebrations setting). Best streak shows in the session review and on the profile. Code: `streakOf` in `teacher/sessionStats.ts`, `HandService`, `components/Streak.tsx`.
+
+## Accessibility compliance
+
+Bring the app up to WCAG 2.2 AA, then keep it there by checking every UI change against it. The rules go in `docs/frontend-design.md`.
+
+**Already in place** (checked 2026-10-10):
+- text contrast: muted text 6.1:1, action buttons 4.7:1 or better since the colour change
+- `lang="en"` and a skip link
+- visible `:focus-visible` outlines
+- keyboard shortcuts for every table action
+- a range chart that works as a keyboard grid (`role="grid"`, roving `tabIndex`, a label for each cell)
+- reduced-motion support
+
+**Gaps found:**
+- **Verdicts aren't announced.** After a decision, a screen reader hears nothing. The verdict banner needs a polite live region ("Too aggressive. The solver checks 100%…").
+  - Only the range chart's hand detail, the sign-in toast and the coach loader use `aria-live`/`role` today.
+- **Dialogs don't manage focus.** The setup modal, profile page, tour, enlarged range chart and account dialogs should:
+  - move focus inside when they open;
+  - keep Tab inside;
+  - close on Escape;
+  - return focus to the button that opened them.
+
+  Only `RangeGrid` moves focus today; the native `<dialog>` element or `inert` on the background would cover most of this.
+- **The table is visual only.** Seats, stacks, bets, the pot and the board need a text version for screen readers. For example, a visually hidden summary: "Pot 5.5bb. Board Q♦ 2♦ 6♥. BB checked. You have 4♠ 4♣, 97.5bb behind." The action log could be its live region.
+- **Cards rely on symbols and colour.** Make sure screen readers say "queen of diamonds", not "Q ♦". Consider a four-colour deck setting.
+- **Charts rely on colour.** The range chart and style chart need a non-colour way to read them. The text breakdown already exists; check that it's reachable by keyboard. Test with colour-blindness simulation, since green and blue sizes are shades of one colour.
+- **Reflow and zoom:** at 200% zoom and at 320px wide, nothing should be cut off or scroll sideways (overlaps with "Mobile layout").
+- **Touch targets:** at least 24×24px (WCAG 2.2). Check the range-grid cells and the key badges on touch screens.
+
+**How:**
+- Run axe or Lighthouse on every screen.
+- Test with NVDA (Windows) and VoiceOver (iPhone).
+- Try a full hand using only the keyboard.
+- Add an accessibility line to the checklist in `docs/frontend-design.md`.
+
 ## Mobile layout
 
 Make the app work properly on phones. Found 2026-10-08 while building the chart explorer.

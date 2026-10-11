@@ -295,7 +295,6 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 
 /* ---------- Right panel ---------- */
 .decision-panel { display: flex; flex-direction: column; gap: var(--sp-3); flex: none; }
-.panel-empty { flex: 1; display: grid; place-items: center; }
 .hand-verdict { font-weight: 600; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-sm); animation: pop 0.3s var(--ease) both; border: 1px solid transparent; }
 .hand-verdict.good { background: rgba(59, 182, 127, 0.1); border-color: rgba(59, 182, 127, 0.3); color: #86e3b6; }
 .hand-verdict.ok { background: rgba(226, 184, 76, 0.1); border-color: rgba(226, 184, 76, 0.3); color: #f0d27e; }
@@ -334,7 +333,6 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 .verdict-detail { font-size: var(--fs-sm); margin: var(--sp-2) 0 0; color: #cfd3d8; }
 
 .range { display: grid; grid-template-columns: auto 1fr; gap: var(--sp-3); align-items: start; animation: verdict-in 0.45s var(--ease) both; }
-.range.placeholder { height: clamp(160px, 24vh, 240px); background: rgba(255, 255, 255, 0.03); border-radius: var(--r-md); }
 .range-grid { width: clamp(160px, 24vh, 240px); display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 1px; background: #05070a; border: 1px solid var(--line-2); border-radius: var(--r-sm); overflow: hidden; }
 .cell { aspect-ratio: 1; min-width: 0; overflow: hidden; letter-spacing: -0.02em; display: grid; place-items: center; color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7); font-weight: 600; }
 .cell.me { outline: 2px solid var(--gold); outline-offset: -1px; z-index: 1; animation: me 1.4s ease-in-out 3; }
@@ -426,7 +424,6 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 .spot-facts dd { margin: 0.1rem 0 0; font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
 .villain-range { display: grid; grid-template-columns: auto 1fr; gap: var(--sp-3); align-items: start; }
 .villain-range .range-grid { width: clamp(130px, 19vh, 180px); }
-.villain-range.placeholder { height: clamp(130px, 19vh, 180px); background: rgba(255, 255, 255, 0.03); border-radius: var(--r-md); }
 .villain-range .range-side p { margin: 0 0 var(--sp-1); }
 .hint { background: var(--raised); border: 1px solid var(--line-2); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); animation: verdict-in 0.35s var(--ease) both; }
 .hint strong { font-size: var(--fs-sm); }
@@ -596,17 +593,63 @@ button.primary.danger { background: #c25a4b; color: #fff; }
 .tour-actions .link { font-size: var(--fs-sm); color: var(--muted); }
 .tour-actions .primary { padding: var(--sp-2) var(--sp-4); font-size: var(--fs-sm); }
 
+/* ---------- Streaks ---------- */
+/* The multiplier: gold because it's "you". It pops (scale) each time the run grows; a gold glow behind it flashes (opacity). */
+.streak { display: flex; align-items: baseline; gap: var(--sp-2); }
+.streak-badge { position: relative; display: inline-block; font-family: var(--serif); font-size: var(--fs-xl); font-weight: 700; line-height: 1; color: var(--gold); font-variant-numeric: tabular-nums; animation: streak-pop 340ms var(--ease) both; }
+.streak-x { font-size: 0.7em; margin-right: 1px; opacity: 0.8; }
+.streak-badge::after { content: ''; position: absolute; inset: -6px -10px; border-radius: 999px; background: radial-gradient(closest-side, rgba(212, 175, 106, 0.45), transparent); opacity: 0; pointer-events: none; animation: streak-flash 600ms ease-out both; }
+.streak-badge.milestone::after { animation-duration: 1600ms; }
+@keyframes streak-pop { 0% { transform: scale(1); } 40% { transform: scale(1.38); } 100% { transform: scale(1); } }
+@keyframes streak-flash { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
+/* The chip shower at milestones: behind the seats, bets and board, above the felt. */
+.table-wrap > .chip-rain { inset: 0; translate: none; overflow: hidden; z-index: 0; pointer-events: none; }
+.chip-rain i {
+  position: absolute; top: -8%; width: var(--size); height: var(--size); border-radius: 50%;
+  background: radial-gradient(circle, var(--chip) 0 52%, transparent 53%), repeating-conic-gradient(var(--stripe) 0 14deg, var(--chip) 14deg 45deg);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+  animation: chip-fall 2s cubic-bezier(0.35, 0, 0.75, 0.6) both;
+}
+.chip-rain i.shine::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(135deg, rgba(255, 255, 255, 0.75), transparent 45%); }
+@keyframes chip-fall {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 0; }
+  8% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translate3d(var(--drift), 125cqh, 0) rotate(var(--spin)); opacity: 0; }
+}
+.no-anim .chip-rain { display: none; }
+
+/* ---------- Skeletons ---------- */
+/* Placeholder shapes in the real layout while data loads (Skeleton.tsx). The shimmer is a band sliding across (translate only). */
+.skeleton { position: relative; display: block; overflow: hidden; background: var(--raised); border-radius: var(--r-sm); }
+.skeleton-line { height: 0.9em; }
+.skeleton-circle { border-radius: 50%; }
+.skeleton-block { border-radius: var(--r-md); }
+.skeleton::after { content: ''; position: absolute; inset: 0; translate: -100% 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.045), transparent); animation: shimmer 1.6s ease-in-out infinite; }
+@keyframes shimmer { to { translate: 100% 0; } }
+.skeleton-group { animation: fade 0.2s both; }
+.skeleton-wait { visibility: hidden; }
+.skeleton-grid { background: var(--panel); }
+.skeleton-grid .skeleton-cell { aspect-ratio: 1; border-radius: 0; }
+.skeleton-grid .skeleton-cell::after { display: none; }
+.range-skeleton { animation: none; }
+.skeleton-stack { display: flex; flex-direction: column; gap: var(--sp-2); }
+.profile-skeleton { display: flex; flex-direction: column; gap: var(--sp-4); }
+.act.act-skeleton { display: inline-flex; align-items: center; justify-content: center; background: var(--raised); border-color: var(--line); color: var(--muted); font-weight: 500; font-size: var(--fs-sm); position: relative; overflow: hidden; }
+.act.act-skeleton::after { content: ''; position: absolute; inset: 0; translate: -100% 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.045), transparent); animation: shimmer 1.6s ease-in-out infinite; }
+
 /* ---------- Motion preferences ---------- */
 /* Reduced motion: nothing moves, but things still fade in briefly instead of snapping. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-property: opacity, color, background-color, border-color !important; }
   .board-card, .dealt, .flip, .action-bubble, .bet, .hand-name, .win-tag, .result-strip, .action-log li, .hand-verdict,
-  .verdict, .verdict-icon, .range, .coach-card, .bubble, .spot-card, .hint, .title-preview > *, .next-ready, .coach-actions,
+  .verdict, .verdict-icon, .range, .coach-card, .bubble, .spot-card, .hint, .title-preview > *, .next-ready, .coach-actions, .streak-badge,
   .modal, .reader, .range-modal, .auth-card, .modal-backdrop .setup, .settings-pop, .account-menu, .auth-toast, .tour-card {
     animation-name: fade !important; animation-duration: 150ms !important;
   }
   .modal-backdrop[data-closing] > * { animation: none !important; }
-  .pulse, .cell.me, .step.ready::after, .next-ready::after, .type-caret { animation: none !important; }
+  .pulse, .cell.me, .step.ready::after, .next-ready::after, .type-caret, .skeleton::after, .act.act-skeleton::after { animation: none !important; }
+  .chip-rain { display: none !important; }
   .seat.acting .seat-info::after { animation: none !important; opacity: 1; }
   :is(.primary, .ghost, .secondary, .icon-btn, .suggestion, .google-btn, .act):active { transform: none !important; }
 }

@@ -12,6 +12,7 @@ import type {
   HandView,
   HintResponse,
   SessionReviewResponse,
+  SessionStatsResponse,
   StarredResponse,
   StarRequest,
   StartHandRequest,
@@ -56,6 +57,7 @@ export const api = {
   star: (handId: string, decisionId: string) => request<DecisionStar>(`/api/hands/${handId}/decisions/${decisionId}/star`),
   setStar: (handId: string, decisionId: string, star: StarRequest) =>
     request<DecisionStar>(`/api/hands/${handId}/decisions/${decisionId}/star`, { method: 'PUT', body: JSON.stringify(star) }),
+  sessionStats: (sessionId: string) => request<SessionStatsResponse>(`/api/sessions/${sessionId}/stats`),
   review: (sessionId: string) => request<SessionReviewResponse>(`/api/sessions/${sessionId}/review`),
   /** `hand`: hero's class, shown on postflop charts even where the solver's line never takes it. */
   chart: (nodeKey: string, hand?: string) =>

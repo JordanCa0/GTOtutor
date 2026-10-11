@@ -1,4 +1,4 @@
-import { bestOption, chosenOption, type DecisionFeedback, type LeakType, type SessionStats, type SpotType } from '@gtotutor/shared-types';
+import { bestOption, chosenOption, type DecisionFeedback, type Grade, type LeakType, type SessionStats, type SpotType } from '@gtotutor/shared-types';
 
 const SPOT_LABELS: Record<SpotType, string> = {
   RFI: 'Opening (first in)',
@@ -38,6 +38,20 @@ export function leakTypeOf(d: DecisionFeedback): LeakType | null {
   if (d.chosenAction === 'check') return aggressive(d.bestAction) ? 'under_raise' : null;
   return 'over_raise';
 }
+
+/** One decision's effect on a streak: best adds 1, mixed keeps it, a mistake ends it. */
+export function nextStreak(s: { current: number; best: number }, grade: Grade): { current: number; best: number } {
+  const current = grade === 'best' ? s.current + 1 : grade === 'mixed' ? s.current : 0;
+  return { current, best: Math.max(s.best, current) };
+}
+
+/** The streak after a run of decisions, oldest first, and the longest one in it. */
+export function streakOf(decisions: Pick<DecisionFeedback, 'grade'>[]): { current: number; best: number } {
+  return decisions.reduce((s, d) => nextStreak(s, d.grade), { current: 0, best: 0 });
+}
+
+/** Streak lengths worth a celebration: 5, 10, 15, 20, 25, then every 25. */
+export const isStreakMilestone = (n: number) => n >= 5 && (n <= 25 ? n % 5 === 0 : n % 25 === 0);
 
 export function computeSessionStats(hands: { decisions: DecisionFeedback[] }[], easyFoldsSkipped: boolean): SessionStats {
   const decisions = hands.flatMap((h) => h.decisions);
@@ -84,5 +98,6 @@ export function computeSessionStats(hands: { decisions: DecisionFeedback[] }[], 
       .map(([type, count]) => ({ type, label: LEAK_LABELS[type], count })),
     worstMistakes,
     easyFoldsSkipped,
+    bestStreak: streakOf(decisions).best,
   };
 }

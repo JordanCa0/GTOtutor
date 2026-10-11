@@ -1,4 +1,4 @@
-import type { ActionType, ChatMessage, HandView, LegalAction, StartHandRequest } from '@gtotutor/shared-types';
+import type { ActionType, ChatMessage, HandView, LegalAction, StartHandRequest, StreakUpdate } from '@gtotutor/shared-types';
 import { useMutation } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api/client';
@@ -12,6 +12,7 @@ import { Presence } from './components/Presence';
 import { ProfilePage } from './components/ProfilePage';
 import { SettingsMenu } from './components/SettingsMenu';
 import { SetupScreen } from './components/SetupScreen';
+import type { Celebration } from './components/Streak';
 import { Table } from './components/Table';
 import { TitleScreen } from './components/TitleScreen';
 import { Tour, type TourStep } from './components/Tour';
@@ -42,6 +43,13 @@ export function App() {
   const [showTitle, setShowTitle] = useState(() => !hasSeenTitle());
   const [configOpen, setConfigOpen] = useState(false);
   const [helpRequest, setHelpRequest] = useState(0);
+  // The session's run of good decisions, and the latest milestone to celebrate. A new session starts over.
+  const [streak, setStreak] = useState<StreakUpdate | null>(null);
+  const [celebration, setCelebration] = useState<Celebration | null>(null);
+  useEffect(() => {
+    setStreak(null);
+    setCelebration(null);
+  }, [sessionId]);
   // The profile opens over the table, so a hand in progress waits underneath.
   const [profileOpen, setProfileOpen] = useState(false);
   const openProfile = useCallback(() => setProfileOpen(true), []);
@@ -146,7 +154,13 @@ export function App() {
         dealing={start.isPending}
         error={start.error?.message ?? null}
         onHand={setHand}
-        onDecided={() => setDecisionsPlayed((n) => n + 1)}
+        onDecided={(s) => {
+          setDecisionsPlayed((n) => n + 1);
+          setStreak(s);
+          if (s.milestone) setCelebration({ milestone: s.milestone, at: Date.now() });
+        }}
+        streak={streak}
+        celebration={celebration}
         onNext={() => settings && start.mutate(settings)}
         chats={chats}
         onChat={(id, messages) => setChats((c) => ({ ...c, [id]: messages }))}
@@ -181,7 +195,9 @@ interface PlayAreaProps {
   dealing: boolean;
   error: string | null;
   onHand: (h: HandView) => void;
-  onDecided: () => void;
+  onDecided: (streak: StreakUpdate) => void;
+  streak: StreakUpdate | null;
+  celebration: Celebration | null;
   onNext: () => void;
   chats: Record<string, ChatMessage[]>;
   onChat: (decisionId: string, messages: ChatMessage[]) => void;
@@ -190,15 +206,21 @@ interface PlayAreaProps {
   helpRequest: number;
 }
 
-function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onChat, animate, helpRequest }: PlayAreaProps) {
+function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration, onNext, chats, onChat, animate, helpRequest }: PlayAreaProps) {
   const { playback, done, skip } = usePlayback(hand, animate);
   useTableSounds(hand, playback, animate);
   const decide = useMutation({
     mutationFn: (action: LegalAction) => api.decide(hand.id, action.id, action.toBb),
-    onSuccess: ({ hand: h, feedback }) => {
-      playSound(feedback.grade === 'best' ? 'good' : feedback.grade === 'mixed' ? 'mixed' : 'bad');
+    onSuccess: ({ hand: h, feedback, streak: s }) => {
+      if (feedback.grade === 'best') playSound('good', 0, { count: s.count, milestone: s.milestone !== null });
+      else if (feedback.grade === 'mixed') playSound('mixed');
+      else {
+        // A long run ending gets a soft falling note first, never anything harsher.
+        if ((s.ended ?? 0) >= 5) playSound('streakEnd');
+        playSound('bad', (s.ended ?? 0) >= 5 ? 260 : 0);
+      }
       onHand(h);
-      onDecided();
+      onDecided(s);
     },
   });
 
@@ -302,7 +324,7 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
       {tour && <Tour key={tour.part ?? 'all'} steps={tour.steps} onDone={endTour} />}
       <section className="left">
         <div className="table-area">
-          <Table hand={hand} playback={playback} onSkip={skip} />
+          <Table hand={hand} playback={playback} onSkip={skip} celebration={celebration} />
         </div>
 
         <div className="controls">
@@ -314,8 +336,13 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
               </button>
             </div>
           ) : !complete && hand.solving ? (
-            <div className="waiting">
-              <span className="muted pulse">Solving the {hand.solving}…</span>
+            // The buttons' shape while the live solve runs, with the wait explained in the middle slot.
+            <div className="actions" role="status" aria-label={`Solving the ${hand.solving}`}>
+              {ACTION_SLOTS.map((slot) => (
+                <span key={slot.key} className="act act-skeleton" aria-hidden>
+                  {slot.key === 'call' ? `Solving the ${hand.solving}…` : ''}
+                </span>
+              ))}
             </div>
           ) : !complete ? (
             <div className="actions">
@@ -381,7 +408,7 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
       </section>
 
       <aside className="right">
-        <DecisionPanel hand={hand} playbackDone={done} chats={chats} onChat={onChat} />
+        <DecisionPanel hand={hand} playbackDone={done} chats={chats} onChat={onChat} streak={streak} />
       </aside>
     </main>
   );
