@@ -105,8 +105,8 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
           <span>
             Simple pots
             <small>
-              Nobody limps or calls ahead of you, so you can always call a raise. Off, you play the full charts: once someone has called or
-              limped, it's raise or fold, since every pot stays heads-up.
+              Opponents fold instead of limping or calling before you act, so you can always call a raise. Turn it off for the full game: once
+              someone has called or limped in front of you, you can only raise or fold, since every pot stays heads-up.
             </small>
           </span>
         </label>
