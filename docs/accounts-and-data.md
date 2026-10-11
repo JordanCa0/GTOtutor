@@ -23,7 +23,7 @@ Every player-owned row has either `user_id` (→ `auth.users`, deleted with the 
 
 | Table | Holds |
 |---|---|
-| `profiles` | One per user: display name, settings (sound, animations, default table/stack/position, skip easy folds, flop practice) |
+| `profiles` | One per user: display name, settings (sound, animations, default table/stack/position, skip easy folds, simple pots, flop practice) |
 | `practice_sessions` | A sitting of hands (today's client `sessionId`) |
 | `hands` | Config, hero position, status, full engine state (so a hand in progress survives a restart), result, net bb |
 | `decisions` | Every graded decision: spot, street, board, hand, chosen vs best action, grade, frequencies, borrowed flop, hint used, **starred time and note** |

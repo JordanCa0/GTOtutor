@@ -227,6 +227,75 @@ describe('hand engine', () => {
     expect(blocked).toBeGreaterThan(0);
   });
 
+  it('says why Call is missing: someone already called, or hero faces a limp', () => {
+    const engine = newEngine(11);
+    const rng = seededRng(12);
+    let explained = 0;
+    for (let i = 0; i < 3000; i++) {
+      const state = engine.start(req);
+      let view = engine.view(state);
+      while (view.status === 'awaiting_hero') {
+        const blocked = view.pendingSpot!.street === 'preflop' && view.pendingSpot!.nodeKey.endsWith('|nocall');
+        expect(view.noCallReason != null).toBe(blocked);
+        if (blocked) {
+          explained++;
+          // Facing an open and a caller: a squeeze (3-bet) or fold.
+          if (view.pendingSpot!.nodeKey.includes('|VS_OPEN|')) expect(view.noCallReason!.title).toBe('3-bet or fold');
+        }
+        engine.decide(state, view.legalActions[rng.int(view.legalActions.length)].id as ActionType);
+        view = engine.view(state);
+      }
+    }
+    expect(explained).toBeGreaterThan(0);
+
+    // UTG always limps: an HJ hero can only raise or fold, and is told why.
+    const set = buildFixtureChartSet();
+    const rfi = set.nodes.get('SIX_MAX|100|RFI|UTG')!;
+    for (const hc of rfi.strategy.keys()) rfi.strategy.set(hc, [0, 1, 0]);
+    const limps = new HandEngine(new ChartService(set), seededRng(34), runoutResolver);
+    expect(limps.view(limps.start({ ...req, heroPosition: 'HJ', skipEasyFolds: false })).noCallReason?.title).toBe('Raise or fold');
+  });
+
+  it('simple pots: bots never limp or call ahead of hero, so hero can always call a raise', () => {
+    const engine = newEngine(21);
+    const rng = seededRng(22);
+    let facingRaise = 0;
+    let calledHero = 0;
+    for (let i = 0; i < 3000; i++) {
+      const state = engine.start({ ...req, simplePots: true });
+      let view = engine.view(state);
+      while (view.status === 'awaiting_hero') {
+        const spot = view.pendingSpot!;
+        if (spot.street === 'preflop') {
+          expect(spot.nodeKey).not.toMatch(/\|nocall$/);
+          expect(view.noCallReason).toBeNull();
+          // The only limp hero ever faces is the SB completing into hero's big blind.
+          if (spot.nodeKey.includes('|VS_LIMP|')) expect(spot.nodeKey).toBe('SIX_MAX|100|VS_LIMP|BB|SB');
+          else if (!/\|RFI\|/.test(spot.nodeKey)) {
+            facingRaise++;
+            expect(view.legalActions.map((a) => a.id)).toContain('call');
+          }
+        }
+        engine.decide(state, view.legalActions[rng.int(view.legalActions.length)].id as ActionType);
+        view = engine.view(state);
+      }
+      // Bots still call hero's own raises.
+      const preflop = view.actionLog.filter((a) => a.street === 'preflop');
+      if (preflop.some((a, j) => !a.isHero && a.action === 'call' && preflop.slice(0, j).some((b) => b.isHero && (b.action === 'raise' || b.action === 'allin')))) calledHero++;
+    }
+    expect(facingRaise).toBeGreaterThan(300);
+    expect(calledHero).toBeGreaterThan(0);
+
+    // UTG always limps in the chart, but folds instead while hero is still to act.
+    const set = buildFixtureChartSet();
+    const rfi = set.nodes.get('SIX_MAX|100|RFI|UTG')!;
+    for (const hc of rfi.strategy.keys()) rfi.strategy.set(hc, [0, 1, 0]);
+    const limps = new HandEngine(new ChartService(set), seededRng(34), runoutResolver);
+    const hj = limps.start({ ...req, heroPosition: 'HJ', skipEasyFolds: false, simplePots: true });
+    expect(hj.actionLog[0]).toMatchObject({ position: 'UTG', action: 'fold' });
+    expect(limps.pendingDecision(hj)!.nodeKey).toBe('SIX_MAX|100|RFI|HJ');
+  });
+
   it('rejects illegal and out-of-turn actions', () => {
     const engine = newEngine(8);
     const state = engine.start({ ...req, heroPosition: 'UTG' });

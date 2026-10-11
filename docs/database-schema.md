@@ -55,7 +55,7 @@ Guests' data lives only for their current session:
 |---|---|---|---|---|
 | `user_id` | uuid, primary key | yes | The account (Supabase auth user) | `7c9e…` |
 | `display_name` | text | no | Name shown in the app | `Jordan` |
-| `settings` | JSON | yes | Saved preferences: sound, animations, default table, stack, position, skip easy folds, flop practice | `{"sound":true,"heroPosition":"BTN"}` |
+| `settings` | JSON | yes | Saved preferences: sound, animations, default table, stack, position, skip easy folds, simple pots, flop practice | `{"sound":true,"heroPosition":"BTN"}` |
 | `created_at` | timestamp | yes | When the account first used the app | `2026-10-04 19:40` |
 
 ### `practice_sessions`: a sitting of hands

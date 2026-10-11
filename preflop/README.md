@@ -27,6 +27,7 @@ This is our own code with no postflop-solver dependency, so it isn't AGPL. Its o
   - This matches the flop solver, which only does heads-up pots.
   - The decisions where calling is blocked (facing an open and a caller, for example) get their own strategy under the node key plus `|nocall`.
   - The app's engine applies the same rule and uses those nodes. For charts without them, `ChartService` derives them by turning calls into folds.
+  - The app's "Simple pots" option (off by default) keeps hero from ever facing those spots: bots fold instead of limping or calling while hero is still in, except when calling hero's own raise or completing the SB into hero's BB. Their raising ranges stay as charted. Hero's own decisions are still graded against the chart.
 - **Card removal between players is ignored.** Each class is dealt with probability combos/1326.
 - **Equities are Monte Carlo** (20,000 samples per class matchup, cached in `cache/`).
 

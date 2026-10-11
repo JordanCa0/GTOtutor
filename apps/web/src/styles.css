@@ -329,6 +329,14 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 .primary .key { margin-left: var(--sp-2); vertical-align: 1px; background: rgba(27, 19, 7, 0.12); border-color: rgba(27, 19, 7, 0.25); }
 @media (hover: none) { .key { display: none; } }
 .waiting { display: flex; gap: var(--sp-4); justify-content: center; align-items: center; }
+/* The greyed Call button with its "3-bet or fold" tooltip (shares .pos-tip's tooltip styles). */
+.actions:has(.act-tip) { position: relative; }
+/* The table's seats stack above the controls; lift the controls while the tooltip is open so the hero's cards stay under it. */
+.controls:has(.act-tip:hover, .act-tip:focus) { position: relative; z-index: 6; }
+/* Anchored to the action bar, not the button, so it stays on screen when Call sits at the edge on phones. */
+.act-tip { display: flex; cursor: help; border-radius: var(--r-md); outline-offset: 2px; }
+.act-tip > .act { flex: 1; pointer-events: none; }
+.act-tip .tooltip { max-width: min(320px, 86vw); }
 .result-strip { display: flex; gap: var(--sp-4); align-items: center; justify-content: center; flex-wrap: wrap; animation: pop 0.3s var(--ease) both; }
 /* Turn and river credit: postflop-solver (AGPL-3.0) and the source link the license requires. */
 .solver-credit { text-align: center; margin: var(--sp-2) 0 0; }

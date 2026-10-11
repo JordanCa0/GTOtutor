@@ -11,6 +11,7 @@ import {
   type HandResult,
   type HandView,
   type LegalAction,
+  type NoCallReason,
   type Position,
   type StartHandRequest,
   type Street,
@@ -19,6 +20,9 @@ import {
 import type { ChartService } from '../charts/chartService.js';
 import type { ChartNode } from '../charts/types.js';
 import { FACING_TYPES, makeNodeKey, NOCALL_SUFFIX } from '../charts/nodeKeys.js';
+
+/** What a raise is called at each raise level: the open is level 1, so re-raising it is a 3-bet. */
+const RAISE_NAMES: Record<number, string> = { 1: '3-bet', 2: '4-bet', 3: '5-bet' };
 import { ALL_HAND_CLASSES, comboCount, fullDeck, handClass, shuffle } from '../poker/cards.js';
 import { bestHand } from '../poker/evaluator.js';
 import { handIndex, mapHand, parseCards } from '../postflop/flopMap.js';
@@ -76,6 +80,11 @@ export interface HandState {
   postflop: PostflopState | null;
   /** Dealt in flop practice mode (straight to a BTN vs BB flop). */
   flopPractice: boolean;
+  /**
+   * Simple pots: bots never limp or call ahead of hero, so hero can always call (see botAction).
+   * Optional: hands saved before it existed lack it.
+   */
+  simplePots?: boolean;
   /** Why the turn and river ran out instead of being played (the live solve failed, was too slow, or hit a limit). */
   liveNote?: string | null;
   /** The solver service commit behind this hand's turn and river strategies (AGPL source link). */
@@ -538,6 +547,7 @@ export class HandEngine {
       solving: this.awaitingSolve(state) ? (state.postflop!.street as 'turn' | 'river') : null,
       liveNote: state.liveNote ?? null,
       solverCommit: state.solverCommit ?? null,
+      noCallReason: pending ? this.noCallReason(state) : null,
     };
   }
 
@@ -558,6 +568,7 @@ export class HandEngine {
       sessionId: req.sessionId ?? null,
       easyFoldsSkipped: req.skipEasyFolds ?? true,
       flopPractice: req.flopPractice ?? false,
+      simplePots: req.simplePots ?? false,
       config: { tableSize: req.tableSize, stackDepthBb: req.stackDepthBb },
       heroPosition,
       players,
@@ -685,8 +696,43 @@ export class HandEngine {
       }
       const node = this.charts.getNode(this.nodeKeyFor(state, player));
       const freqs = node.strategy.get(handClass(player.cards[0], player.cards[1]))!;
-      this.apply(state, player, node.actions[this.sample(freqs)]);
+      this.apply(state, player, this.botAction(state, player, node.actions[this.sample(freqs)]));
     }
+  }
+
+  /**
+   * A bot's chart action, except in simple pots: there a bot folds instead of limping or calling
+   * while hero is still in, so hero never faces a caller (which would leave hero only fold or
+   * raise, as pots stay heads-up). Two calls are kept, as they leave hero's options whole: calling
+   * hero's own raise, and the SB completing into hero's big blind. Raising hands stay as charted.
+   */
+  private botAction(state: HandState, player: Player, action: LegalAction): LegalAction {
+    if (!state.simplePots || action.id !== 'call') return action;
+    const hero = state.players.find((p) => p.isHero)!;
+    if (hero.folded) return action;
+    const keep = state.raiseLevel === 0 ? hero.position === 'BB' && player.position === 'SB' : state.lastRaiser === hero.position;
+    return keep ? action : { id: 'fold', label: 'Fold', toBb: null };
+  }
+
+  /**
+   * Why hero has no Call here, for the greyed Call button's tooltip, or null: someone has already
+   * called (pots stay heads-up, so it's re-raise or fold), or hero faces a limp (no limping behind).
+   * Only comes up with simple pots off.
+   */
+  private noCallReason(state: HandState): NoCallReason | null {
+    if (state.postflop || !state.heroToAct) return null;
+    const hero = state.players.find((p) => p.isHero)!;
+    const key = this.nodeKeyFor(state, hero);
+    const node = this.charts.getNode(key);
+    if (key.endsWith(NOCALL_SUFFIX)) {
+      const raise = node.actions.some((a) => a.id === 'raise') ? (RAISE_NAMES[state.raiseLevel] ?? 'Raise') : node.actions.some((a) => a.id === 'allin') ? 'All-in' : null;
+      if (!raise) return { title: 'Fold only', text: 'Someone already called, and pots stay heads-up after the flop.' };
+      return { title: `${raise} or fold`, text: `Someone already called, so you can't call too: pots stay heads-up after the flop.` };
+    }
+    if (state.raiseLevel === 0 && state.limper && hero.position !== 'BB') {
+      return { title: 'Raise or fold', text: "Someone limped, so you can't limp too: pots stay heads-up after the flop." };
+    }
+    return null;
   }
 
   private sample(freqs: number[]): number {

@@ -59,6 +59,7 @@ const startHandSchema = {
     heroPosition: { enum: ['random', 'UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'] },
     sessionId: sessionIdSchema,
     skipEasyFolds: { type: 'boolean' },
+    simplePots: { type: 'boolean' },
     flopPractice: { type: 'boolean' },
   },
 } as const;

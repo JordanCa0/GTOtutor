@@ -421,6 +421,17 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration
                     {action.label}
                     <ShortcutKey k={keyFor(action)} />
                   </button>
+                ) : slot.key === 'call' && hand.noCallReason ? (
+                  // Why there's no call ("3-bet or fold"), on hover or tap: the wrapper takes focus, as a disabled button can't.
+                  <span key={slot.key} className="act-tip pos-tip" tabIndex={0} aria-describedby="no-call-tip">
+                    <button className={`act act-${slot.key} unavailable`} disabled>
+                      {slot.placeholder}
+                    </button>
+                    <span role="tooltip" id="no-call-tip" className="tooltip tip-above tip-center">
+                      <strong>{hand.noCallReason.title}</strong>
+                      <span>{hand.noCallReason.text}</span>
+                    </span>
+                  </span>
                 ) : (
                   <button key={slot.key} className={`act act-${slot.key} unavailable`} disabled title="Not an option in this spot">
                     {slot.placeholder}

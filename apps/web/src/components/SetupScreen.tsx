@@ -44,6 +44,7 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
   const [stack, setStack] = useState<StackDepth>(initial?.stackDepthBb ?? 100);
   const [position, setPosition] = useState<Position | 'random'>(initial?.heroPosition ?? 'random');
   const [skipEasyFolds, setSkipEasyFolds] = useState(initial?.skipEasyFolds ?? true);
+  const [simplePots, setSimplePots] = useState(initial?.simplePots ?? false);
   const [flopPractice, setFlopPractice] = useState(initial?.flopPractice ?? false);
 
   useEffect(() => {
@@ -100,6 +101,16 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
           </span>
         </label>
         <label className="toggle">
+          <input type="checkbox" checked={simplePots} onChange={(e) => setSimplePots(e.target.checked)} />
+          <span>
+            Simple pots
+            <small>
+              Nobody limps or calls ahead of you, so you can always call a raise. Off, you play the full charts: once someone has called or
+              limped, it's raise or fold, since every pot stays heads-up.
+            </small>
+          </span>
+        </label>
+        <label className="toggle">
           <input type="checkbox" checked={flopPractice} onChange={(e) => setFlopPractice(e.target.checked)} />
           <span>
             Flop practice (testing)
@@ -110,7 +121,7 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
 
       <p className="muted small">Cash game only for now. Tournament/ICM, other table sizes, and other stack depths come with the solver.</p>
 
-      <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, heroPosition: position, skipEasyFolds, flopPractice })}>
+      <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, heroPosition: position, skipEasyFolds, simplePots, flopPractice })}>
         {starting ? 'Dealing…' : onClose ? 'Deal with these settings' : 'Deal a hand'}
       </button>
       {error && <p className="error">{error}</p>}

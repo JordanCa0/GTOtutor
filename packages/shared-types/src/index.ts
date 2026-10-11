@@ -38,6 +38,12 @@ export interface StartHandRequest extends HandConfig {
   /** Mostly skip hands whose first decision is an obvious fold. Defaults to true. */
   skipEasyFolds?: boolean;
   /**
+   * Simple pots: opponents never limp or call ahead of hero, so every pot is one raiser against
+   * one caller and hero can always call. Defaults to false (the full charts, where hero sometimes
+   * can only fold or raise).
+   */
+  simplePots?: boolean;
+  /**
    * Testing aid: deal straight into a solved BTN-vs-BB single-raised pot and start at hero's flop
    * decision (hero is BTN or BB; preflop is played automatically and not graded).
    */
@@ -164,6 +170,14 @@ export interface HandView {
   liveNote?: string | null;
   /** Commit of the solver service behind this hand's turn and river strategies, for the source link (AGPL). */
   solverCommit?: string | null;
+  /** Why hero has no Call option in this spot (someone already called, or facing a limp), or null. */
+  noCallReason?: NoCallReason | null;
+}
+
+/** The greyed Call button's tooltip: "3-bet or fold" and why. */
+export interface NoCallReason {
+  title: string;
+  text: string;
 }
 
 export interface SubmitDecisionRequest {
