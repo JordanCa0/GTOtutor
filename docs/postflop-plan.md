@@ -159,6 +159,16 @@ Production serves this output from a private S3 bucket synced to the API server'
   - Limits: uncached solves per player (`LIVE_SOLVES_PER_HOUR`, default 300) and overall (`LIVE_SOLVES_GLOBAL_PER_HOUR`, default 3000), like the coach's; plus the function's concurrency cap.
 - **Security.** Only the API can invoke the function (IAM); it has no URL. Its role can only write logs. No database access, no secrets (AGPL condition 5).
 
+## What the coach sees
+
+Explanations and follow-up chat get both ranges at the decision, not just hero's hand (`HandEngine.spotRanges`, `teacher/spotSummary.ts`):
+- **Hero's range by hand group** (`teacher/handGroups.ts`): sets, overpairs, top pair by kicker, draws and so on after the flop; pairs, suited aces, broadways and so on before it. Each group has its share of the range, its action mix and its EVs.
+- **Villain's range by group** at that point: the flop file's preflop range times villain's actions along the line; on the turn and river, the live solve's turn-start range the same way; preflop, the last raiser's chart node (saved on the decision as `villainRange`).
+- **Hands next to hero's** in the same group, with their mix.
+- **A lookup tool** in chat, `get_hand_strategy`, for any one hand ("what about AK here?").
+
+Every number in the summary and the tool's answers goes on the grounding check's allowed list. Hints never get any of it, so they can't give the answer away. Without the data (a live solve no longer in memory, or a decision saved before 2026-10-10), the coach is told villain's range isn't available.
+
 ## Cost estimates (projections, not measured)
 
 | Scope | Desktop |

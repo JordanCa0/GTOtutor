@@ -78,16 +78,35 @@ export interface TurnStart {
  * Same formula as `live::turn_start` in the solver. The flop files' own `weights` can't be used:
  * they include the opponent's card removal, so blockers would count twice.
  */
-export function turnStart(data: LoadedFlop, spot: SpotInfo, line: number[]): TurnStart | null {
+/** Each player's preflop range over the flop file's hands (weights from the spot's range strings). */
+export function preflopRanges(data: Pick<LoadedFlop, 'hands'>, spot: SpotInfo): [number[], number[]] {
   const preflop = [parseRange(spot.oop_range), parseRange(spot.ip_range)];
-  const ranges = [0, 1].map((p) => data.hands[p].map((h) => preflop[p].get(handClass(h.slice(0, 2), h.slice(2))) ?? 0)) as [number[], number[]];
-  const street = [0, 0];
+  return [0, 1].map((p) => data.hands[p].map((h) => preflop[p].get(handClass(h.slice(0, 2), h.slice(2))) ?? 0)) as [number[], number[]];
+}
+
+/**
+ * Each player's range after `line` (action indexes from `nodes`' first decision): the starting
+ * ranges times each action's frequency on the line. Null if the line leaves the tree.
+ */
+export function lineReach(nodes: Map<string, FlopNode>, start: [number[], number[]], line: number[]): [number[], number[]] | null {
+  const ranges: [number[], number[]] = [[...start[0]], [...start[1]]];
   for (let k = 0; k < line.length; k++) {
-    const node = data.byHistory.get(line.slice(0, k).join('.'));
-    const label = node?.actions[line[k]];
-    if (!node || !label) return null;
+    const node = nodes.get(line.slice(0, k).join('.'));
+    if (!node || !node.actions[line[k]]) return null;
     const p = node.player;
     ranges[p] = ranges[p].map((r, h) => (r * node.strategy[line[k]][h]) / 1000);
+  }
+  return ranges;
+}
+
+export function turnStart(data: LoadedFlop, spot: SpotInfo, line: number[]): TurnStart | null {
+  const ranges = lineReach(data.byHistory, preflopRanges(data, spot), line);
+  if (!ranges) return null;
+  const street = [0, 0];
+  for (let k = 0; k < line.length; k++) {
+    const node = data.byHistory.get(line.slice(0, k).join('.'))!;
+    const label = node.actions[line[k]];
+    const p = node.player;
     const [kind, amount] = label.split(' ');
     if (kind === 'fold') return null;
     if (kind === 'call') street[p] = street[1 - p];

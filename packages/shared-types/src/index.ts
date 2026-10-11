@@ -102,6 +102,8 @@ export interface DecisionFeedback {
   board: string[];
   /** Set when the strategy comes from a similar solved flop rather than this exact one. */
   approxFlop: string | null;
+  /** Preflop, facing a raise: who made it and from which chart node, so the coach can describe their range. */
+  villainRange?: VillainRange;
 }
 
 export interface PendingSpot {

@@ -139,6 +139,8 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
       options: decision.options,
       actionsBefore: ctx.actionLog.slice(0, cut),
       priorDecisions: ctx.decisions.slice(0, k),
+      // Both ranges at the decision, so the coach can explain the whole spot (not sent with hints).
+      spot: engine.spotRanges(decision.nodeKey, decision.villainRange),
     };
   };
 

@@ -15,7 +15,9 @@ import type {
 import { chosenOption } from '@gtotutor/shared-types';
 import { z } from 'zod';
 import { findUngroundedPercentages } from './grounding.js';
+import { postflopGroup, preflopGroup } from './handGroups.js';
 import { HourlyRateLimiter } from './rateLimit.js';
+import { lookupHand, summarizeSpot, type SpotRanges } from './spotSummary.js';
 
 /** Cache key part for hero's choice: the type, plus the size when there's more than one of that type. */
 const chosenKey = (d: DecisionFeedback) => {
@@ -23,10 +25,22 @@ const chosenKey = (d: DecisionFeedback) => {
   return d.options.filter((x) => x.actionId === o.actionId).length > 1 ? `${o.actionId}@${o.toBb}` : o.actionId;
 };
 
-const PROMPT_VERSION = 'v5';
+const PROMPT_VERSION = 'v6';
+
+/** A tool the coach can call mid-answer, e.g. to look up one hand's strategy. Runs on the server; returns text. */
+export interface CoachTool {
+  name: string;
+  description: string;
+  /** JSON schema of the input object. */
+  inputSchema: { type: 'object'; properties: Record<string, unknown>; required?: string[] };
+  run(input: Record<string, unknown>): string;
+}
+
+/** At most this many rounds of tool calls before the coach must answer. */
+const MAX_TOOL_ROUNDS = 3;
 
 export interface CoachLlm {
-  structured<S extends z.ZodType>(system: string, messages: ChatMessage[], schema: S): Promise<z.infer<S>>;
+  structured<S extends z.ZodType>(system: string, messages: ChatMessage[], schema: S, tools?: CoachTool[]): Promise<z.infer<S>>;
   text(system: string, messages: ChatMessage[]): Promise<string>;
 }
 
@@ -53,6 +67,8 @@ export interface SpotContext {
 
 export interface ExplainInput extends SpotContext {
   decision: DecisionFeedback;
+  /** Both ranges at the decision (HandEngine.spotRanges); null when the data is gone. Never sent with hints. */
+  spot?: SpotRanges | null;
 }
 
 const COACH_BASE = `You are the coach inside GTOtutor, a No-Limit Hold'em cash-game trainer, teaching an intermediate player about preflop and postflop decisions. You receive the strategy chart's numbers for the exact spot; treat them as ground truth and explain them rather than recomputing or second-guessing them.
@@ -68,14 +84,14 @@ tldr: at most 15 words. Start with "Correct:", "Mixed:" or "Mistake:" to match t
   Good: "Mistake: 3-betting J9o folds out worse hands and only gets called by better ones."
   Bad: "This is a good decision because there are several factors that make calling reasonable here."
 
-points: 2 or 3 bullet points, each one sentence of at most 20 words, each a different reason. If the choice wasn't the main play, one point says what goes wrong with it. If the spot is mixed, one point says why mixing makes sense. No filler and no repeating the tldr.`;
+points: 2 or 3 bullet points, each one sentence of at most 20 words, each a different reason. Where it explains the play, one point can contrast hero's hand with how the rest of the range plays (from <whole_spot>), e.g. which groups bet or what villain still has. If the choice wasn't the main play, one point says what goes wrong with it. If the spot is mixed, one point says why mixing makes sense. No filler and no repeating the tldr.`;
 
 const HINT_TASK = `The student has NOT acted yet and asked for a hint. In 2-3 sentences, point them at what matters in this spot (position, who opened and how wide, how their hand plays against that range, blockers, stack depth) so they can reason it out. Do not reveal or recommend an action, do not state any percentage or frequency, and do not say what the chart does.`;
 
 const OFF_TOPIC_TOKEN = 'OFF_TOPIC';
 export const OFF_TOPIC_REPLY = "I'm your poker coach, so I only answer poker questions. Ask me about this hand, this spot, or poker strategy in general.";
 
-const CHAT_TASK = `The student is asking follow-up questions about a decision they already made. Answer the latest question, staying grounded in the spot data. If they ask about a different spot (another position or action), explain the general principle and say the chart numbers for that spot are not in front of you.
+const CHAT_TASK = `The student is asking follow-up questions about a decision they already made. Answer the latest question, staying grounded in the spot data. If they ask about a different spot (another position or action), explain the general principle and say the chart numbers for that spot are not in front of you. For questions about this spot's other hands ("which hands bet here?", "what is villain continuing with?"), use <whole_spot>, and call get_hand_strategy for a specific hand rather than guessing its numbers.
 
 tldr: the direct answer in one sentence of at most 20 words, specific to this hand and spot. No hedging.
 detail: the explanation behind it, in at most 2 short paragraphs of plain text. Don't repeat the tldr.
@@ -171,7 +187,40 @@ export function buildContext(input: ExplainInput): string {
         : d.grade === 'mixed'
           ? 'part of a mixed strategy, not the main action'
           : 'rarely or never taken by the chart';
-  return `${buildSpotContext(input)}\nHero chose: ${chosen.label} (chart frequency ${pct(d.chosenFrequency)}). Grade: ${grade}.`;
+  const whole = spotData(input);
+  return `${buildSpotContext(input)}\nHero chose: ${chosen.label} (chart frequency ${pct(d.chosenFrequency)}). Grade: ${grade}.${whole ? `\n\n<whole_spot>\n${whole.text}\n</whole_spot>` : ''}`;
+}
+
+/** Hero's hand group at a decision: by class preflop, by made hand or draw on the real board after. */
+export function heroGroup(d: Pick<DecisionFeedback, 'handClass' | 'heroCards' | 'board'>): string {
+  return d.board.length ? postflopGroup(d.heroCards, d.board).group : preflopGroup(d.handClass);
+}
+
+/** The grouped summary of both ranges, and its numbers for the grounding check; null without range data. */
+function spotData(input: ExplainInput): { text: string; percents: number[] } | null {
+  return input.spot ? summarizeSpot(input.spot, { handClass: input.decision.handClass, group: heroGroup(input.decision) }) : null;
+}
+
+/** The coach's lookup tool for one hand at this decision; every number it returns is added to `allowed`. */
+function handTool(spot: SpotRanges, allowed: number[]): CoachTool {
+  return {
+    name: 'get_hand_strategy',
+    description:
+      "Look up one hand at this decision: for hero, its share of hero's range, its hand group, and how often each option is played (with EVs when known); for villain, its share of villain's range and its group. Use it instead of guessing whenever the student asks about a specific hand other than hero's.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        hand: { type: 'string', description: 'A hand class like "AKs", "T9o" or "77", or two exact cards like "AsKd".' },
+        player: { type: 'string', enum: ['hero', 'villain'] },
+      },
+      required: ['hand', 'player'],
+    },
+    run(input) {
+      const res = lookupHand(spot, String(input.hand ?? ''), input.player === 'villain' ? 'villain' : 'hero');
+      allowed.push(...res.percents);
+      return res.text;
+    },
+  };
 }
 
 /** Hints must nudge, not answer. */
@@ -206,19 +255,39 @@ export function claudeCoachLlm(model: string): CoachLlm {
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: 'default' as const,
   });
+  // The system prompt (instructions plus the spot data) is the same across a thread's follow-ups, so it's cached.
+  const cachedSystem = (system: string) => [{ type: 'text' as const, text: system, cache_control: { type: 'ephemeral' as const } }];
   return {
-    async structured(system, messages, schema) {
+    async structured(system, messages, schema, tools) {
       try {
         client ??= new Anthropic();
-        const response = await client.beta.messages.parse({
-          ...base(),
-          system,
-          messages,
-          output_config: { effort: 'medium', format: betaZodOutputFormat(schema) },
-        });
-        if (response.stop_reason === 'refusal') throw new ExplanationUnavailable('The coach declined to answer this one.');
-        if (!response.parsed_output) throw new ExplanationUnavailable('The coach returned an unreadable answer — try again.');
-        return response.parsed_output;
+        const convo: Anthropic.Beta.Messages.BetaMessageParam[] = messages.map((m) => ({ role: m.role, content: m.content }));
+        const toolDefs = tools?.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema }));
+        for (let round = 0; ; round++) {
+          const response = await client.beta.messages.parse({
+            ...base(),
+            system: cachedSystem(system),
+            messages: convo,
+            ...(toolDefs?.length && { tools: toolDefs, tool_choice: round < MAX_TOOL_ROUNDS ? { type: 'auto' as const } : { type: 'none' as const } }),
+            output_config: { effort: 'medium', format: betaZodOutputFormat(schema) },
+          });
+          if (response.stop_reason === 'refusal') throw new ExplanationUnavailable('The coach declined to answer this one.');
+          const calls = response.content.filter((b) => b.type === 'tool_use');
+          if (response.stop_reason === 'tool_use' && calls.length && tools) {
+            convo.push({ role: 'assistant', content: response.content as Anthropic.Beta.Messages.BetaContentBlockParam[] });
+            convo.push({
+              role: 'user',
+              content: calls.map((b) => {
+                const tool = tools.find((t) => t.name === b.name);
+                const content = tool ? tool.run((b.input ?? {}) as Record<string, unknown>) : `Unknown tool ${b.name}.`;
+                return { type: 'tool_result' as const, tool_use_id: b.id, content };
+              }),
+            });
+            continue;
+          }
+          if (!response.parsed_output) throw new ExplanationUnavailable('The coach returned an unreadable answer — try again.');
+          return response.parsed_output;
+        }
       } catch (err) {
         throw toUnavailable(err);
       }
@@ -226,7 +295,7 @@ export function claudeCoachLlm(model: string): CoachLlm {
     async text(system, messages) {
       try {
         client ??= new Anthropic();
-        const response = await client.beta.messages.create({ ...base(), system, messages, output_config: { effort: 'medium' } });
+        const response = await client.beta.messages.create({ ...base(), system: cachedSystem(system), messages, output_config: { effort: 'medium' } });
         if (response.stop_reason === 'refusal') throw new ExplanationUnavailable('The coach declined to answer this one.');
         const text = response.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('').trim();
         if (!text) throw new ExplanationUnavailable('The coach returned an empty answer — try again.');
@@ -289,7 +358,7 @@ export class LlmTeacher {
     );
     if (!result.ok) return { status: 'unavailable', reason: result.reason };
 
-    const allowed = [...d.options.map((o) => o.frequency * 100), ...input.rangeSummary.map((r) => r.share * 100)];
+    const allowed = [...d.options.map((o) => o.frequency * 100), ...input.rangeSummary.map((r) => r.share * 100), ...(spotData(input)?.percents ?? [])];
     const points = result.value.points.slice(0, 3);
     const ungroundedNumbers = findUngroundedPercentages([result.value.tldr, ...points].join('\n'), allowed);
     const entry = { tldr: result.value.tldr, points, ungroundedNumbers };
@@ -339,13 +408,15 @@ export class LlmTeacher {
       .join('\n\n');
     // Earlier replies come back split into tldr + detail; the model sees them as one message.
     const history = messages.map(({ role, content, tldr }) => ({ role, content: tldr ? `${tldr}\n\n${content}` : content }));
-    const result = await this.run(clientKey, () => this.llm.structured(system, history, ChatSchema));
+    // Numbers the coach may quote: the spot's, the whole-spot summary's, and whatever its hand lookups return.
+    const allowed = [...input.decision.options.map((o) => o.frequency * 100), ...input.rangeSummary.map((r) => r.share * 100), ...(spotData(input)?.percents ?? [])];
+    const tools = input.spot ? [handTool(input.spot, allowed)] : undefined;
+    const result = await this.run(clientKey, () => this.llm.structured(system, history, ChatSchema, tools));
     if (!result.ok) return { status: 'unavailable', reason: result.reason };
     const tldr = result.value.tldr.trim();
     const detail = result.value.detail.trim();
     // The model flags off-topic questions with a token; the student gets a fixed redirect instead.
     if (tldr.replace(/[^A-Z_]/g, '') === OFF_TOPIC_TOKEN) return { status: 'ok', tldr: null, reply: OFF_TOPIC_REPLY, ungroundedNumbers: [] };
-    const allowed = [...input.decision.options.map((o) => o.frequency * 100), ...input.rangeSummary.map((r) => r.share * 100)];
     return { status: 'ok', tldr, reply: detail, ungroundedNumbers: findUngroundedPercentages(`${tldr}\n${detail}`, allowed) };
   }
 

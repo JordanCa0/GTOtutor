@@ -19,11 +19,12 @@ import {
 import type { ChartService } from '../charts/chartService.js';
 import type { ChartNode } from '../charts/types.js';
 import { FACING_TYPES, makeNodeKey, NOCALL_SUFFIX } from '../charts/nodeKeys.js';
-import { fullDeck, handClass, shuffle } from '../poker/cards.js';
+import { ALL_HAND_CLASSES, comboCount, fullDeck, handClass, shuffle } from '../poker/cards.js';
 import { bestHand } from '../poker/evaluator.js';
 import { handIndex, mapHand, parseCards } from '../postflop/flopMap.js';
 import { flopClassStrategy, flopRangeSummary, historyKey, parseSolverAction, type FlopLookup, type FlopNode, type FlopStore, type LoadedFlop } from '../postflop/flopStore.js';
-import { mapBoardCard, turnRequest, type LiveOut, type LiveRequest } from '../postflop/liveSolve.js';
+import { lineReach, mapBoardCard, preflopRanges, turnRequest, turnStart, type LiveOut, type LiveRequest } from '../postflop/liveSolve.js';
+import type { SpotRanges } from '../teacher/spotSummary.js';
 import type { Rng } from '../poker/rng.js';
 import type { ShowdownResolver } from './showdownResolver.js';
 
@@ -101,6 +102,12 @@ interface LiveData {
   rivers: Map<string, Map<string, FlopNode>>;
   /** Each seat's hand in `hands`. */
   seatHands: [number, number];
+  /** The river card dealt after each turn line. */
+  riverCards: Map<string, string>;
+  /** Both ranges at the start of the turn, over `hands` (for the coach); null if the spot info is missing. */
+  startRanges: [number[], number[]] | null;
+  /** OOP and IP positions. */
+  positions: [Position, Position];
 }
 
 /**
@@ -472,6 +479,7 @@ export class HandEngine {
       street: pending.street,
       board: [...state.board],
       approxFlop: pending.approxFlop,
+      ...(pending.street === 'preflop' && state.lastRaiseNode && state.lastRaiseNode.position !== state.heroPosition && { villainRange: { ...state.lastRaiseNode } }),
     };
     state.hintUsedPending = false;
     state.decisions.push(feedback);
@@ -898,6 +906,9 @@ export class HandEngine {
       rivers: new Map(out.rivers.map((r) => [historyKey(r.turnLine), new Map(r.nodes.map((n) => [historyKey(n.history), n]))])),
       // Hands are translated like on the flop; one that clashes with the mapped turn card gets the closest hand in range.
       seatHands: [mapHand(seatCards(0), pf.lookup.mapper, out.hands[0], handIndexes[0]), mapHand(seatCards(1), pf.lookup.mapper, out.hands[1], handIndexes[1])],
+      riverCards: new Map(out.rivers.map((r) => [historyKey(r.turnLine), r.card])),
+      startRanges: this.liveStartRanges(pf, out),
+      positions: [pf.seats[0], pf.seats[1]],
     };
     if (data.seatHands.some((h) => h < 0)) return this.runOut(state, 'A hand was missing from the turn solve, so the hand ran out.');
     this.recentLive.delete(data.id);
@@ -907,6 +918,73 @@ export class HandEngine {
     state.solverCommit = solve.commit;
     if (pf.street === 'river' && !data.rivers.has(historyKey(pf.turnLine!))) return this.runOut(state, 'The river strategy was missing from the solve, so the hand ran out.');
     this.advance(state);
+  }
+
+  /** Both ranges at the start of the turn, over the solve's hands: the flop file's ranges along the flop line. */
+  private liveStartRanges(pf: PostflopState, out: LiveOut): [number[], number[]] | null {
+    const spot = this.flops?.spotInfo(pf.spot);
+    const start = spot && pf.flopLine && turnStart(pf.lookup.data, spot, pf.flopLine);
+    if (!start) return null;
+    return [0, 1].map((p) => out.hands[p].map((h) => start.ranges[p][pf.lookup.data.handIndexes[p].get(h) ?? -1] ?? 0)) as [number[], number[]];
+  }
+
+  /**
+   * Both ranges at a decision, for the coach: hero's with its strategy and EVs, and villain's when
+   * it's known (`villain` is the last raiser, for preflop decisions). Null when the node's data
+   * is gone (a live solve no longer in memory).
+   */
+  spotRanges(nodeKey: string, villain?: VillainRange | null): SpotRanges | null {
+    const live = this.liveNode(nodeKey);
+    if (live) {
+      const { key, data, node } = live;
+      const p = node.player;
+      const river = key.street === 'river';
+      const turnLine = key.turnLine ? key.turnLine.split('.').map(Number) : [];
+      const history = key.history ? key.history.split('.').map(Number) : [];
+      let reach = data.startRanges && (river ? lineReach(data.turn, data.startRanges, turnLine) : data.startRanges);
+      if (reach) reach = lineReach(river ? data.rivers.get(key.turnLine)! : data.turn, reach, history);
+      return {
+        source: 'solver',
+        board: river ? [...data.board, data.riverCards.get(key.turnLine)!] : data.board,
+        actions: node.actions.map((a) => parseSolverAction(a).label),
+        hero: { hands: data.hands[p], weights: node.weights ?? data.hands[p].map(() => 1), strategy: node.strategy.map((row) => row.map((f) => f / 1000)), ev: node.ev_bb ?? null },
+        villain: reach ? { position: data.positions[1 - p], hands: data.hands[1 - p], weights: reach[1 - p] } : null,
+      };
+    }
+    const flop = parseFlopNodeKey(nodeKey);
+    if (flop) {
+      if (!this.flops?.solvedFlops(flop.spot).includes(flop.flop)) return null;
+      const { data, node } = this.solvedNode(flop);
+      const p = node.player;
+      const spot = this.flops.spotInfo(flop.spot);
+      const reach = spot && lineReach(data.byHistory, preflopRanges(data, spot), flop.history);
+      // Spot names are "<a>_vs_<b>_...": whichever acts first after the flop is OOP.
+      const seats = flop.spot.split('_vs_').map((s) => s.split('_')[0].toUpperCase() as Position);
+      const [oop, ip] = postflopIndex(seats[0]) < postflopIndex(seats[1]) ? seats : [seats[1], seats[0]];
+      return {
+        source: 'solver',
+        board: data.flop.match(/../g)!,
+        actions: node.actions.map((a) => parseSolverAction(a).label),
+        hero: { hands: data.hands[p], weights: node.weights ?? data.hands[p].map(() => 1), strategy: node.strategy.map((row) => row.map((f) => f / 1000)), ev: node.ev_bb ?? null },
+        villain: reach ? { position: [oop, ip][1 - p], hands: data.hands[1 - p], weights: reach[1 - p] } : null,
+      };
+    }
+    if (nodeKey.startsWith(`${LIVE_KEY}|`) || !this.charts.hasNode(nodeKey)) return null;
+    const node = this.charts.getNode(nodeKey);
+    const vNode = villain && this.charts.hasNode(villain.nodeKey) ? this.charts.getNode(villain.nodeKey) : null;
+    const vIdx = vNode ? vNode.actions.findIndex((a) => a.id === villain!.actionId) : -1;
+    return {
+      source: 'chart',
+      board: [],
+      actions: node.actions.map((a) => a.label),
+      hero: {
+        hands: ALL_HAND_CLASSES,
+        weights: ALL_HAND_CLASSES.map(comboCount),
+        strategy: node.actions.map((_, a) => ALL_HAND_CLASSES.map((hc) => node.strategy.get(hc)![a])),
+        ev: node.actions.map((_, a) => ALL_HAND_CLASSES.map((hc) => node.ev.get(hc)?.[a] ?? null)),
+      },
+      villain: vNode && vIdx >= 0 ? { position: villain!.position, hands: ALL_HAND_CLASSES, weights: ALL_HAND_CLASSES.map((hc) => comboCount(hc) * vNode.strategy.get(hc)![vIdx]) } : null,
+    };
   }
 
   /** The live solve failed or was too slow: the board runs out as before, and the player is told why. */
