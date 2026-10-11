@@ -117,6 +117,14 @@ legend { font-size: var(--fs-sm); font-weight: 600; color: var(--text); margin-b
 .app header .brand { font-size: var(--fs-lg); margin-right: var(--sp-2); }
 .app header > .muted { font-size: var(--fs-sm); }
 .spacer { flex: 1; }
+/* Two groups, the table's controls and yours: tight inside a group, wider between them. */
+.header-group { display: flex; align-items: center; gap: var(--sp-2); }
+.header-group + .header-group { margin-left: var(--sp-3); }
+.header-menu { display: none; }
+/* One column: the spot summary is on the table and the avatar stands in for the name, so the buttons fit. */
+@media (max-width: 1023px) {
+  .app header > .muted, .account-name { display: none; }
+}
 .banner { font-size: var(--fs-xs); padding: var(--sp-1) var(--sp-4); color: var(--muted); border-bottom: 1px solid var(--line); background: var(--panel); }
 /* Always the last row: the banner above it only shows with placeholder charts. */
 main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; gap: var(--sp-4); padding: var(--sp-3) var(--sp-4) var(--sp-4); min-height: 0; }
@@ -128,7 +136,8 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 @media (max-width: 640px) {
   .app header { gap: var(--sp-2); padding: var(--sp-2) 16px; }
   .app header > .muted { display: none; }
-  .app header .ghost { white-space: nowrap; }
+  .header-group { display: none; }
+  .header-menu { display: block; }
 }
 @media (max-width: 1023px) {
   .app { height: auto; overflow: visible; }
@@ -193,7 +202,7 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 .seat.hero.folded .seat-cards { opacity: 0.45; }
 .seat.winner .seat-info { border-color: var(--good); }
 /* Position tooltips: on hover (pointer devices) or focus (keyboard, and a tap on touch screens). The seat being read comes to the front, folded or not. */
-.pos-tip { position: relative; cursor: help; border-radius: var(--r-sm); outline-offset: 2px; }
+.seat-info.pos-tip { cursor: help; outline-offset: 2px; }
 .pos-tip .tooltip {
   position: absolute; z-index: 5; width: max-content; max-width: min(270px, 70vw); display: flex; flex-direction: column; gap: var(--sp-1);
   padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--panel); box-shadow: var(--shadow-float);
@@ -566,8 +575,8 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 .jelly-radio .soon { font-size: var(--fs-xs); opacity: 0.75; margin-left: var(--sp-1); }
 .jelly-radio__chip[data-on='true'] .jelly-radio__skin { font-weight: 650; }
 .jelly-radio__chip:focus-visible .jelly-radio__skin { outline: 2px solid var(--focus); outline-offset: 2px; }
-.configure-btn { display: inline-flex; align-items: center; gap: var(--sp-2); }
-.configure-btn svg { color: var(--muted); }
+.with-icon { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.with-icon svg { flex: none; color: var(--muted); }
 .modal-backdrop .setup { margin: 0; max-height: 92dvh; overflow-y: auto; box-shadow: var(--shadow-float); animation: modal-in 200ms var(--ease) both; }
 /* Set by <Presence> while a modal leaves. After the .setup rule above so it wins. */
 .modal-backdrop[data-closing] { pointer-events: none; animation: fade-out 150ms ease-out both; }
@@ -578,12 +587,33 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 /* ---------- Accounts ---------- */
 .corner-account { position: fixed; top: 0.9rem; right: 1rem; z-index: 5; display: flex; gap: var(--sp-2); }
 .account { position: relative; }
-.account-btn { display: inline-flex; align-items: center; gap: var(--sp-2); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-btn { display: inline-flex; align-items: center; gap: var(--sp-2); max-width: 220px; white-space: nowrap; }
+.account-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.account-btn svg { flex: none; color: var(--muted); transition: transform 200ms var(--ease); }
+.account-btn[aria-expanded='true'] svg { transform: rotate(180deg); }
 .account-avatar { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: var(--fs-xs); font-weight: 700; color: var(--text); background: rgba(255, 255, 255, 0.1); }
 .account-menu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 220px; display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-2); border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--panel); box-shadow: var(--shadow-float); z-index: 20; transform-origin: top right; animation: popover-in 150ms var(--ease) both; }
 .account-menu p { margin: 0 0 var(--sp-1); padding: 0 var(--sp-1); overflow-wrap: anywhere; }
 .account-menu button { justify-content: flex-start; text-align: left; }
 .danger { color: #e07a6b; }
+
+/* Phone menu: every header control in one sheet under the header, growing from the menu button. */
+.header-sheet { position: absolute; top: calc(100% + var(--sp-1)); left: 16px; right: 16px; z-index: 20; max-height: calc(100dvh - 4.5rem); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; padding: var(--sp-2); border-radius: var(--r-lg); border: 1px solid var(--line-2); background: var(--panel); box-shadow: var(--shadow-float); transform-origin: top right; animation: popover-in 150ms var(--ease) both; }
+.sheet-group { display: flex; flex-direction: column; padding: var(--sp-2) 0; }
+.sheet-group + .sheet-group, .sheet-id + .sheet-group { border-top: 1px solid var(--line); }
+.sheet-group .eyebrow { padding: 0 var(--sp-3); }
+.sheet-group .setting { padding-left: var(--sp-3); padding-right: var(--sp-3); }
+.sheet-group .eyebrow + .setting { border-top: none; }
+.sheet-id { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--sp-3) var(--sp-3); min-width: 0; }
+.sheet-id > div { min-width: 0; }
+.sheet-id strong { display: block; font-size: var(--fs-sm); }
+.sheet-id p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-id .account-avatar { width: 32px; height: 32px; font-size: var(--fs-sm); }
+/* Full-width rows: a 3% shrink would move them too far, so a press tints the row instead. */
+.menu-item { display: flex; align-items: center; gap: var(--sp-3); min-height: 2.75rem; padding: 0 var(--sp-3); border: none; border-radius: var(--r-sm); background: transparent; color: var(--text); font-size: var(--fs-md); text-align: left; transition: background-color 150ms ease; }
+.menu-item svg { flex: none; color: var(--muted); }
+.menu-item:active { background: rgba(255, 255, 255, 0.08); }
+@media (hover: hover) and (pointer: fine) { .menu-item:hover { background: rgba(255, 255, 255, 0.05); } }
 button.primary.danger { background: #c25a4b; color: #fff; }
 .auth-card { width: min(420px, 100%); max-height: 92dvh; overflow-y: auto; padding: var(--sp-5); border-radius: var(--r-lg); border: 1px solid var(--line-2); background: var(--panel); box-shadow: var(--shadow-float); animation: modal-in 200ms var(--ease) both; display: flex; flex-direction: column; gap: var(--sp-3); }
 .auth-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-4); }
@@ -664,7 +694,7 @@ button.primary.danger { background: #c25a4b; color: #fff; }
   *, *::before, *::after { animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-property: opacity, color, background-color, border-color !important; }
   .board-card, .dealt, .flip, .action-bubble, .bet, .hand-name, .win-tag, .result-strip, .action-log li, .hand-verdict,
   .verdict, .verdict-icon, .range, .coach-card, .bubble, .spot-card, .hint, .title-preview > *, .next-ready, .coach-actions, .streak-badge,
-  .modal, .reader, .range-modal, .auth-card, .modal-backdrop .setup, .settings-pop, .account-menu, .auth-toast, .tour-card {
+  .modal, .reader, .range-modal, .auth-card, .modal-backdrop .setup, .settings-pop, .account-menu, .header-sheet, .auth-toast, .tour-card {
     animation-name: fade !important; animation-duration: 150ms !important;
   }
   .modal-backdrop[data-closing] > * { animation: none !important; }

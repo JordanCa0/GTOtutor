@@ -29,7 +29,7 @@ export function Tour({ steps: all, onDone }: { steps: TourStep[]; onDone: () => 
   // Fix the step list when the tour opens, so a step doesn't vanish mid-tour. Read after the commit, not
   // during render: the panels it points at may be mounting in the same render as the tour.
   const [steps, setSteps] = useState<TourStep[] | null>(null);
-  useLayoutEffect(() => setSteps(all.filter((s) => document.querySelector(s.target))), [all]);
+  useLayoutEffect(() => setSteps(all.filter((s) => findTarget(s.target))), [all]);
   const [i, setI] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
   const [card, setCard] = useState<{ top: number; left: number } | null>(null);
@@ -45,11 +45,11 @@ export function Tour({ steps: all, onDone }: { steps: TourStep[]; onDone: () => 
   // Bring the target into view (the side panel scrolls), then follow it every frame: it may still be animating in.
   useEffect(() => {
     if (!step) return;
-    document.querySelector(step.target)?.scrollIntoView({ block: 'nearest' });
+    findTarget(step.target)?.scrollIntoView({ block: 'nearest' });
     let frame = 0;
     let prev = '';
     const track = () => {
-      const el = document.querySelector(step.target);
+      const el = findTarget(step.target);
       if (el) {
         const r = el.getBoundingClientRect();
         const next = { top: r.top, left: r.left, width: r.width, height: r.height };
@@ -159,4 +159,9 @@ function place(r: Rect, w: number, h: number, side: TourStep['side']): { top: nu
   for (const s of order) if (sidewaysFit(s)) return clamp(options[s]);
   // Nothing fits (a big target on a small screen): pin the card to the bottom of the screen.
   return { top: vh - h - GUTTER, left: Math.max(GUTTER, (vw - w) / 2) };
+}
+
+/** The first element matching the selector that is actually laid out, so a step can name a desktop and a phone target. */
+function findTarget(selector: string): Element | undefined {
+  return [...document.querySelectorAll(selector)].find((el) => el.getClientRects().length > 0);
 }

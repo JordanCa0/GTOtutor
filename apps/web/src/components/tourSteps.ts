@@ -43,9 +43,9 @@ export const VERDICT_STEPS: TourStep[] = [
     body: "The coach explains the chart's play in a sentence or two, and answers follow-up questions.",
   },
   {
-    target: '.review-btn',
+    target: '.review-btn, .menu-btn',
     side: 'bottom',
     title: 'Find your leaks',
-    body: 'After a few hands, Session review sums up where you lose the most. You can replay this tour from the ? button.',
+    body: 'After a few hands, Session review sums up where you lose the most. You can replay this tour from How it works (the ? button).',
   },
 ];

@@ -1,82 +1,112 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../api/client';
 import { dismissAuthError, displayName, signInWithGoogle, useAuth } from '../auth/auth';
 import { supabase } from '../auth/supabase';
-import { XIcon } from './icons';
+import { ChevronDownIcon, XIcon } from './icons';
 import { Backdrop, Presence } from './Presence';
+
+type AccountDialog = 'auth' | 'progress' | 'delete' | null;
+let dialog: AccountDialog = null;
+const listeners = new Set<() => void>();
+/** Opens a sign-in or delete dialog from anywhere: the header, the phone menu, the setup corner. */
+export function openAccountDialog(d: AccountDialog) {
+  dialog = d;
+  listeners.forEach((l) => l());
+}
+const subscribe = (l: () => void) => {
+  listeners.add(l);
+  return () => void listeners.delete(l);
+};
+
+/** The account dialogs and the sign-in failure toast. Mounted once; every account control opens them through openAccountDialog. */
+export function AccountDialogs() {
+  const { enabled, session, error } = useAuth();
+  const current = useSyncExternalStore(subscribe, () => dialog);
+  if (!enabled) return null;
+  const close = () => openAccountDialog(null);
+  return (
+    <>
+      <Presence show={(current === 'auth' || current === 'progress') && !session}>
+        <AuthDialog reason={current === 'progress' ? 'progress' : 'save'} onClose={close} />
+      </Presence>
+      <Presence show={current === 'delete' && !!session}>
+        <DeleteAccountDialog onClose={close} />
+      </Presence>
+      {error &&
+        createPortal(
+          <div className="auth-toast" role="alert">
+            <div>
+              <strong>Sign-in failed</strong>
+              <p>{error}</p>
+            </div>
+            <button className="ghost" onClick={dismissAuthError}>
+              Dismiss
+            </button>
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
 
 /** Header control: "Sign in" for guests, the account menu when signed in. Hidden when sign-in isn't configured. */
 export function AccountMenu({ onProfile }: { onProfile?: () => void }) {
-  const { enabled, ready, session, error } = useAuth();
-  const [dialog, setDialog] = useState<'auth' | 'delete' | null>(null);
+  const { enabled, ready, session } = useAuth();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  useDismiss(open, menuRef, setOpen);
 
+  if (!enabled || !ready) return null;
+  if (!session) {
+    return (
+      <button className="ghost" onClick={() => openAccountDialog('auth')}>
+        Sign in
+      </button>
+    );
+  }
+  return (
+    <div className="account" ref={menuRef}>
+      <button className="ghost account-btn" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open}>
+        <span className="account-avatar" aria-hidden>
+          {displayName(session).slice(0, 1).toUpperCase()}
+        </span>
+        <span className="account-name">{displayName(session)}</span>
+        <ChevronDownIcon size={14} />
+      </button>
+      {open && (
+        <div className="account-menu" role="menu">
+          <p className="muted small">Signed in as {session.user.email}</p>
+          {onProfile && (
+            <button role="menuitem" className="ghost" onClick={() => (setOpen(false), onProfile())}>
+              My progress
+            </button>
+          )}
+          <button role="menuitem" className="ghost" onClick={() => void supabase!.auth.signOut().then(() => setOpen(false))}>
+            Sign out
+          </button>
+          <button role="menuitem" className="ghost danger" onClick={() => (setOpen(false), openAccountDialog('delete'))}>
+            Delete account…
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Closes a popover on a click outside it or on Escape. */
+export function useDismiss(open: boolean, ref: RefObject<HTMLElement | null>, setOpen: (open: boolean) => void) {
   useEffect(() => {
     if (!open) return;
-    const close = (e: MouseEvent) => menuRef.current && !menuRef.current.contains(e.target as Node) && setOpen(false);
-    window.addEventListener('mousedown', close);
-    return () => window.removeEventListener('mousedown', close);
-  }, [open]);
-
-  if (!enabled) return null;
-  const failure = error &&
-    createPortal(
-      <div className="auth-toast" role="alert">
-        <div>
-          <strong>Sign-in failed</strong>
-          <p>{error}</p>
-        </div>
-        <button className="ghost" onClick={dismissAuthError}>
-          Dismiss
-        </button>
-      </div>,
-      document.body,
-    );
-  if (!ready) return failure || null;
-
-  return (
-    <>
-      {session ? (
-        <div className="account" ref={menuRef}>
-          <button className="ghost account-btn" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open}>
-            <span className="account-avatar" aria-hidden>
-              {displayName(session).slice(0, 1).toUpperCase()}
-            </span>
-            {displayName(session)}
-          </button>
-          {open && (
-            <div className="account-menu" role="menu">
-              <p className="muted small">Signed in as {session.user.email}</p>
-              {onProfile && (
-                <button role="menuitem" className="ghost" onClick={() => (setOpen(false), onProfile())}>
-                  Profile
-                </button>
-              )}
-              <button role="menuitem" className="ghost" onClick={() => void supabase!.auth.signOut().then(() => setOpen(false))}>
-                Sign out
-              </button>
-              <button role="menuitem" className="ghost danger" onClick={() => (setOpen(false), setDialog('delete'))}>
-                Delete account…
-              </button>
-            </div>
-          )}
-        </div>
-      ) : (
-        <button className="ghost" onClick={() => setDialog('auth')}>
-          Sign in
-        </button>
-      )}
-      <Presence show={dialog === 'auth' && !session}>
-        <AuthDialog onClose={() => setDialog(null)} />
-      </Presence>
-      <Presence show={dialog === 'delete' && !!session}>
-        <DeleteAccountDialog onClose={() => setDialog(null)} />
-      </Presence>
-      {failure}
-    </>
-  );
+    const onDown = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open, ref, setOpen]);
 }
 
 function Modal({ title, eyebrow, onClose, children }: { title: string; eyebrow: string; onClose?: () => void; children: ReactNode }) {
@@ -107,7 +137,7 @@ function Modal({ title, eyebrow, onClose, children }: { title: string; eyebrow: 
 }
 
 /** Sign-in is Google only. */
-function AuthDialog({ onClose }: { onClose: () => void }) {
+function AuthDialog({ reason, onClose }: { reason: 'save' | 'progress'; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -123,8 +153,13 @@ function AuthDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal eyebrow="Account" title="Sign in" onClose={onClose}>
-      <p className="muted small">Your hands, decisions, and coach chats are saved to your account. Anything you played as a guest this session comes with you.</p>
+    <Modal eyebrow="Account" title={reason === 'progress' ? 'Sign in to track your progress' : 'Sign in'} onClose={onClose}>
+      <p className="muted small">
+        {reason === 'progress'
+          ? 'My progress keeps your all-time review, your playing style, and the decisions you starred, across every session. '
+          : 'Your hands, decisions, and coach chats are saved to your account. '}
+        Anything you played as a guest this session comes with you.
+      </p>
       <button className="google-btn" disabled={busy} onClick={() => void google()}>
         <GoogleMark /> Continue with Google
       </button>

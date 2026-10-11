@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { updateSettings, useSettings } from '../settings';
 import { playSound } from '../sound/soundEngine';
+import { useDismiss } from './AccountMenu';
 
 function Switch({ label, description, checked, onChange }: { label: string; description: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -15,22 +16,40 @@ function Switch({ label, description, checked, onChange }: { label: string; desc
   );
 }
 
-export function SettingsMenu() {
+/** The settings switches, shared by the header's gear popover and the phone menu. */
+export function SettingsSwitches() {
   const settings = useSettings();
+  return (
+    <>
+      <Switch
+        label="Sound effects"
+        description="Cards, chips, and the chime after each decision."
+        checked={settings.sound}
+        onChange={(sound) => {
+          updateSettings({ sound });
+          if (sound) playSound('chip');
+        }}
+      />
+      <Switch
+        label="Animations"
+        description="Off: deals, bets, and the runout appear instantly."
+        checked={settings.animations}
+        onChange={(animations) => updateSettings({ animations })}
+      />
+      <Switch
+        label="Celebrations"
+        description="Chips shower down when a streak of good decisions hits 5, 10, 15…"
+        checked={settings.celebrations}
+        onChange={(celebrations) => updateSettings({ celebrations })}
+      />
+    </>
+  );
+}
+
+export function SettingsMenu() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    document.addEventListener('mousedown', onDown);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  useDismiss(open, ref, setOpen);
 
   return (
     <div className="settings-menu" ref={ref}>
@@ -48,27 +67,7 @@ export function SettingsMenu() {
       {open && (
         <div className="settings-pop" role="dialog" aria-label="Settings">
           <p className="eyebrow">Settings</p>
-          <Switch
-            label="Sound effects"
-            description="Cards, chips, and the chime after each decision."
-            checked={settings.sound}
-            onChange={(sound) => {
-              updateSettings({ sound });
-              if (sound) playSound('chip');
-            }}
-          />
-          <Switch
-            label="Animations"
-            description="Off: deals, bets, and the runout appear instantly."
-            checked={settings.animations}
-            onChange={(animations) => updateSettings({ animations })}
-          />
-          <Switch
-            label="Celebrations"
-            description="Chips shower down when a streak of good decisions hits 5, 10, 15…"
-            checked={settings.celebrations}
-            onChange={(celebrations) => updateSettings({ celebrations })}
-          />
+          <SettingsSwitches />
         </div>
       )}
     </div>

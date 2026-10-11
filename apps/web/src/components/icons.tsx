@@ -79,3 +79,35 @@ export const HelpIcon = ({ size }: P) => (
     <path d="M12 17h.01" />
   </Icon>
 );
+
+export const ChevronDownIcon = ({ size }: P) => (
+  <Icon size={size}>
+    <path d="m6 9 6 6 6-6" />
+  </Icon>
+);
+
+export const MenuIcon = ({ size }: P) => (
+  <Icon size={size}>
+    <path d="M4 6h16" />
+    <path d="M4 12h16" />
+    <path d="M4 18h16" />
+  </Icon>
+);
+
+export const TrendingUpIcon = ({ size }: P) => (
+  <Icon size={size}>
+    <path d="M16 7h6v6" />
+    <path d="m22 7-8.5 8.5-5-5L2 17" />
+  </Icon>
+);
+
+export const ClipboardListIcon = ({ size }: P) => (
+  <Icon size={size}>
+    <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <path d="M12 11h4" />
+    <path d="M12 16h4" />
+    <path d="M8 11h.01" />
+    <path d="M8 16h.01" />
+  </Icon>
+);

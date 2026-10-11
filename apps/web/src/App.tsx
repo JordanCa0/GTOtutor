@@ -5,9 +5,10 @@ import { api } from './api/client';
 import { ActionLog } from './components/ActionLog';
 import { DecisionPanel } from './components/DecisionPanel';
 import { SessionReview } from './components/SessionReview';
-import { AccountMenu } from './components/AccountMenu';
+import { AccountDialogs, AccountMenu, openAccountDialog } from './components/AccountMenu';
 import { optionColor } from './components/actionColors';
-import { HelpIcon, SlidersIcon } from './components/icons';
+import { HeaderMenu } from './components/HeaderMenu';
+import { ClipboardListIcon, HelpIcon, SlidersIcon, TrendingUpIcon } from './components/icons';
 import { Presence } from './components/Presence';
 import { ProfilePage } from './components/ProfilePage';
 import { SettingsMenu } from './components/SettingsMenu';
@@ -59,7 +60,7 @@ export function App() {
     </Presence>
   );
   const { animations } = useSettings();
-  const { ready: authReady, session } = useAuth();
+  const { enabled: accountsOn, ready: authReady, session } = useAuth();
   const userId = session?.user.id ?? null;
   const prevUser = useRef(userId);
   // On <html> rather than .app so portaled modals and the title page follow the setting too.
@@ -99,6 +100,9 @@ export function App() {
       <AccountMenu onProfile={openProfile} />
     </div>
   );
+  // Guests see My progress too, so they can find it; for them it explains signing in instead of opening an empty page.
+  const progress = () => (session ? openProfile() : openAccountDialog('progress'));
+  const help = () => setHelpRequest((n) => n + 1);
   // First visit only, and never once signed in. Wait for the stored session so signed-in users don't see it flash.
   if (!hand && showTitle && !userId) {
     if (!authReady) return null;
@@ -115,6 +119,7 @@ export function App() {
   if (!hand) {
     return (
       <>
+        <AccountDialogs />
         {corner}
         <SetupScreen initial={settings} starting={start.isPending} error={start.error?.message ?? null} onStart={deal} />
         {profile}
@@ -132,19 +137,33 @@ export function App() {
           {hand.config.stackDepthBb}bb 6-max cash, you're in the <b>{hand.heroPosition}</b>
         </span>
         <span className="spacer" />
-        <button className="ghost configure-btn" onClick={() => setConfigOpen(true)}>
-          <SlidersIcon size={15} />
-          Configure game
-        </button>
-        <button className="ghost review-btn" onClick={() => setReviewOpen(true)}>
-          Session review
-        </button>
-        <button className="icon-btn" onClick={() => setHelpRequest((n) => n + 1)} aria-label="How it works" title="How it works">
-          <HelpIcon size={17} />
-        </button>
-        <SettingsMenu />
-        <AccountMenu onProfile={openProfile} />
+        {/* The table on one side, you and your progress on the other. Phones get HeaderMenu instead. */}
+        <div className="header-group">
+          <button className="ghost with-icon" onClick={() => setConfigOpen(true)}>
+            <SlidersIcon size={15} />
+            Configure game
+          </button>
+          <button className="icon-btn" onClick={help} aria-label="How it works" title="How it works">
+            <HelpIcon size={17} />
+          </button>
+          <SettingsMenu />
+        </div>
+        <div className="header-group">
+          <button className="ghost with-icon review-btn" onClick={() => setReviewOpen(true)}>
+            <ClipboardListIcon size={15} />
+            Session review
+          </button>
+          {accountsOn && authReady && (
+            <button className="ghost with-icon" onClick={progress}>
+              <TrendingUpIcon size={15} />
+              My progress
+            </button>
+          )}
+          <AccountMenu onProfile={openProfile} />
+        </div>
+        <HeaderMenu onConfigure={() => setConfigOpen(true)} onReview={() => setReviewOpen(true)} onProgress={progress} onHelp={help} />
       </header>
+      <AccountDialogs />
 
       {hand.dataSource.kind === 'fixture' && <div className="banner">Chart numbers come from placeholder ranges, not a solver yet. EVs arrive with the solver.</div>}
 
