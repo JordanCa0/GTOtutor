@@ -296,6 +296,50 @@ describe('hand engine', () => {
     expect(limps.pendingDecision(hj)!.nodeKey).toBe('SIX_MAX|100|RFI|HJ');
   });
 
+  it('plays every hand against the chosen opponent, who never folds its first decision, with everyone else folding', () => {
+    const engine = newEngine(21);
+    const rng = seededRng(5);
+    const cases = [
+      ['BB', 'UTG'],
+      ['BB', 'BTN'],
+      ['BTN', 'CO'],
+      ['UTG', 'BTN'],
+      ['UTG', 'BB'],
+      ['SB', 'BB'],
+      ['BB', 'SB'],
+    ] as const;
+    for (const [heroPosition, opponentPosition] of cases) {
+      let opponentActed = 0;
+      for (let i = 0; i < 40; i++) {
+        const state = engine.start({ ...req, heroPosition, opponentPosition });
+        let guard = 0;
+        while (state.heroToAct) {
+          const legal = engine.view(state).legalActions;
+          // Hero never folds first, so an opponent behind hero always gets to answer.
+          const choices = state.decisions.length ? legal : legal.filter((a) => a.id !== 'fold');
+          engine.decide(state, choices[rng.int(choices.length)].id as ActionType);
+          if (++guard > 10) throw new Error('hand did not terminate');
+        }
+        const first = state.actionLog.find((a) => a.street === 'preflop' && a.position === opponentPosition);
+        if (first) {
+          opponentActed++;
+          expect(first.action, `${heroPosition} vs ${opponentPosition}`).not.toBe('fold');
+        }
+        // Nobody but hero and the opponent ever puts in more than their blind.
+        for (const a of state.actionLog.filter((e) => e.street === 'preflop' && e.position !== heroPosition && e.position !== opponentPosition)) {
+          expect(a.action).toMatch(/fold|check/);
+        }
+      }
+      expect(opponentActed, `${heroPosition} vs ${opponentPosition}`).toBeGreaterThan(30);
+    }
+  });
+
+  it('rejects an opponent without a fixed hero seat, or in hero's seat', () => {
+    expect(() => newEngine(1).start({ ...req, heroPosition: 'random', opponentPosition: 'BTN' })).toThrow(/Choose your position/);
+    expect(() => newEngine(1).start({ ...req, heroPosition: 'BTN', opponentPosition: 'BTN' })).toThrow(/your seat/);
+    expect(newEngine(1).start({ ...req, heroPosition: 'random', opponentPosition: 'any' }).heroToAct).toBe(true);
+  });
+
   it('rejects illegal and out-of-turn actions', () => {
     const engine = newEngine(8);
     const state = engine.start({ ...req, heroPosition: 'UTG' });

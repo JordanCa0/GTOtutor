@@ -85,6 +85,11 @@ export interface HandState {
    * Optional: hands saved before it existed lack it.
    */
   simplePots?: boolean;
+  /**
+   * The seat hero plays against: every other bot folds (see botAction). Optional: hands saved
+   * before it existed lack it.
+   */
+  opponentPosition?: Position | null;
   /** Why the turn and river ran out instead of being played (the live solve failed, was too slow, or hit a limit). */
   liveNote?: string | null;
   /** The solver service commit behind this hand's turn and river strategies (AGPL source link). */
@@ -259,6 +264,12 @@ export class HandEngine {
       throw new HttpError(400, `Unknown position ${req.heroPosition}`);
     }
     if (req.flopPractice) return this.startFlopPractice(req);
+    const opponent = req.opponentPosition && req.opponentPosition !== 'any' ? req.opponentPosition : null;
+    if (opponent) {
+      if (!SIX_MAX_POSITIONS.includes(opponent)) throw new HttpError(400, `Unknown position ${opponent}`);
+      if (req.heroPosition === 'random') throw new HttpError(400, 'Choose your position to pick an opponent.');
+      if (opponent === req.heroPosition) throw new HttpError(400, "Your opponent can't sit in your seat.");
+    }
     const skipEasyFolds = (req.skipEasyFolds ?? true) && this.rng.float() >= UNFILTERED_DEAL_RATE;
     // Redeal hands with nothing to train on: walks in the BB, and (mostly) trivial folds.
     for (let attempt = 0; attempt < MAX_DEAL_ATTEMPTS; attempt++) {
@@ -569,6 +580,7 @@ export class HandEngine {
       easyFoldsSkipped: req.skipEasyFolds ?? true,
       flopPractice: req.flopPractice ?? false,
       simplePots: req.simplePots ?? false,
+      opponentPosition: req.opponentPosition && req.opponentPosition !== 'any' ? req.opponentPosition : null,
       config: { tableSize: req.tableSize, stackDepthBb: req.stackDepthBb },
       heroPosition,
       players,
@@ -695,8 +707,36 @@ export class HandEngine {
         return;
       }
       const node = this.charts.getNode(this.nodeKeyFor(state, player));
-      const freqs = node.strategy.get(handClass(player.cards[0], player.cards[1]))!;
+      const playOn = player.position === state.opponentPosition && !player.hasActed;
+      if (playOn) this.drawPlayingHand(state, player, node);
+      const chart = node.strategy.get(handClass(player.cards[0], player.cards[1]))!;
+      // The drawn hand plays on in its chart proportions without the fold (a mixed hand folds sometimes).
+      const playable = chart.map((f, i) => (node.actions[i].id === 'fold' ? 0 : f));
+      const freqs = playOn && playable.some((f) => f > 0) ? playable : chart;
       this.apply(state, player, this.botAction(state, player, node.actions[this.sample(freqs)]));
+    }
+  }
+
+  /**
+   * A chosen opponent's first decision: swap its hole cards for a hand from the undealt cards that
+   * plays on here (opens, defends, 3-bets…), weighted by how often the chart plays it, so practising
+   * against a seat never ends with it folding. Its later decisions follow the chart as dealt.
+   */
+  private drawPlayingHand(state: HandState, player: Player, node: ChartNode): void {
+    const fold = node.actions.findIndex((a) => a.id === 'fold');
+    if (fold < 0) return;
+    const playOn = (cards: string[]) => 1 - node.strategy.get(handClass(cards[0], cards[1]))![fold];
+    if (playOn(player.cards) > 0 && this.rng.float() < playOn(player.cards)) return;
+    for (let attempt = 0; attempt < MAX_DEAL_ATTEMPTS * 20; attempt++) {
+      const i = this.rng.int(state.deck.length);
+      let j = this.rng.int(state.deck.length - 1);
+      if (j >= i) j++;
+      const cards = [state.deck[i], state.deck[j]];
+      if (this.rng.float() >= playOn(cards)) continue;
+      state.deck[i] = player.cards[0];
+      state.deck[j] = player.cards[1];
+      player.cards = cards;
+      return;
     }
   }
 
@@ -705,8 +745,10 @@ export class HandEngine {
    * while hero is still in, so hero never faces a caller (which would leave hero only fold or
    * raise, as pots stay heads-up). Two calls are kept, as they leave hero's options whole: calling
    * hero's own raise, and the SB completing into hero's big blind. Raising hands stay as charted.
+   * With a chosen opponent, every other bot folds (a free check stays a check).
    */
   private botAction(state: HandState, player: Player, action: LegalAction): LegalAction {
+    if (state.opponentPosition && player.position !== state.opponentPosition && action.id !== 'check') return { id: 'fold', label: 'Fold', toBb: null };
     if (!state.simplePots || action.id !== 'call') return action;
     const hero = state.players.find((p) => p.isHero)!;
     if (hero.folded) return action;

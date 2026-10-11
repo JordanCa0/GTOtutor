@@ -337,6 +337,10 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 .act-tip { display: flex; cursor: help; border-radius: var(--r-md); outline-offset: 2px; }
 .act-tip > .act { flex: 1; pointer-events: none; }
 .act-tip .tooltip { max-width: min(320px, 86vw); }
+/* A greyed setup option with why on hover or tap (shares .pos-tip's tooltip styles). */
+.setup-tip { position: relative; display: inline-block; cursor: help; border-radius: var(--r-md); outline-offset: 2px; }
+.setup-tip > * { pointer-events: none; }
+.setup-tip > .tooltip { left: 0; }
 .result-strip { display: flex; gap: var(--sp-4); align-items: center; justify-content: center; flex-wrap: wrap; animation: pop 0.3s var(--ease) both; }
 /* Turn and river credit: postflop-solver (AGPL-3.0) and the source link the license requires. */
 .solver-credit { text-align: center; margin: var(--sp-2) 0 0; }

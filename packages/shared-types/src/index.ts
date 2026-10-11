@@ -33,6 +33,11 @@ export interface HandConfig {
 
 export interface StartHandRequest extends HandConfig {
   heroPosition: Position | 'random';
+  /**
+   * Play every hand against this seat: everyone else folds, so the pot is hero against it. When it
+   * acts before hero, only deals where it opens or limps are kept. Needs a fixed hero position.
+   */
+  opponentPosition?: Position | 'any';
   /** The practice session (a sitting of hands) this hand belongs to; the API requires it. */
   sessionId?: string;
   /** Mostly skip hands whose first decision is an obvious fold. Defaults to true. */

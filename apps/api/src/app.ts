@@ -57,6 +57,7 @@ const startHandSchema = {
     tableSize: { enum: ['HU', 'SIX_MAX', 'NINE_MAX'] },
     stackDepthBb: { enum: [20, 40, 60, 100, 150] },
     heroPosition: { enum: ['random', 'UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'] },
+    opponentPosition: { enum: ['any', 'UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'] },
     sessionId: sessionIdSchema,
     skipEasyFolds: { type: 'boolean' },
     simplePots: { type: 'boolean' },

@@ -38,11 +38,13 @@ const soon = (label: string) => (
 const TABLE_ITEMS: JellyItem[] = TABLE_SIZES.map((t) => ({ value: t.id, label: t.available ? t.label : soon(t.label), disabled: !t.available }));
 const STACK_ITEMS: JellyItem[] = STACK_DEPTHS.map((s) => ({ value: String(s.id), label: s.available ? `${s.id}bb` : soon(`${s.id}bb`), disabled: !s.available }));
 const POSITION_ITEMS: JellyItem[] = [{ value: 'random', label: 'Random' }, ...SIX_MAX_POSITIONS.map((p) => ({ value: p, label: p }))];
+const OPPONENT_ITEMS: JellyItem[] = [{ value: 'any', label: 'Anyone' }, ...SIX_MAX_POSITIONS.map((p) => ({ value: p, label: p }))];
 
 export function SetupScreen({ initial, starting, error, onStart, onClose }: Props) {
   const [tableSize, setTableSize] = useState<TableSize>(initial?.tableSize ?? 'SIX_MAX');
   const [stack, setStack] = useState<StackDepth>(initial?.stackDepthBb ?? 100);
   const [position, setPosition] = useState<Position | 'random'>(initial?.heroPosition ?? 'random');
+  const [opponent, setOpponent] = useState<Position | 'any'>(initial?.opponentPosition ?? 'any');
   const [skipEasyFolds, setSkipEasyFolds] = useState(initial?.skipEasyFolds ?? true);
   const [simplePots, setSimplePots] = useState(initial?.simplePots ?? false);
   const [flopPractice, setFlopPractice] = useState(initial?.flopPractice ?? false);
@@ -88,7 +90,44 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
 
       <fieldset>
         <legend>Your position</legend>
-        <JellyRadio {...JELLY_THEME} ariaLabel="Your position" items={POSITION_ITEMS} value={position} onChange={(v) => setPosition(v as Position | 'random')} />
+        <JellyRadio
+          {...JELLY_THEME}
+          ariaLabel="Your position"
+          items={POSITION_ITEMS}
+          value={position}
+          onChange={(v) => {
+            setPosition(v as Position | 'random');
+            if (v === 'random' || v === opponent) setOpponent('any');
+          }}
+        />
+      </fieldset>
+
+      <fieldset>
+        <legend>Opponent</legend>
+        {position === 'random' || flopPractice ? (
+          // Greyed until hero picks a seat, with why on hover or tap: the wrapper takes focus, as the disabled chips can't.
+          <span className="setup-tip pos-tip" tabIndex={0} aria-describedby="opponent-tip">
+            <JellyRadio {...JELLY_THEME} disabled ariaLabel="Opponent" items={OPPONENT_ITEMS} value="any" onChange={() => {}} />
+            <span role="tooltip" id="opponent-tip" className="tooltip tip-below">
+              {flopPractice ? 'Flop practice is always BTN vs BB.' : 'Select your position to choose an opponent.'}
+            </span>
+          </span>
+        ) : (
+          <>
+            <JellyRadio
+              {...JELLY_THEME}
+              ariaLabel="Opponent"
+              items={OPPONENT_ITEMS.filter((item) => typeof item === 'string' || item.value !== position)}
+              value={opponent}
+              onChange={(v) => setOpponent(v as Position | 'any')}
+            />
+            <p className="muted small">
+              {opponent === 'any'
+                ? 'Play the whole table as the charts deal it.'
+                : `Every hand is you against the ${opponent}, who always plays on; everyone else folds.`}
+            </p>
+          </>
+        )}
       </fieldset>
 
       <fieldset>
@@ -121,7 +160,7 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
 
       <p className="muted small">Cash game only for now. Tournament/ICM, other table sizes, and other stack depths come with the solver.</p>
 
-      <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, heroPosition: position, skipEasyFolds, simplePots, flopPractice })}>
+      <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, heroPosition: position, ...(position !== 'random' && !flopPractice && opponent !== 'any' && { opponentPosition: opponent }), skipEasyFolds, simplePots, flopPractice })}>
         {starting ? 'Dealing…' : onClose ? 'Deal with these settings' : 'Deal a hand'}
       </button>
       {error && <p className="error">{error}</p>}
