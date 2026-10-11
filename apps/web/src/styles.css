@@ -593,6 +593,32 @@ button.primary.danger { background: #c25a4b; color: #fff; }
 .tour-actions .link { font-size: var(--fs-sm); color: var(--muted); }
 .tour-actions .primary { padding: var(--sp-2) var(--sp-4); font-size: var(--fs-sm); }
 
+/* ---------- Streaks ---------- */
+/* The multiplier: gold because it's "you". It pops (scale) each time the run grows; a gold glow behind it flashes (opacity). */
+.streak { display: flex; align-items: baseline; gap: var(--sp-2); }
+.streak-badge { position: relative; display: inline-block; font-family: var(--serif); font-size: var(--fs-xl); font-weight: 700; line-height: 1; color: var(--gold); font-variant-numeric: tabular-nums; animation: streak-pop 340ms var(--ease) both; }
+.streak-x { font-size: 0.7em; margin-right: 1px; opacity: 0.8; }
+.streak-badge::after { content: ''; position: absolute; inset: -6px -10px; border-radius: 999px; background: radial-gradient(closest-side, rgba(212, 175, 106, 0.45), transparent); opacity: 0; pointer-events: none; animation: streak-flash 600ms ease-out both; }
+.streak-badge.milestone::after { animation-duration: 1600ms; }
+@keyframes streak-pop { 0% { transform: scale(1); } 40% { transform: scale(1.38); } 100% { transform: scale(1); } }
+@keyframes streak-flash { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
+/* The chip shower at milestones: behind the seats, bets and board, above the felt. */
+.table-wrap > .chip-rain { inset: 0; translate: none; overflow: hidden; z-index: 0; pointer-events: none; }
+.chip-rain i {
+  position: absolute; top: -8%; width: var(--size); height: var(--size); border-radius: 50%;
+  background: radial-gradient(circle, var(--chip) 0 52%, transparent 53%), repeating-conic-gradient(var(--stripe) 0 14deg, var(--chip) 14deg 45deg);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+  animation: chip-fall 2s cubic-bezier(0.35, 0, 0.75, 0.6) both;
+}
+.chip-rain i.shine::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(135deg, rgba(255, 255, 255, 0.75), transparent 45%); }
+@keyframes chip-fall {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 0; }
+  8% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translate3d(var(--drift), 125cqh, 0) rotate(var(--spin)); opacity: 0; }
+}
+.no-anim .chip-rain { display: none; }
+
 /* ---------- Skeletons ---------- */
 /* Placeholder shapes in the real layout while data loads (Skeleton.tsx). The shimmer is a band sliding across (translate only). */
 .skeleton { position: relative; display: block; overflow: hidden; background: var(--raised); border-radius: var(--r-sm); }
@@ -617,12 +643,13 @@ button.primary.danger { background: #c25a4b; color: #fff; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-property: opacity, color, background-color, border-color !important; }
   .board-card, .dealt, .flip, .action-bubble, .bet, .hand-name, .win-tag, .result-strip, .action-log li, .hand-verdict,
-  .verdict, .verdict-icon, .range, .coach-card, .bubble, .spot-card, .hint, .title-preview > *, .next-ready, .coach-actions,
+  .verdict, .verdict-icon, .range, .coach-card, .bubble, .spot-card, .hint, .title-preview > *, .next-ready, .coach-actions, .streak-badge,
   .modal, .reader, .range-modal, .auth-card, .modal-backdrop .setup, .settings-pop, .account-menu, .auth-toast, .tour-card {
     animation-name: fade !important; animation-duration: 150ms !important;
   }
   .modal-backdrop[data-closing] > * { animation: none !important; }
   .pulse, .cell.me, .step.ready::after, .next-ready::after, .type-caret, .skeleton::after, .act.act-skeleton::after { animation: none !important; }
+  .chip-rain { display: none !important; }
   .seat.acting .seat-info::after { animation: none !important; opacity: 1; }
   :is(.primary, .ghost, .secondary, .icon-btn, .suggestion, .google-btn, .act):active { transform: none !important; }
 }

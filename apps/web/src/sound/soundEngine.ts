@@ -1,5 +1,11 @@
 /** Synthesized table sounds (Web Audio) — no audio files to ship or license. */
-export type SoundName = 'deal' | 'muck' | 'check' | 'chip' | 'allin' | 'sweep' | 'good' | 'mixed' | 'bad';
+export type SoundName = 'deal' | 'muck' | 'check' | 'chip' | 'allin' | 'sweep' | 'good' | 'mixed' | 'bad' | 'streakEnd';
+
+/** Major-scale steps in semitones: the good chime starts one step higher per streak step, up to an octave. */
+const SCALE = [0, 2, 4, 5, 7, 9, 11, 12];
+
+/** How far up the scale the good chime starts for a streak of `count` (1 = the usual chime). */
+export const streakStep = (count: number) => SCALE[Math.min(Math.max(count, 1), SCALE.length) - 1];
 
 const STORAGE_KEY = 'gtotutor.sound';
 
@@ -82,7 +88,8 @@ function clink(at: number, loud: number, out: GainNode, c: AudioContext) {
   burst(at, 5200, 3, 0.12 * loud, 0.05, out, c);
 }
 
-export function playSound(name: SoundName, delayMs = 0): void {
+/** `streak`: for 'good', the streak length (the chime climbs) and whether it hit a milestone (a fourth note). */
+export function playSound(name: SoundName, delayMs = 0, streak?: { count: number; milestone: boolean }): void {
   if (!enabled) return;
   const a = audio();
   if (!a) return;
@@ -115,12 +122,20 @@ export function playSound(name: SoundName, delayMs = 0): void {
       burst(t, 1100, 0.5, 0.18, 0.3, out, c);
       for (let i = 0; i < 4; i++) clink(t + 0.08 + i * 0.05 + Math.random() * 0.02, 0.6, out, c);
       break;
-    case 'good':
-      // Rising major arpeggio: C6, E6, G6.
-      [1046.5, 1318.5, 1568].forEach((f, i) => {
-        tone(t + i * 0.085, f, 'sine', 0.16, 0.01, 0.5, out, c);
-        tone(t + i * 0.085, f * 2, 'sine', 0.03, 0.01, 0.3, out, c);
+    case 'good': {
+      // Rising major arpeggio: C6, E6, G6, moved up the scale as the streak grows; a milestone adds the octave on top.
+      const shift = 2 ** (streakStep(streak?.count ?? 1) / 12);
+      const notes = [1046.5, 1318.5, 1568, ...(streak?.milestone ? [2093] : [])];
+      notes.forEach((f, i) => {
+        const last = streak?.milestone && i === notes.length - 1;
+        tone(t + i * 0.085, f * shift, 'sine', last ? 0.13 : 0.16, 0.01, last ? 0.9 : 0.5, out, c);
+        tone(t + i * 0.085, f * shift * 2, 'sine', last ? 0.05 : 0.03, 0.01, 0.3, out, c);
       });
+      break;
+    }
+    case 'streakEnd':
+      // A long streak ended: one soft falling note, gentler than 'bad'.
+      [659, 523].forEach((f, i) => tone(t + i * 0.12, f, 'sine', 0.08, 0.02, 0.45, out, c));
       break;
     case 'mixed':
       [784, 988].forEach((f, i) => tone(t + i * 0.1, f, 'sine', 0.12, 0.01, 0.4, out, c));

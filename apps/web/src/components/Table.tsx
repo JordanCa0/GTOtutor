@@ -2,6 +2,8 @@ import type { ActionLogEntry, HandView, Position } from '@gtotutor/shared-types'
 import { actingAt, potAt, seatsAt, type PlaybackState } from '../playback';
 import { ChipStack } from './ChipStack';
 import { PlayingCard } from './PlayingCard';
+import { useSettings } from '../settings';
+import { ChipRain, type Celebration } from './Streak';
 
 interface Point {
   x: number;
@@ -38,9 +40,12 @@ interface Props {
   hand: HandView;
   playback: PlaybackState;
   onSkip: () => void;
+  /** A streak milestone: chips shower behind the seats. */
+  celebration?: Celebration | null;
 }
 
-export function Table({ hand, playback, onSkip }: Props) {
+export function Table({ hand, playback, onSkip, celebration }: Props) {
+  const { animations, celebrations } = useSettings();
   const heroIdx = hand.seats.findIndex((s) => s.isHero);
   const n = hand.seats.length;
   const slotOf = (pos: Position) => SLOTS[(hand.seats.findIndex((s) => s.position === pos) - heroIdx + n) % n];
@@ -64,6 +69,7 @@ export function Table({ hand, playback, onSkip }: Props) {
   return (
     <div className="table-wrap" onClick={onSkip} title="Click to skip animation">
       <div className="felt" />
+      {celebration && animations && celebrations && <ChipRain key={celebration.at} celebration={celebration} />}
 
       <div className="pot-label" style={at({ x: 50, y: 34 })}>
         Pot <b>{pot}</b>bb

@@ -172,9 +172,22 @@ export interface SubmitDecisionRequest {
   toBb?: number;
 }
 
+/**
+ * The session's run of good decisions after this one: a best play adds 1, a mixed one keeps it,
+ * a mistake ends it. `milestone` is set when this decision reached 5, 10, 15, 20, 25, then every 25;
+ * `ended` is the length of a streak this decision ended.
+ */
+export interface StreakUpdate {
+  count: number;
+  best: number;
+  milestone: number | null;
+  ended: number | null;
+}
+
 export interface SubmitDecisionResponse {
   feedback: DecisionFeedback;
   hand: HandView;
+  streak: StreakUpdate;
 }
 
 export interface ChartNodeView {
@@ -270,6 +283,8 @@ export interface SessionStats {
   leaks: { type: LeakType; label: string; count: number }[];
   worstMistakes: SessionMistake[];
   easyFoldsSkipped: boolean;
+  /** Longest run of good decisions (see `StreakUpdate`). Missing on stats saved before 2026-10-10. */
+  bestStreak?: number;
 }
 
 export const MIN_DECISIONS_FOR_REVIEW = 5;

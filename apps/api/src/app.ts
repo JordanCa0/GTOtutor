@@ -157,8 +157,8 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
     '/api/hands/:id/decisions',
     { schema: { body: decisionSchema } },
     async (req): Promise<SubmitDecisionResponse> => {
-      const { state, feedback } = await hands.decide(await players.player(req), req.params.id, req.body.action, req.body.toBb);
-      return { feedback, hand: engine.view(state) };
+      const { state, feedback, streak } = await hands.decide(await players.player(req), req.params.id, req.body.action, req.body.toBb);
+      return { feedback, hand: engine.view(state), streak };
     },
   );
 

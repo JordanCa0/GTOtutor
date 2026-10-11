@@ -82,6 +82,7 @@ function ProfileBody({ onOpen }: { onOpen: (item: StarredDecision) => void }) {
           </div>
           <p className="muted small">
             Best or mixed play in {stats.decisions} decisions. {g.mistake} mistake{g.mistake === 1 ? '' : 's'}.
+            {(stats.bestStreak ?? 0) >= 2 && ` Best streak: ${stats.bestStreak} in a row.`}
           </p>
         </div>
         <div className="profile-stat">

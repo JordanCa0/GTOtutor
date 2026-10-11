@@ -164,6 +164,7 @@ export function StatsSection({
             {g.mistake} mistake{g.mistake === 1 ? "" : "s"} · {stats.hintsUsed}{" "}
             hint
             {stats.hintsUsed === 1 ? "" : "s"} used
+            {(stats.bestStreak ?? 0) >= 2 && ` · best streak ${stats.bestStreak} in a row`}
             {stats.easyFoldsSkipped &&
               " · easy folds were mostly skipped, so this skews toward harder spots"}
           </p>

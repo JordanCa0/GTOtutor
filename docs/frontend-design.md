@@ -99,6 +99,8 @@ Rules:
 | Verdict, chart, coach card appearing | Every decision | 300–450ms `--ease`, fade and small rise |
 | Modals, popovers | Occasionally | 200ms `--ease`; popovers grow from their trigger, modals from the centre |
 | Cards dealt, chips sliding | Part of the game | Can be longer; the user can skip them |
+| Streak multiplier ("×7") | Every good decision in a run | Pops: scale 1 → 1.38 → 1 over 340ms with a 600ms gold flash behind it (1.6s at milestones); reduced motion fades it in |
+| Chip shower at streak milestones (5, 10, 15…) | Rarely | About 3s of chips falling behind the seats (transform and opacity only), more gold at higher milestones; off with reduced motion, Animations off or Celebrations off |
 | Skeleton shimmer | While loading | A faint band sliding across every 1.6s (translate only); reduced motion shows a still fill |
 | Coach text typing out (profile review and its answers) | Occasionally | At least 90 characters a second, never more than 3s per block; click to show it all; reduced motion shows it at once |
 | Next decision waiting (gold glow on "Now" and the chart's "Go to your next decision") | While studying an earlier decision | 1.6s opacity breathe on a pseudo-element's shadow; the pill rises in over 300ms |

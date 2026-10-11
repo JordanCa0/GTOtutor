@@ -63,6 +63,12 @@ export function SettingsMenu() {
             checked={settings.animations}
             onChange={(animations) => updateSettings({ animations })}
           />
+          <Switch
+            label="Celebrations"
+            description="Chips shower down when a streak of good decisions hits 5, 10, 15…"
+            checked={settings.celebrations}
+            onChange={(celebrations) => updateSettings({ celebrations })}
+          />
         </div>
       )}
     </div>
