@@ -4,17 +4,16 @@ import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { displayName, useAuth } from '../auth/auth';
 import { CoachCard } from './CoachCard';
-import { CoachLoader } from './CoachLoader';
 import { PlayingCard } from './PlayingCard';
 import { Backdrop, Presence } from './Presence';
 import { RangeGrid } from './RangeGrid';
 import { ProfileCoach } from './ProfileCoach';
+import { Skeleton, SkeletonGroup, useSkeleton } from './Skeleton';
 import { StatsSection } from './SessionReview';
 import { StyleCard } from './StyleChart';
 import { VerdictBanner, verdictTitle } from './VerdictBanner';
 
 const pct = (f: number) => `${Math.round(f * 100)}%`;
-/** "−0.14bb", "0.00bb": EV given up shows as a negative number, with a real minus sign. */
 
 /** The signed-in player's page: all-time review, style chart, and starred decisions. */
 export function ProfilePage({ onClose }: { onClose: () => void }) {
@@ -62,7 +61,8 @@ function ProfileBody({ onOpen }: { onOpen: (item: StarredDecision) => void }) {
   // The coach's write-up loads separately so the numbers show straight away.
   const review = useQuery({ queryKey: ['profile-review'], queryFn: api.profileReview });
 
-  if (profile.isPending) return <CoachLoader label="Adding up your hands" />;
+  const skeleton = useSkeleton(profile.isPending);
+  if (skeleton.active || profile.isPending) return <ProfileSkeleton visible={skeleton.visible} />;
   if (profile.error) return <p className="error">{profile.error.message}</p>;
   const { stats, style, gto, starredCount } = profile.data;
   if (stats.decisions === 0) return <p className="muted">Play some hands while signed in and your profile fills in here.</p>;
@@ -128,6 +128,41 @@ function ProfileBody({ onOpen }: { onOpen: (item: StarredDecision) => void }) {
 /** EV lost per decision as a status colour: under 0.05bb close to perfect, under 0.2bb some leaks, more than that costly. */
 const evLossClass = (bb: number) => (bb < 0.05 ? 'rate-good' : bb < 0.2 ? 'rate-ok' : 'rate-bad');
 
+/** The profile's shape while its numbers load: the three stat tiles, the style chart and the leaks table. */
+function ProfileSkeleton({ visible }: { visible: boolean }) {
+  return (
+    <SkeletonGroup visible={visible} label="Adding up your hands" className="profile-skeleton">
+      <div className="profile-stats">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="profile-stat">
+            <Skeleton width="40%" />
+            <Skeleton width="55%" height="2.2rem" />
+            <Skeleton width="85%" />
+          </div>
+        ))}
+      </div>
+      <Skeleton width="9rem" height="1.4rem" />
+      <Skeleton kind="block" height="clamp(220px, 32vh, 320px)" />
+      <Skeleton width="6rem" height="1.4rem" />
+      <div className="skeleton-stack">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} height="1.6rem" />
+        ))}
+      </div>
+    </SkeletonGroup>
+  );
+}
+
+function StarredSkeleton({ visible, label, rows }: { visible: boolean; label: string; rows: number }) {
+  return (
+    <SkeletonGroup visible={visible} label={label} className="skeleton-stack">
+      {Array.from({ length: rows }, (_, i) => (
+        <Skeleton key={i} kind="block" height="3.25rem" />
+      ))}
+    </SkeletonGroup>
+  );
+}
+
 function StarredList({ onOpen }: { onOpen: (item: StarredDecision) => void }) {
   const starred = useInfiniteQuery({
     queryKey: ['starred'],
@@ -135,7 +170,8 @@ function StarredList({ onOpen }: { onOpen: (item: StarredDecision) => void }) {
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextBefore,
   });
-  if (starred.isPending) return <CoachLoader label="Loading your starred decisions" />;
+  const skeleton = useSkeleton(starred.isPending);
+  if (skeleton.active || starred.isPending) return <StarredSkeleton visible={skeleton.visible} label="Loading your starred decisions" rows={3} />;
   if (starred.error) return <p className="error">{starred.error.message}</p>;
   const items = starred.data.pages.flatMap((p) => p.items);
   if (!items.length) return <p className="muted small">Star a decision from its verdict to keep it here.</p>;
@@ -161,9 +197,10 @@ function StarredList({ onOpen }: { onOpen: (item: StarredDecision) => void }) {
           </li>
         ))}
       </ul>
+      {starred.isFetchingNextPage && <StarredSkeleton visible label="Loading more starred decisions" rows={2} />}
       {starred.hasNextPage && (
         <button className="ghost" disabled={starred.isFetchingNextPage} onClick={() => starred.fetchNextPage()}>
-          {starred.isFetchingNextPage ? 'Loading…' : 'Show more'}
+          Show more
         </button>
       )}
     </>

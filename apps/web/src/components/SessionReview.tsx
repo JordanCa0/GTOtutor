@@ -1,14 +1,11 @@
-import type {
-  SessionCoachReview,
-  SessionReviewResponse,
-  SessionStats,
-} from "@gtotutor/shared-types";
+import type { SessionCoachReview, SessionStats } from "@gtotutor/shared-types";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { api } from "../api/client";
 import { CoachLoader } from "./CoachLoader";
 import { PlayingCard } from "./PlayingCard";
 import { Backdrop } from "./Presence";
+import { Skeleton, SkeletonGroup, useSkeleton } from "./Skeleton";
 
 const pct = (n: number, d: number) =>
   d ? `${Math.round((n / d) * 100)}%` : "—";
@@ -30,10 +27,16 @@ export function SessionReview({
   onClose,
   onNewSession,
 }: Props) {
-  const { data, isPending, error, refetch } = useQuery({
+  // The numbers come back at once; the coach's write-up (a paid call) arrives on its own.
+  const stats = useQuery({
+    queryKey: ["session-stats", sessionId, decisionsPlayed],
+    queryFn: () => api.sessionStats(sessionId),
+  });
+  const review = useQuery({
     queryKey: ["review", sessionId, decisionsPlayed],
     queryFn: () => api.review(sessionId),
   });
+  const skeleton = useSkeleton(stats.isPending);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -56,12 +59,23 @@ export function SessionReview({
             Close
           </button>
         </div>
-        {isPending ? (
-          <CoachLoader label="Reviewing your session" />
-        ) : error ? (
-          <p className="error">{error.message}</p>
+        {skeleton.active || stats.isPending ? (
+          <ReviewSkeleton visible={skeleton.visible} />
+        ) : stats.error ? (
+          <p className="error">{stats.error.message}</p>
         ) : (
-          <ReviewBody data={data} onRetry={() => refetch()} />
+          <ReviewBody
+            stats={stats.data.stats}
+            coach={
+              review.isPending
+                ? undefined
+                : (review.data?.coach ?? {
+                    status: "unavailable",
+                    reason: review.error?.message ?? "No review.",
+                  })
+            }
+            onRetry={() => review.refetch()}
+          />
         )}
         <div className="modal-foot">
           <button className="secondary" onClick={onNewSession}>
@@ -73,14 +87,37 @@ export function SessionReview({
   );
 }
 
+/** The review's shape while the numbers load: headline, grade bar and the by-spot table. */
+function ReviewSkeleton({ visible }: { visible: boolean }) {
+  return (
+    <SkeletonGroup visible={visible} label="Reviewing your session" className="review-grid">
+      <div className="skeleton-stack">
+        <Skeleton width="45%" height="2.2rem" />
+        <Skeleton height="0.6rem" />
+        <Skeleton width="80%" />
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} height="1.6rem" />
+        ))}
+      </div>
+      <div className="skeleton-stack">
+        <Skeleton width="35%" height="1.2rem" />
+        {[90, 75, 85].map((w) => (
+          <Skeleton key={w} width={`${w}%`} />
+        ))}
+      </div>
+    </SkeletonGroup>
+  );
+}
+
 function ReviewBody({
-  data,
+  stats,
+  coach,
   onRetry,
 }: {
-  data: SessionReviewResponse;
+  stats: SessionStats;
+  coach: SessionCoachReview | undefined;
   onRetry: () => void;
 }) {
-  const { stats, coach } = data;
   if (stats.decisions === 0)
     return (
       <p className="muted">

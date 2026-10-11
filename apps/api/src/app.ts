@@ -14,6 +14,7 @@ import {
   type ProfileResponse,
   type ProfileReviewResponse,
   type SessionReviewResponse,
+  type SessionStatsResponse,
   type StarredResponse,
   type StarRequest,
   type StartHandRequest,
@@ -247,6 +248,15 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
       const star: DecisionStar = req.body.starred ? { starred: true, note } : { starred: false, note: null };
       await hands.setStar(ctx, req.params.decisionId, star);
       return star;
+    },
+  );
+
+  app.get<{ Params: { sessionId: string } }>(
+    '/api/sessions/:sessionId/stats',
+    { schema: { params: { type: 'object', properties: { sessionId: sessionIdSchema } } } },
+    async (req): Promise<SessionStatsResponse> => {
+      const records = await hands.sessionHands(await players.player(req), req.params.sessionId);
+      return { stats: computeSessionStats(records, records.some((h) => h.config.easyFoldsSkipped)) };
     },
   );
 

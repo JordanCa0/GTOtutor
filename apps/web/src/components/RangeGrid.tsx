@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent }
 import { api } from '../api/client';
 import { ACTION_COLORS, optionColor, stripeOrder } from './actionColors';
 import { Backdrop, Presence } from './Presence';
+import { RangeSkeleton, SkeletonGroup, useSkeleton } from './Skeleton';
 
 const DESC = 'AKQJT98765432';
 export const GRID: string[][] = [...DESC].map((r1, row) =>
@@ -51,7 +52,13 @@ export function RangeGrid({ nodeKey, highlight, onOpenChange, onNext }: RangeGri
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  if (isPending) return <div className="range placeholder" />;
+  const skeleton = useSkeleton(isPending);
+  if (skeleton.active || isPending)
+    return (
+      <SkeletonGroup visible={skeleton.visible} label="Loading the range chart">
+        <RangeSkeleton />
+      </SkeletonGroup>
+    );
   if (error) return <p className="error small">{error.message}</p>;
 
   return (

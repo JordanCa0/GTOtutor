@@ -278,6 +278,11 @@ export type SessionCoachReview =
   | { status: 'unavailable'; reason: string }
   | { status: 'not_enough_data'; needed: number };
 
+/** GET /api/sessions/:id/stats: the numbers alone, without waiting for the coach. */
+export interface SessionStatsResponse {
+  stats: SessionStats;
+}
+
 export interface SessionReviewResponse {
   stats: SessionStats;
   coach: SessionCoachReview;

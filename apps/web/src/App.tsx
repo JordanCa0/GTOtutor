@@ -314,8 +314,13 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, onNext, chats, onCh
               </button>
             </div>
           ) : !complete && hand.solving ? (
-            <div className="waiting">
-              <span className="muted pulse">Solving the {hand.solving}…</span>
+            // The buttons' shape while the live solve runs, with the wait explained in the middle slot.
+            <div className="actions" role="status" aria-label={`Solving the ${hand.solving}`}>
+              {ACTION_SLOTS.map((slot) => (
+                <span key={slot.key} className="act act-skeleton" aria-hidden>
+                  {slot.key === 'call' ? `Solving the ${hand.solving}…` : ''}
+                </span>
+              ))}
             </div>
           ) : !complete ? (
             <div className="actions">

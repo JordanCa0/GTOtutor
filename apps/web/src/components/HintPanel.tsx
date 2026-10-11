@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { ACTION_COLORS } from './actionColors';
 import { CoachLoader } from './CoachLoader';
 import { PlayingCard } from './PlayingCard';
+import { RangeSkeleton, SkeletonGroup, useSkeleton } from './Skeleton';
 import { combos, GRID } from './RangeGrid';
 
 const round = (n: number) => Math.round(n * 100) / 100;
@@ -97,7 +98,13 @@ export function HintPanel({ hand }: { hand: HandView }) {
 /** The hands the last raiser takes their action with: their range, not your answer. */
 function VillainRangeView({ villain, highlight }: { villain: VillainRange; highlight: string }) {
   const { data } = useQuery({ queryKey: ['chart', villain.nodeKey], queryFn: () => api.chart(villain.nodeKey) });
-  if (!data) return <div className="villain-range placeholder" />;
+  const skeleton = useSkeleton(!data);
+  if (skeleton.active || !data)
+    return (
+      <SkeletonGroup visible={skeleton.visible} label={`Loading ${villain.position}'s range`}>
+        <RangeSkeleton small />
+      </SkeletonGroup>
+    );
 
   const idx = data.actions.findIndex((a) => a.id === villain.actionId);
   const freq = (hc: string) => (idx >= 0 ? (data.strategy[hc]?.[idx] ?? 0) : 0);
