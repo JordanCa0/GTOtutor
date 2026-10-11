@@ -192,6 +192,26 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 .seat.folded:not(.hero) .card { opacity: 0; transform: translate(0, 30px) scale(0.6) rotate(8deg); }
 .seat.hero.folded .seat-cards { opacity: 0.45; }
 .seat.winner .seat-info { border-color: var(--good); }
+/* Position tooltips: on hover (pointer devices) or focus (keyboard, and a tap on touch screens). The seat being read comes to the front, folded or not. */
+.pos-tip { position: relative; cursor: help; border-radius: var(--r-sm); outline-offset: 2px; }
+.pos-tip .tooltip {
+  position: absolute; z-index: 5; width: max-content; max-width: min(270px, 70vw); display: flex; flex-direction: column; gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--panel); box-shadow: var(--shadow-float);
+  font-size: var(--fs-sm); font-weight: 400; letter-spacing: normal; line-height: 1.45; color: var(--text); white-space: normal; text-align: left;
+  opacity: 0; visibility: hidden; transform: scale(0.97); pointer-events: none; transition: opacity 150ms ease, transform 200ms var(--ease), visibility 0s 200ms;
+}
+.pos-tip .tooltip strong { font-weight: 700; color: var(--gold); }
+.pos-tip .tip-above { bottom: calc(100% + 10px); }
+.pos-tip .tip-below { top: calc(100% + 10px); }
+.pos-tip .tip-center { left: 50%; translate: -50% 0; }
+.pos-tip .tip-right { left: -12px; }
+.pos-tip .tip-left { right: -12px; }
+.pos-tip .tip-above.tip-center { transform-origin: bottom center; } .pos-tip .tip-below.tip-center { transform-origin: top center; }
+.pos-tip .tip-above.tip-right { transform-origin: bottom left; } .pos-tip .tip-below.tip-right { transform-origin: top left; }
+.pos-tip .tip-above.tip-left { transform-origin: bottom right; } .pos-tip .tip-below.tip-left { transform-origin: top right; }
+.pos-tip:focus .tooltip { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+@media (hover: hover) and (pointer: fine) { .pos-tip:hover .tooltip { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; } }
+.seat:has(.pos-tip:hover, .pos-tip:focus) { z-index: 4; opacity: 1; }
 .dealer { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 6px; border-radius: 50%; background: #ece9e2; color: #1a1a1a; font-family: var(--serif); font-size: var(--fs-xs); font-weight: 700; }
 .action-bubble { position: absolute; bottom: -21px; left: 50%; translate: -50% 0; font-size: var(--fs-xs); font-weight: 700; padding: 0.05rem var(--sp-2); border-radius: 999px; background: #2b333e; border: 1px solid var(--line-2); animation: pop 0.3s var(--ease) both; white-space: nowrap; }
 .action-bubble.act-raise, .action-bubble.act-bet, .action-bubble.act-allin { background: var(--raise); border-color: transparent; }

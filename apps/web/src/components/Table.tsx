@@ -2,6 +2,7 @@ import type { ActionLogEntry, HandView, Position } from '@gtotutor/shared-types'
 import { actingAt, potAt, seatsAt, type PlaybackState } from '../playback';
 import { ChipStack } from './ChipStack';
 import { PlayingCard } from './PlayingCard';
+import { POSITION_INFO } from '../positions';
 import { useSettings } from '../settings';
 import { ChipRain, type Celebration } from './Streak';
 
@@ -42,6 +43,30 @@ interface Props {
   onSkip: () => void;
   /** A streak milestone: chips shower behind the seats. */
   celebration?: Celebration | null;
+}
+
+/**
+ * The seat's position name, with a tooltip on hover or focus (tap on touch screens) saying what it
+ * means and how it plays. The tooltip opens away from the table edge nearest the seat.
+ */
+function PositionLabel({ position, slot }: { position: Position; slot: Point }) {
+  const info = POSITION_INFO[position];
+  const id = `pos-tip-${position}`;
+  const side = slot.x < 30 ? 'tip-right' : slot.x > 70 ? 'tip-left' : 'tip-center';
+  const vertical = slot.y < 40 ? 'tip-below' : 'tip-above';
+  return (
+    <span className="pos pos-tip" tabIndex={0} aria-describedby={id} onClick={(e) => e.stopPropagation()}>
+      {position}
+      {position === 'BTN' && <span className="dealer">D</span>}
+      <span role="tooltip" id={id} className={`tooltip ${side} ${vertical}`}>
+        <strong>
+          {position}: {info.name}
+        </strong>
+        <span>{info.turn}</span>
+        <span className="muted">{info.why}</span>
+      </span>
+    </span>
+  );
 }
 
 export function Table({ hand, playback, onSkip, celebration }: Props) {
@@ -132,10 +157,7 @@ export function Table({ hand, playback, onSkip, celebration }: Props) {
               ))}
             </div>
             <div className="seat-info">
-              <span className="pos">
-                {seat.position}
-                {seat.position === 'BTN' && <span className="dealer">D</span>}
-              </span>
+              <PositionLabel position={seat.position} slot={slotOf(seat.position)} />
               <span className="stack">{Math.round((stack - d.committed + won) * 100) / 100}bb</span>
               {d.lastAction && !sd && !playback.awarded && (
                 <span key={d.lastAction.toBb + d.lastAction.action} className={`action-bubble act-${d.lastAction.action}`}>
