@@ -93,4 +93,12 @@ describe('GTO summary', () => {
     expect(gtoSummaryOf(ds)).toEqual({ accuracy: 0.667, evLossBb: 0.5, evDecisions: 2 });
     expect(gtoSummaryOf([])).toEqual({ accuracy: 0, evLossBb: null, evDecisions: 0 });
   });
+
+  it('measures the bet size hero picked, not the first size of that action', () => {
+    const d = decision('bet', { check: 0.5, bet: 0.5 }, { ev: { check: 1, bet: 2 } });
+    // Two bet sizes: 33% (best, 2bb) and 75% (1.2bb); hero bet 75%.
+    d.options = [d.options[0], { ...d.options[1], label: 'bet 33%', toBb: 2 }, { ...d.options[1], label: 'bet 75%', toBb: 4.5, frequency: 0, evBb: 1.2 }];
+    d.chosenIndex = 2;
+    expect(gtoSummaryOf([d]).evLossBb).toBe(0.8);
+  });
 });

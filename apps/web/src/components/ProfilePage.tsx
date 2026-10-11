@@ -15,7 +15,6 @@ import { VerdictBanner, verdictTitle } from './VerdictBanner';
 
 const pct = (f: number) => `${Math.round(f * 100)}%`;
 /** "−0.14bb", "0.00bb": EV given up shows as a negative number, with a real minus sign. */
-const signedBb = (bb: number) => `${bb < -0.005 ? '−' : ''}${Math.abs(bb).toFixed(2)}bb`;
 
 /** The signed-in player's page: all-time review, style chart, and starred decisions. */
 export function ProfilePage({ onClose }: { onClose: () => void }) {
@@ -86,12 +85,12 @@ function ProfileBody({ onOpen }: { onOpen: (item: StarredDecision) => void }) {
           </p>
         </div>
         <div className="profile-stat">
-          <p className="profile-stat-label">EV per decision</p>
-          <p className={`profile-stat-value ${gto.evLossBb ? 'down' : ''}`}>{gto.evLossBb === null ? '–' : signedBb(-gto.evLossBb)}</p>
+          <p className="profile-stat-label">EV lost per decision</p>
+          <p className={`profile-stat-value ${gto.evLossBb === null ? '' : evLossClass(gto.evLossBb)}`}>{gto.evLossBb === null ? '–' : `${gto.evLossBb.toFixed(2)}bb`}</p>
           <p className="muted small">
             {gto.evLossBb === null
               ? 'Shows up once you play flop spots or solved charts: the placeholder preflop charts have no EVs.'
-              : `Against the best play in each spot, so 0 is perfect. Over ${gto.evDecisions} decisions with EVs.`}
+              : `What your choices gave up against the best play in each spot, so 0 is perfect. Over ${gto.evDecisions} decisions with EVs.`}
           </p>
         </div>
         <div className="profile-stat">
@@ -125,6 +124,9 @@ function ProfileBody({ onOpen }: { onOpen: (item: StarredDecision) => void }) {
     </>
   );
 }
+
+/** EV lost per decision as a status colour: under 0.05bb close to perfect, under 0.2bb some leaks, more than that costly. */
+const evLossClass = (bb: number) => (bb < 0.05 ? 'rate-good' : bb < 0.2 ? 'rate-ok' : 'rate-bad');
 
 function StarredList({ onOpen }: { onOpen: (item: StarredDecision) => void }) {
   const starred = useInfiniteQuery({

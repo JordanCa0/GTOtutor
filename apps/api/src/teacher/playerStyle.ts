@@ -1,4 +1,4 @@
-import type { ActionType, DecisionFeedback, GtoSummary, PlayerStyle, SpotType, StyleAxis, StyleLeakRate, StyleLeakRates, StylePoint } from '@gtotutor/shared-types';
+import { chosenOption, type ActionType, type DecisionFeedback, type GtoSummary, type PlayerStyle, type SpotType, type StyleAxis, type StyleLeakRate, type StyleLeakRates, type StylePoint } from '@gtotutor/shared-types';
 import { spotLabel, spotTypeOf } from './sessionStats.js';
 
 const AGGRESSIVE = new Set<ActionType>(['bet', 'raise', 'allin']);
@@ -86,7 +86,8 @@ export function gtoSummaryOf(decisions: DecisionFeedback[]): GtoSummary {
   let evDecisions = 0;
   for (const d of decisions) {
     const evs = d.options.map((o) => o.evBb);
-    const chosen = d.options.find((o) => o.actionId === d.chosenAction)?.evBb;
+    // The size hero actually picked, not just the first option of that type.
+    const chosen = chosenOption(d)?.evBb;
     if (chosen == null || evs.some((e) => e == null)) continue;
     lost += Math.max(...(evs as number[])) - chosen;
     evDecisions++;
