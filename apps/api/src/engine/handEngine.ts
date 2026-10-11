@@ -801,7 +801,9 @@ export class HandEngine {
    */
   private nextStreet(state: HandState): void {
     const pf = state.postflop!;
-    const canPlay = this.liveStreets && pf.street !== 'river' && !state.players.some((p) => !p.folded && p.allIn);
+    // Only hands hero is still in get turn and river solves; bots left on their own just run out.
+    const heroIn = state.players.some((p) => p.isHero && !p.folded);
+    const canPlay = this.liveStreets && heroIn && pf.street !== 'river' && !state.players.some((p) => !p.folded && p.allIn);
     if (!canPlay) return this.finish(state);
     const committed = state.players.find((p) => !p.folded)!.committed;
     if (pf.street === 'flop') {

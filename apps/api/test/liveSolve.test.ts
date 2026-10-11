@@ -216,6 +216,20 @@ describe('live turn and river play', () => {
     expect(engine2.view(again).legalActions.map((a) => a.id)).toEqual(engine.view(state).legalActions.map((a) => a.id));
   });
 
+  it('never waits on a solve for a hand hero has folded out of', () => {
+    const engine = new HandEngine(charts, seededRng(38), runoutResolver, flops, true);
+    let botFlops = 0;
+    for (let i = 0; i < 400 && botFlops < 3; i++) {
+      // Hero folds the SB; BTN and BB (a solved spot) can play on without hero.
+      const state = engine.start({ tableSize: 'SIX_MAX', stackDepthBb: 100, heroPosition: 'SB', skipEasyFolds: false });
+      if (!engine.view(state).legalActions.some((a) => a.id === 'fold')) continue;
+      engine.decide(state, 'fold');
+      expect(engine.view(state)).toMatchObject({ status: 'complete', solving: null });
+      if (state.actionLog.some((a) => a.street === 'flop')) botFlops++;
+    }
+    expect(botFlops).toBeGreaterThan(0);
+  });
+
   it('keeps hands running out after the flop when live solving is off', () => {
     const engine = new HandEngine(charts, seededRng(37), runoutResolver, flops);
     const state = engine.start(flopPractice);
