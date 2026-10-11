@@ -1,4 +1,5 @@
 import type { ActionLogEntry, HandView, Position } from '@gtotutor/shared-types';
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { actingAt, potAt, seatsAt, type PlaybackState } from '../playback';
 import { ChipStack } from './ChipStack';
 import { PlayingCard } from './PlayingCard';
@@ -11,22 +12,78 @@ interface Point {
   y: number;
 }
 
-/** Seat anchors (% of the table box), clockwise from hero at the bottom; action moves clockwise. */
-const SLOTS: Point[] = [
-  { x: 50, y: 85 },
-  { x: 10, y: 68 },
-  { x: 10, y: 27 },
-  { x: 50, y: 9 },
-  { x: 90, y: 27 },
-  { x: 90, y: 68 },
-];
-const TABLE_CENTER: Point = { x: 50, y: 48 };
-const POT_SPOT: Point = { x: 50, y: 41 };
-const betSpot = (p: Point): Point => ({
-  x: p.x + (TABLE_CENTER.x - p.x) * 0.42,
-  y: p.y + (TABLE_CENTER.y - p.y) * 0.42,
-});
+type Shape = 'wide' | 'tall';
+
+/** Where everything sits (% of the table box) on a wide table and on a tall one (a phone held upright). */
+interface Layout {
+  /** Seat anchors, clockwise from hero at the bottom; action moves clockwise. */
+  slots: Point[];
+  center: Point;
+  pot: Point;
+  potLabel: Point;
+  board: Point;
+}
+const LAYOUTS: Record<Shape, Layout> = {
+  wide: {
+    slots: [
+      { x: 50, y: 85 },
+      { x: 10, y: 68 },
+      { x: 10, y: 27 },
+      { x: 50, y: 9 },
+      { x: 90, y: 27 },
+      { x: 90, y: 68 },
+    ],
+    center: { x: 50, y: 48 },
+    pot: { x: 50, y: 41 },
+    potLabel: { x: 50, y: 34 },
+    board: { x: 50, y: 54 },
+  },
+  tall: {
+    slots: [
+      { x: 50, y: 86 },
+      { x: 15, y: 65 },
+      { x: 15, y: 31 },
+      { x: 50, y: 9 },
+      { x: 85, y: 31 },
+      { x: 85, y: 65 },
+    ],
+    center: { x: 50, y: 48 },
+    pot: { x: 50, y: 42 },
+    potLabel: { x: 50, y: 37 },
+    board: { x: 50, y: 50 },
+  },
+};
+/** The table size (px) each layout is drawn for: a smaller table scales seats, cards and chips down to fit. */
+const DESIGN: Record<Shape, { w: number; h: number }> = { wide: { w: 760, h: 475 }, tall: { w: 420, h: 580 } };
 const at = (p: Point) => ({ left: `${p.x}%`, top: `${p.y}%` });
+
+/**
+ * Picks the layout from the shape of the space the table gets (its parent), and how far to scale the
+ * table's contents. Measured on the parent because the table's own box depends on the shape.
+ */
+function useTableShape(ref: RefObject<HTMLElement | null>) {
+  const [fit, setFit] = useState<{ shape: Shape; scale: number }>({ shape: 'wide', scale: 1 });
+  useLayoutEffect(() => {
+    const area = ref.current?.parentElement;
+    if (!area) return;
+    const measure = () => {
+      const { width, height } = area.getBoundingClientRect();
+      if (!width || !height) return;
+      const shape: Shape = height / width > 0.8 ? 'tall' : 'wide';
+      // The table's box inside the area (as .table-wrap sizes it in styles.css), against the design size.
+      const w = shape === 'wide' ? Math.min(width, height * 1.6) : Math.min(width, height * 0.9);
+      const h = shape === 'wide' ? w / 1.6 : Math.min(height, width * 1.5);
+      const fitted = Math.min(w / DESIGN[shape].w, h / DESIGN[shape].h);
+      const scale = Math.round(Math.min(1, Math.max(0.55, fitted)) * 100) / 100;
+      setFit((f) => (f.shape === shape && f.scale === scale ? f : { shape, scale }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(area);
+    return () => ro.disconnect();
+  }, [ref]);
+  return fit;
+}
 
 const ACTION_TEXT: Record<ActionLogEntry['action'], (a: ActionLogEntry) => string> = {
   fold: () => 'Fold',
@@ -66,9 +123,16 @@ function PositionTooltip({ position, slot }: { position: Position; slot: Point }
 
 export function Table({ hand, playback, onSkip, celebration }: Props) {
   const { animations, celebrations } = useSettings();
+  const ref = useRef<HTMLDivElement>(null);
+  const { shape, scale } = useTableShape(ref);
+  const layout = LAYOUTS[shape];
+  const betSpot = (p: Point): Point => ({
+    x: p.x + (layout.center.x - p.x) * 0.42,
+    y: p.y + (layout.center.y - p.y) * 0.42,
+  });
   const heroIdx = hand.seats.findIndex((s) => s.isHero);
   const n = hand.seats.length;
-  const slotOf = (pos: Position) => SLOTS[(hand.seats.findIndex((s) => s.position === pos) - heroIdx + n) % n];
+  const slotOf = (pos: Position) => layout.slots[(hand.seats.findIndex((s) => s.position === pos) - heroIdx + n) % n];
 
   const display = seatsAt(hand, playback.steps);
   const pot = potAt(display);
@@ -82,22 +146,22 @@ export function Table({ hand, playback, onSkip, celebration }: Props) {
 
   const chipTarget = (pos: Position): Point => {
     if (winners.length === 1) return betSpot(slotOf(winners[0]));
-    if (playback.gathered) return POT_SPOT;
+    if (playback.gathered) return layout.pot;
     return betSpot(slotOf(pos));
   };
 
   return (
-    <div className="table-wrap" onClick={onSkip} title="Click to skip animation">
+    <div ref={ref} className={`table-wrap ${shape}`} style={{ ['--table-scale' as string]: scale }} onClick={onSkip} title="Click to skip animation">
       <div className="felt" />
       {celebration && animations && celebrations && <ChipRain key={celebration.at} celebration={celebration} />}
 
-      <div className="pot-label" style={at({ x: 50, y: 34 })}>
+      <div className="pot-label" style={at(layout.potLabel)}>
         Pot <b>{pot}</b>bb
       </div>
 
-      <div className="board" style={at({ x: 50, y: 54 })}>
+      <div className="board" style={at(layout.board)}>
         {playback.board > 0 ? (
-          (result?.board.length ? result.board : hand.board).slice(0, playback.board).map((c) => <PlayingCard key={c} card={c} className="board-card" />)
+          (result?.board.length ? result.board : hand.board).slice(0, playback.board).map((c) => <PlayingCard key={c} card={c} size={shape === 'tall' ? 'sm' : 'md'} className="board-card" />)
         ) : (
           <span className="street">Preflop</span>
         )}
@@ -145,7 +209,7 @@ export function Table({ hand, playback, onSkip, celebration }: Props) {
                 <PlayingCard
                   key={cards ? cards[k] : `back-${k}`}
                   card={cards ? cards[k] : null}
-                  size={seat.isHero ? 'md' : 'sm'}
+                  size={seat.isHero ? 'md' : shape === 'tall' && !cards ? 'xs' : 'sm'}
                   className={`dealt ${shown && !seat.isHero ? 'flip' : ''}`}
                   style={{ ['--deal-delay' as string]: `${(k * n + dealOrder) * 32}ms` }}
                 />

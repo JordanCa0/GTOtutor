@@ -12,7 +12,7 @@ The stylesheet mixes units on purpose. Each unit has one job:
 | --- | --- | --- |
 | `rem` | Font sizes, spacing (gap, padding, margin), button and control sizes | Scales with the browser's font-size setting, so someone who zooms text gets a bigger UI, not overlapping text |
 | `px` | Borders (1px), hairline gaps (1–2px), radii, shadows, icon boxes, fixed layout columns (the 480/540px side panel) | These should look the same at any text size. A 1px line that becomes 1.25px looks blurry |
-| `%`, `cqw`, `cqh` | Everything inside the poker table (seats, chips, cards, felt) | The table is a size container (`.table-area`, `.table-wrap`). Its contents scale with it, so the table looks the same at any window size |
+| `%`, `cqw`, `cqh`, `--table-scale` | Everything inside the poker table (seats, chips, cards, felt) | The table is a size container (`.table-area`, `.table-wrap`). Positions are % of the table. Seats, cards, chips and the board are drawn at full size and shrink with `scale: var(--table-scale)`, which `Table.tsx` sets from the table's measured size, so the table looks the same at any window size |
 | `dvh`, `vh`, `vw` | Only the outer shell (`.app` height, page margins) and the bounds of a `clamp()` | Using viewport units inside components ties them to the window rather than their container |
 | `ch` | How wide a paragraph of text can get (`max-width: 46ch`) | Keeps lines readable |
 | `em` | Only something that should follow its own text's size (an icon inside a line of text) | Anywhere else, `em` compounds unpredictably when nested |
@@ -67,8 +67,17 @@ Rules:
 ## 6. Layout
 
 - **Shell:** `.app` fills the viewport (`100dvh`) with rows for the header, banner and main. `main` is pinned to the last row (`grid-row: 3`) because the banner is optional. Without the pin, `main` falls into the auto-height banner row and the table shrinks. `main` has two columns, the table side (`minmax(0, 1fr)`) and the side panel (480px, 540px from 1500px). It turns into one column below 1024px.
-- **Breakpoints:** 640px (phone), 1024px (one column), 1500px (wide). Use only these in new code. The older one-off breakpoints (480, 700, 760, 860) should move to the nearest of these when touched.
+- **Breakpoints:** 640px (phone), 1024px (one column), 1500px (wide). Use only these. The `useCompact()` hook (`useMediaQuery.ts`) matches the 1024px one in code.
 - **Columns under 1024px:** give every fixed-width thing a way to shrink (`min-width: 0`, `minmax(0, 1fr)`, `flex-wrap`). Phones need a 16px side gutter and no sideways scrolling.
+- **Phones and tablets (under 1024px)** play on one screen with no scrolling (`docs/mobile-plan.md`):
+  - The header shows one menu (`HeaderMenu.tsx`) instead of buttons.
+  - Rows are `table / feedback strip / action bar`. The strip (`FeedbackStrip.tsx`) and the bar have fixed heights, so the table keeps its size.
+  - The table picks a tall seat layout when its space is taller than wide (`LAYOUTS` in `Table.tsx`).
+  - The decision panel is a bottom sheet (`BottomSheet.tsx`) with Verdict, Chart, Coach and Hand tabs. The action log lives in the Hand tab.
+  - The action bar is a grid: slots share the width, and a size group takes two columns.
+  - Phones on their side (landscape, under 540px tall) put the strip and bar in a column to the right of the table, and the sheet slides up on the right.
+  - Below 640px, big pop-ups (`.modal`, `.reader`, setup) fill the screen; small dialogs keep a 16px gutter.
+  - Respect safe areas (`env(safe-area-inset-*)`) on anything touching a screen edge, and keep inputs at 16px or more so iOS doesn't zoom.
 - **The table must not change size between decisions.** The left column is `table / controls / log`, and the table gets whatever height is left. Anything in the controls row has to stay one line on a 1280px-wide screen:
   - The action bar has at most the three slots (Fold, Call/Check, Raise/Bet) plus one extra (all-in).
   - Several sizes of one action go in the raise slot as one segmented group (`.act-group`), never as separate buttons.
@@ -98,6 +107,8 @@ Rules:
 | Hover and press | Constantly | 150–160ms, `ease` for colour, `--ease` for transform |
 | Verdict, chart, coach card appearing | Every decision | 300–450ms `--ease`, fade and small rise |
 | Modals, popovers | Occasionally | 200ms `--ease`; popovers grow from their trigger, modals from the centre |
+| Phone bottom sheet | Each time you look at a verdict | Slides up 300ms, down 200ms, `--ease-drawer`, as a transition so a drag or re-tap reverses it; drag down past 25% or flick to close; reduced motion fades |
+| Phone feedback strip | Every decision | Contents fade over 150ms; never moves |
 | Cards dealt, chips sliding | Part of the game | Can be longer; the user can skip them |
 | Streak multiplier ("×7") | Every good decision in a run | Pops: scale 1 → 1.38 → 1 over 340ms with a 600ms gold flash behind it (1.6s at milestones); reduced motion fades it in |
 | Chip shower at streak milestones (5, 10, 15…) | Rarely | About 3s of chips falling behind the seats (transform and opacity only), more gold at higher milestones; off with reduced motion, Animations off or Celebrations off |
@@ -120,7 +131,7 @@ Rules:
 
 - [ ] Spacing uses `--sp-*`, fonts use `--fs-*`, radii use `--r-*`; no new raw `rem` or `px` values except hairlines.
 - [ ] Units follow section 1.
-- [ ] Works at 1280px, 1024px and 375px wide without sideways scrolling, and the table doesn't change size.
+- [ ] Works at 1280px, 1024px, 390px, 320px and 844×390 (landscape) without sideways scrolling, the play screen fits without vertical scrolling below 1024px, and the table doesn't change size. `npm run test:e2e -w apps/web` checks this.
 - [ ] Colours come from tokens or `optionColor()`; gold only for "you".
 - [ ] Hover is gated, pressing scales, focus is visible, every action has a key.
 - [ ] New animations are on the list in section 8 and have a reduced-motion fallback.

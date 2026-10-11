@@ -17,7 +17,11 @@ import type { Celebration } from './components/Streak';
 import { Table } from './components/Table';
 import { TitleScreen } from './components/TitleScreen';
 import { Tour, type TourStep } from './components/Tour';
-import { PLAY_STEPS, VERDICT_STEPS } from './components/tourSteps';
+import { PLAY_STEPS, PLAY_STEPS_COMPACT, VERDICT_STEPS, VERDICT_STEPS_COMPACT } from './components/tourSteps';
+import { BottomSheet } from './components/BottomSheet';
+import { FeedbackStrip } from './components/FeedbackStrip';
+import type { SheetTab } from './components/DecisionPanel';
+import { useCompact } from './useMediaQuery';
 import { actingAt } from './playback';
 import { useAuth } from './auth/auth';
 import { hasSeenTitle, hasSeenTour, markTitleSeen, markTourSeen, type TourPart } from './onboarding';
@@ -259,6 +263,14 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration
   const result = hand.result;
   const complete = hand.status === 'complete';
 
+  // Phone layout: the decision panel lives in a bottom sheet, opened from the strip under the table.
+  const compact = useCompact();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetTab, setSheetTab] = useState<SheetTab>('verdict');
+  const closeSheet = useCallback(() => setSheetOpen(false), []);
+  // A new grade or the next spot starts on its first tab.
+  useEffect(() => setSheetTab('verdict'), [hand.decisions.length]);
+
   // One entry per slot, in display order. Several sizes of one type (flop bets of 33/66/100%) fill the raise
   // slot together as one segmented group, smallest first, with shortcuts 1, 2, 3 (R also takes the smallest),
   // so the bar stays one row whatever the spot. Any other extra option (all-in next to a raise) gets its own
@@ -285,6 +297,7 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration
   const sizeText = (a: LegalAction) =>
     a.id === 'bet' && a.toBb !== null && hand.potBb > 0 ? { main: `Bet ${Math.round((a.toBb / hand.potBb) * 100)}%`, sub: `${a.toBb}bb` } : { main: a.label, sub: null };
 
+  const handLog = hand.actionLog.slice(0, playback.steps);
   const canAct = done && !complete && !decide.isPending;
   const canDeal = done && complete && !dealing;
   useEffect(() => {
@@ -293,7 +306,7 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration
       if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target as HTMLElement;
       if (t.isContentEditable || t.closest('input, textarea, select')) return;
-      if (document.querySelector('.modal-backdrop, .tour')) return;
+      if (document.querySelector('.modal-backdrop, .tour, .sheet[data-open="true"]')) return;
       const k = e.key.toLowerCase();
       if (canAct && shortcuts.has(k)) {
         e.preventDefault();
@@ -313,24 +326,28 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration
   useEffect(() => {
     if (tour) return;
     if (canAct && !hasSeenTour('play')) {
-      setTour({ steps: PLAY_STEPS, part: 'play' });
+      setTour({ steps: compact ? PLAY_STEPS_COMPACT : PLAY_STEPS, part: 'play' });
       return;
     }
     if (graded && !hasSeenTour('verdict')) {
       // Let the verdict and chart finish animating in first. If the panel has already moved on to a
       // later decision, wait for the next grade instead.
-      const t = setTimeout(() => document.querySelector('.verdict') && setTour({ steps: VERDICT_STEPS, part: 'verdict' }), 700);
+      const t = setTimeout(
+        () => document.querySelector('.verdict') && setTour({ steps: compact ? VERDICT_STEPS_COMPACT : VERDICT_STEPS, part: 'verdict' }),
+        700,
+      );
       return () => clearTimeout(t);
     }
-  }, [canAct, graded, tour]);
+  }, [canAct, graded, tour, compact]);
   // The ? button replays both parts (steps for things not on screen yet are skipped). PlayArea remounts
   // every hand, so only react to presses made while this hand is up.
   const helpSeen = useRef(helpRequest);
   useEffect(() => {
     if (helpRequest === helpSeen.current) return;
     helpSeen.current = helpRequest;
-    setTour({ steps: [...PLAY_STEPS, ...VERDICT_STEPS], part: null });
-  }, [helpRequest]);
+    setSheetOpen(false);
+    setTour({ steps: compact ? [...PLAY_STEPS_COMPACT, ...VERDICT_STEPS_COMPACT] : [...PLAY_STEPS, ...VERDICT_STEPS], part: null });
+  }, [helpRequest]); // eslint-disable-line react-hooks/exhaustive-deps
   const endTour = useCallback(() => {
     setTour((t) => {
       if (t?.part) markTourSeen(t.part);
@@ -345,6 +362,18 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration
         <div className="table-area">
           <Table hand={hand} playback={playback} onSkip={skip} celebration={celebration} />
         </div>
+
+        {compact && (
+          <FeedbackStrip
+            hand={hand}
+            playbackDone={done}
+            streak={streak}
+            onOpen={(t) => {
+              setSheetTab(t);
+              setSheetOpen(true);
+            }}
+          />
+        )}
 
         <div className="controls">
           {!done ? (
@@ -409,8 +438,11 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration
             result && (
               <div className="result-strip">
                 <span className="muted small">
-                  Result <b className={result.heroNetBb > 0 ? 'up' : result.heroNetBb < 0 ? 'down' : ''}>{result.heroNetBb > 0 ? '+' : ''}{result.heroNetBb}bb</b>. {result.summary}
-                  {hand.liveNote && <> {hand.liveNote}</>}
+                  Result <b className={result.heroNetBb > 0 ? 'up' : result.heroNetBb < 0 ? 'down' : ''}>{result.heroNetBb > 0 ? '+' : ''}{result.heroNetBb}bb</b>
+                  <span className="result-summary">
+                    . {result.summary}
+                    {hand.liveNote && <> {hand.liveNote}</>}
+                  </span>
                 </span>
                 <button className="primary" onClick={onNext} disabled={dealing} autoFocus>
                   {dealing ? 'Dealing…' : 'Deal next hand'}
@@ -420,15 +452,39 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration
             )
           )}
           {(decide.error || error) && <p className="error small">{decide.error?.message ?? error}</p>}
-          {hand.solverCommit && <SolverCredit commit={hand.solverCommit} />}
+          {hand.solverCommit && !compact && <SolverCredit commit={hand.solverCommit} />}
         </div>
 
-        <ActionLog entries={hand.actionLog.slice(0, playback.steps)} board={hand.board} />
+        {!compact && <ActionLog entries={handLog} board={hand.board} />}
       </section>
 
-      <aside className="right">
-        <DecisionPanel hand={hand} playbackDone={done} chats={chats} onChat={onChat} streak={streak} />
-      </aside>
+      {compact ? (
+        <BottomSheet open={sheetOpen} onClose={closeSheet} label="Decision details">
+          <DecisionPanel
+            hand={hand}
+            playbackDone={done}
+            chats={chats}
+            onChat={onChat}
+            streak={streak}
+            sheet={{
+              tab: sheetTab,
+              onTab: setSheetTab,
+              handTab: (
+                <div className="sheet-hand">
+                  <p className="label">This hand so far</p>
+                  <ActionLog entries={handLog} board={hand.board} />
+                  {result && <p className="muted small">{result.summary}</p>}
+                  {hand.solverCommit && <SolverCredit commit={hand.solverCommit} />}
+                </div>
+              ),
+            }}
+          />
+        </BottomSheet>
+      ) : (
+        <aside className="right">
+          <DecisionPanel hand={hand} playbackDone={done} chats={chats} onChat={onChat} streak={streak} />
+        </aside>
+      )}
     </main>
   );
 }

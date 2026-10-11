@@ -89,6 +89,8 @@ export default function JellyRadio({
   const groupRef = useRef<HTMLDivElement>(null);
   const chipRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const widths = useRef<number[]>([]);
+  // Each chip's row (its top offset): when the group wraps on a narrow screen, only the selected chip's row makes way.
+  const rows = useRef<number[]>([]);
   const mvs = useRef<ChipMotion[]>([]);
   const applied = useRef(at);
   const cfg = useRef({ swell, barge, shrink, jelly, bounce, stagger, stiffness, reduce, count: list.length });
@@ -118,7 +120,7 @@ export default function JellyRadio({
       const on = i === sel;
       const far = Math.abs(i - sel);
       const dir = Math.sign(i - sel) * (rtl ? -1 : 1);
-      const x = dir * push;
+      const x = rows.current[i] === rows.current[sel] ? dir * push : 0;
       const s = on ? 1 + C.swell : 1 - C.shrink;
       if (instant || C.reduce) {
         mv.x.jump(x);
@@ -143,6 +145,7 @@ export default function JellyRadio({
     const group = groupRef.current;
     if (!group) return;
     widths.current = chipRefs.current.map((el) => el?.offsetWidth ?? 0);
+    rows.current = chipRefs.current.map((el) => el?.offsetTop ?? 0);
     const chipH = chipRefs.current[0]?.offsetHeight ?? 0;
     const maxW = Math.max(0, ...widths.current);
     group.style.setProperty('--jr-pad-x', `${Math.ceil((maxW * swell * 1.3) / 2 + barge) + 2}px`);

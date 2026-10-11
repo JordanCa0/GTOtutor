@@ -24,3 +24,6 @@ preflop/realization/r0-*.json
 preflop/charts/preflop-v9[a-z].json
 solver/spots/preflop-v9[a-z]/
 preflop/compare-preflop-v9*.txt
+# Playwright runs (apps/web/e2e)
+apps/web/test-results/
+apps/web/playwright-report/

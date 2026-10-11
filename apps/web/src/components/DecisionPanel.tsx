@@ -1,5 +1,5 @@
 import type { ChatMessage, DecisionFeedback, HandView, StreakUpdate } from '@gtotutor/shared-types';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { CoachCard } from './CoachCard';
 import { HintPanel } from './HintPanel';
 import { RangeGrid } from './RangeGrid';
@@ -7,15 +7,26 @@ import { RangeSkeleton, Skeleton, SkeletonGroup, useSkeleton } from './Skeleton'
 import { StreakBadge } from './Streak';
 import { VerdictBanner } from './VerdictBanner';
 
+export type SheetTab = 'verdict' | 'chart' | 'coach' | 'hand';
+
+/** In the phone sheet the panel shows one part at a time behind tabs; on desktop everything is stacked. */
+interface SheetMode {
+  tab: SheetTab;
+  onTab: (tab: SheetTab) => void;
+  /** The Hand tab: the action log and credits, which sit under the table on desktop. */
+  handTab: ReactNode;
+}
+
 interface Props {
   hand: HandView;
   playbackDone: boolean;
   chats: Record<string, ChatMessage[]>;
   onChat: (decisionId: string, messages: ChatMessage[]) => void;
   streak?: StreakUpdate | null;
+  sheet?: SheetMode;
 }
 
-export function DecisionPanel({ hand, playbackDone, chats, onChat, streak = null }: Props) {
+export function DecisionPanel({ hand, playbackDone, chats, onChat, streak = null, sheet }: Props) {
   const showPending = hand.status === 'awaiting_hero' && playbackDone && hand.pendingSpot !== null;
   const itemCount = hand.decisions.length + (showPending ? 1 : 0);
   const [selected, setSelected] = useState(itemCount - 1);
@@ -34,7 +45,7 @@ export function DecisionPanel({ hand, playbackDone, chats, onChat, streak = null
   const matched = hand.decisions.filter((d) => d.grade === 'best').length;
   const mistakes = hand.decisions.filter((d) => d.grade === 'mistake').length;
 
-  if (itemCount === 0) {
+  if (itemCount === 0 && !sheet) {
     return (
       <SkeletonGroup visible={skeleton.visible} label="Dealing" className="skeleton-stack">
         <Skeleton kind="block" height="4.5rem" />
@@ -47,9 +58,38 @@ export function DecisionPanel({ hand, playbackDone, chats, onChat, streak = null
   const decision: DecisionFeedback | undefined = hand.decisions[selected];
   const isPending = showPending && selected === hand.decisions.length;
   const nextWaiting = showPending && !isPending;
+  // Sheet tabs: a graded decision has all four; the spot you're deciding on (or none yet) has its own and the hand.
+  const tabs: { id: SheetTab; label: string }[] = decision && !isPending
+    ? [
+        { id: 'verdict', label: 'Verdict' },
+        { id: 'chart', label: 'Chart' },
+        { id: 'coach', label: 'Coach' },
+        { id: 'hand', label: 'Hand' },
+      ]
+    : [
+        { id: 'verdict', label: 'Spot' },
+        { id: 'hand', label: 'Hand' },
+      ];
+  const tab = sheet && tabs.some((t) => t.id === sheet.tab) ? sheet.tab : 'verdict';
+  const hide = (part: SheetTab) => (sheet ? tab !== part : false);
 
   return (
     <div className="decision-panel">
+      {sheet && (
+        <div className="sheet-tabs" role="tablist">
+          {tabs.map((t) => (
+            <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => sheet.onTab(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {sheet && (
+        <div className="panel-part" hidden={hide('hand')}>
+          {sheet.handTab}
+        </div>
+      )}
+      <div className="panel-part" hidden={tab === 'hand' && !!sheet}>
       {complete && hand.decisions.length > 1 && (
         <div className={`hand-verdict ${mistakes ? 'bad' : matched === hand.decisions.length ? 'good' : 'ok'}`}>
           {matched} of {hand.decisions.length} decision{hand.decisions.length > 1 ? 's' : ''} matched the chart
@@ -71,21 +111,36 @@ export function DecisionPanel({ hand, playbackDone, chats, onChat, streak = null
         </div>
       )}
 
+      </div>
+
       {isPending ? (
-        <HintPanel key={hand.pendingSpot!.nodeKey + hand.id} hand={hand} />
+        <div className="panel-part" hidden={hide('verdict')}>
+          <HintPanel key={hand.pendingSpot!.nodeKey + hand.id} hand={hand} />
+        </div>
       ) : decision ? (
         <>
-          {selected === hand.decisions.length - 1 && <StreakBadge streak={streak} />}
-          <VerdictBanner feedback={decision} handId={hand.id} />
-          <RangeGrid
-            key={decision.id}
-            nodeKey={decision.nodeKey}
-            highlight={decision.handClass}
-            onOpenChange={setChartOpen}
-            onNext={nextWaiting ? () => setSelected(hand.decisions.length) : undefined}
-          />
-          <CoachCard key={`coach-${decision.id}`} handId={hand.id} decision={decision} messages={chats[decision.id] ?? []} onMessages={(m) => onChat(decision.id, m)} />
+          <div className="panel-part" hidden={hide('verdict')}>
+            {selected === hand.decisions.length - 1 && <StreakBadge streak={streak} />}
+            <VerdictBanner feedback={decision} handId={hand.id} />
+          </div>
+          <div className="panel-part" hidden={hide('chart')}>
+            <RangeGrid
+              key={decision.id}
+              nodeKey={decision.nodeKey}
+              highlight={decision.handClass}
+              inline={!!sheet}
+              onOpenChange={setChartOpen}
+              onNext={nextWaiting ? () => setSelected(hand.decisions.length) : undefined}
+            />
+          </div>
+          <div className="panel-part" hidden={hide('coach')}>
+            <CoachCard key={`coach-${decision.id}`} handId={hand.id} decision={decision} messages={chats[decision.id] ?? []} onMessages={(m) => onChat(decision.id, m)} />
+          </div>
         </>
+      ) : sheet ? (
+        <div className="panel-part muted small" hidden={hide('verdict')}>
+          Dealing…
+        </div>
       ) : null}
     </div>
   );

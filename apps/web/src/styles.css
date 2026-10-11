@@ -48,6 +48,8 @@
   --serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
   --sans: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --ease: cubic-bezier(0.22, 0.8, 0.3, 1);
+  /* Sheets sliding in and out (the iOS drawer curve). */
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --shadow-float: 0 16px 40px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
   font-family: var(--sans);
@@ -57,8 +59,14 @@
 }
 
 * { box-sizing: border-box; }
-html { min-height: 100%; background: var(--bg); }
-body { margin: 0; padding-top: 1px; }
+html { min-height: 100%; background: var(--bg); -webkit-text-size-adjust: 100%; }
+/* flow-root keeps the setup card's top margin inside the body (a 1px padding did, but made 100dvh screens 1px too tall). Clip is a last guard: overflow is fixed at the cause. */
+body { margin: 0; display: flow-root; overflow-x: clip; }
+/* No double-tap zoom delay (pinch-zoom still works), and our own pressed states instead of the grey tap flash. */
+html, body, button, a, input, textarea, label { touch-action: manipulation; }
+button, a, input, label, [tabindex] { -webkit-tap-highlight-color: transparent; }
+/* No pull-to-refresh mid-hand. */
+html:has(.app) { overscroll-behavior-y: none; }
 button { font: inherit; color: inherit; cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: 0.45; }
 button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -121,9 +129,10 @@ legend { font-size: var(--fs-sm); font-weight: 600; color: var(--text); margin-b
 .header-group { display: flex; align-items: center; gap: var(--sp-2); }
 .header-group + .header-group { margin-left: var(--sp-3); }
 .header-menu { display: none; }
-/* One column: the spot summary is on the table and the avatar stands in for the name, so the buttons fit. */
+/* One column (phones, tablets upright, phones on their side): the spot summary is on the table, and every header control goes in one menu. */
 @media (max-width: 1023px) {
-  .app header > .muted, .account-name { display: none; }
+  .app header > .muted, .header-group { display: none; }
+  .header-menu { display: block; }
 }
 .banner { font-size: var(--fs-xs); padding: var(--sp-1) var(--sp-4); color: var(--muted); border-bottom: 1px solid var(--line); background: var(--panel); }
 /* Always the last row: the banner above it only shows with placeholder charts. */
@@ -132,24 +141,32 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 .left { display: grid; grid-template-rows: minmax(0, 1fr) auto auto; gap: var(--sp-2); min-height: 0; min-width: 0; }
 .right { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: var(--sp-3); min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #3a4350 transparent; display: flex; flex-direction: column; }
 
-/* Phones: the game summary is on the table already, so give the header's buttons the room. */
 @media (max-width: 640px) {
   .app header { gap: var(--sp-2); padding: var(--sp-2) 16px; }
-  .app header > .muted { display: none; }
-  .header-group { display: none; }
-  .header-menu { display: block; }
 }
+/*
+ * Below 1024px: one column that fits the screen with no scrolling (docs/mobile-plan.md). Rows are table /
+ * feedback strip / action bar; the strip and bar have fixed heights, so the table never resizes between
+ * decisions. The decision panel is a bottom sheet (.sheet) and the action log moves into it.
+ */
 @media (max-width: 1023px) {
-  .app { height: auto; overflow: visible; }
-  main { grid-template-columns: 1fr; }
-  .table-area { height: 62vw; }
-  .right { overflow: visible; }
+  .app header { padding-top: max(var(--sp-2), env(safe-area-inset-top)); padding-left: max(var(--sp-4), env(safe-area-inset-left)); padding-right: max(var(--sp-4), env(safe-area-inset-right)); }
+  main { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); padding: var(--sp-2) max(var(--sp-4), env(safe-area-inset-right)) calc(var(--sp-2) + env(safe-area-inset-bottom)) max(var(--sp-4), env(safe-area-inset-left)); }
+  .controls { min-height: 3.5rem; }
 }
 
 /* ---------- Table: the one rich surface ---------- */
 .table-area { min-height: 0; container-type: size; display: grid; place-items: center; }
 /* A size container so chips can slide by `cqw`/`cqh` (percentages of the table) with `translate`. */
 .table-wrap { position: relative; width: min(100cqw, 160cqh); aspect-ratio: 16 / 10; user-select: none; container-type: size; }
+/* A phone held upright: a tall oval filling its row (Table.tsx picks the shape and the seat layout). */
+.table-wrap.tall { width: min(100cqw, 90cqh); height: min(100cqh, 150cqw); aspect-ratio: auto; }
+.table-wrap.tall .felt { inset: 9% 15%; }
+.table-wrap.tall .seat:not(.hero) .seat-cards { min-height: 30px; }
+/* Seats, cards, chips and the board are drawn for a full-size table; --table-scale (set by Table.tsx from the
+   table's size) shrinks them with it. Tooltips scale back up so their text stays readable. */
+.table-wrap > :is(.seat, .board, .pot-label, .bet) { scale: var(--table-scale, 1); }
+.table-wrap .pos-tip .tooltip { scale: calc(1 / var(--table-scale, 1)); }
 .felt {
   position: absolute; inset: 13% 11%; border-radius: 999px;
   background:
@@ -402,7 +419,7 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 /* Cell labels only exist in the enlarged view. */
 .range.large .range-grid { width: min(78vh, 72vw); font-size: clamp(0.55rem, 1.5vh, 0.95rem); }
 .range.large .range-side { font-size: var(--fs-md); padding-top: var(--sp-6); }
-@media (max-width: 700px) { .range.large { grid-template-columns: 1fr; } .range.large .range-grid { width: 88vw; } .range.large .range-side { padding-top: 0; } }
+@media (max-width: 640px) { .range.large { grid-template-columns: 1fr; } .range.large .range-grid { width: 88vw; } .range.large .range-side { padding-top: 0; } }
 
 /* Coach */
 .coach-card { flex: none; min-height: 220px; display: flex; flex-direction: column; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--raised); animation: verdict-in 0.5s var(--ease) both; }
@@ -471,7 +488,7 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 .modal-foot { margin-top: var(--sp-4); justify-content: flex-end; }
 .modal h3 { font-size: var(--fs-sm); font-weight: 600; color: var(--text); margin: var(--sp-4) 0 var(--sp-2); }
 .review-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: var(--sp-5); }
-@media (max-width: 760px) { .review-grid { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .review-grid { grid-template-columns: 1fr; } }
 .big-stat { font-family: var(--serif); font-size: var(--fs-2xl); font-weight: 700; margin: var(--sp-2) 0 var(--sp-1); color: var(--text); }
 .grade-bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: rgba(255, 255, 255, 0.05); }
 .grade-bar .good { background: var(--good); }
@@ -562,10 +579,10 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 .preview-situation { font-family: var(--serif); font-size: var(--fs-lg); }
 .preview-coach { display: grid; grid-template-columns: auto 1fr; gap: var(--sp-3); align-items: start; padding: var(--sp-3) var(--sp-3); border-radius: var(--r-md); background: var(--raised); border: 1px solid var(--line); }
 .preview-coach .bubble-tldr { margin: 0; padding: 0; border: none; font-size: var(--fs-sm); }
-@media (max-width: 860px) {
+@media (max-width: 1023px) {
   .title-hero { grid-template-columns: 1fr; }
 }
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .title-screen { padding: 4vh 16px var(--sp-6); }
   .title-cta { max-width: none; align-items: stretch; }
 }
@@ -598,7 +615,7 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 .danger { color: #e07a6b; }
 
 /* Phone menu: every header control in one sheet under the header, growing from the menu button. */
-.header-sheet { position: absolute; top: calc(100% + var(--sp-1)); left: 16px; right: 16px; z-index: 20; max-height: calc(100dvh - 4.5rem); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; padding: var(--sp-2); border-radius: var(--r-lg); border: 1px solid var(--line-2); background: var(--panel); box-shadow: var(--shadow-float); transform-origin: top right; animation: popover-in 150ms var(--ease) both; }
+.header-sheet { position: absolute; top: calc(100% + var(--sp-1)); right: max(16px, env(safe-area-inset-right)); width: min(24rem, calc(100% - 32px)); z-index: 20; max-height: calc(100dvh - 4.5rem); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; padding: var(--sp-2); border-radius: var(--r-lg); border: 1px solid var(--line-2); background: var(--panel); box-shadow: var(--shadow-float); transform-origin: top right; animation: popover-in 150ms var(--ease) both; }
 .sheet-group { display: flex; flex-direction: column; padding: var(--sp-2) 0; }
 .sheet-group + .sheet-group, .sheet-id + .sheet-group { border-top: 1px solid var(--line); }
 .sheet-group .eyebrow { padding: 0 var(--sp-3); }
@@ -773,9 +790,9 @@ button.primary.danger { background: #c25a4b; color: #fff; }
 .style-leaks li { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: 0.45rem 0.7rem; background: var(--raised); font-size: var(--fs-sm); }
 .style-leaks b { font-variant-numeric: tabular-nums; }
 .style-explain { display: grid; gap: 0.4rem; line-height: 1.5; }
-@media (max-width: 860px) { .style-card, .style-detail-body { grid-template-columns: 1fr; } }
+@media (max-width: 1023px) { .style-card, .style-detail-body { grid-template-columns: 1fr; } }
 /* Phones: let the value columns wrap so all four columns fit. */
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .style-table th:not(:first-child), .style-table td:not(:first-child) { white-space: normal; }
   .style-table th, .style-table td { padding: 0.35rem 0.3rem; }
 }
@@ -785,6 +802,116 @@ button.primary.danger { background: #c25a4b; color: #fff; }
 .starred-note { flex-basis: 100%; color: var(--muted); font-size: var(--fs-sm); font-style: italic; overflow-wrap: anywhere; }
 .starred-detail { display: flex; flex-direction: column; gap: 1rem; }
 @media (hover: hover) and (pointer: fine) { .starred-item:hover { border-color: var(--line-3); } }
-@media (max-width: 700px) { .profile-stats { grid-template-columns: 1fr; } .profile-head { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 640px) { .profile-stats { grid-template-columns: 1fr; } .profile-head { align-items: flex-start; flex-direction: column; } }
 /* Animations off (Settings): everything lands in its final state immediately. */
 .no-anim *, .no-anim *::before, .no-anim *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+
+/* ---------- Phone layout: action bar (after the base .actions rules so these win) ---------- */
+/* The fixed slots share the width equally; a size group splits the raise slot, which takes two columns so
+   Fold and Call stay easy to hit. */
+@media (max-width: 1023px) {
+  .actions { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--sp-2); width: 100%; max-width: 40rem; margin: 0 auto; }
+  .act { min-width: 0; padding: var(--sp-2); }
+  .act-group { grid-column: span 2; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+  .act-size-text { align-items: center; }
+  .waiting { justify-content: space-between; }
+  .result-strip { flex-wrap: nowrap; justify-content: space-between; animation-name: fade; }
+  .result-summary { display: none; }
+}
+@media (max-width: 640px) {
+  .act { font-size: var(--fs-sm); }
+  .act-size-text small { display: none; }
+}
+
+/* ---------- Phone layout: feedback strip and bottom sheet (docs/mobile-plan.md) ---------- */
+/* One fixed-height line under the table. Its contents fade (it changes every decision, so no movement);
+   a press tints it rather than shrinking, since it spans the screen. */
+.feedback-strip { display: flex; align-items: center; width: 100%; height: 3.5rem; padding: 0 var(--sp-3); border-radius: var(--r-md); border: 1px solid var(--line); background: var(--panel); text-align: left; transition: background-color 150ms ease, border-color 150ms ease; }
+.feedback-strip:disabled { opacity: 1; cursor: default; }
+.feedback-strip:active:not(:disabled) { background: var(--raised); }
+@media (hover: hover) and (pointer: fine) { .feedback-strip:hover:not(:disabled) { border-color: var(--line-2); } }
+.strip-content { display: flex; align-items: center; gap: var(--sp-3); width: 100%; min-width: 0; animation: fade 150ms ease both; }
+.strip-main { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.strip-main strong { font-size: var(--fs-sm); }
+.strip-main span { font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.strip-main.muted { font-size: var(--fs-sm); }
+.strip-icon { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; color: #fff; }
+.strip-icon.grade-best { background: var(--good); }
+.strip-icon.grade-mixed { background: var(--ok); color: #1a1405; }
+.strip-icon.grade-mistake { background: var(--bad); }
+.strip-streak { flex: none; font-family: var(--serif); font-weight: 700; font-size: var(--fs-md); color: var(--gold); font-variant-numeric: tabular-nums; animation: streak-pop 340ms var(--ease) both; }
+.strip-cta { flex: none; font-size: var(--fs-xs); color: var(--muted); }
+.strip-chevron { flex: none; display: grid; color: var(--muted); rotate: 180deg; }
+@media (max-width: 640px) { .strip-cta { display: none; } }
+
+/* The sheet: slides up over the table. Stays mounted while closed (off-screen, inert) so the panel keeps its
+   state. A transition, not keyframes, so a drag or a quick re-tap reverses it from where it is. */
+.sheet-backdrop { position: fixed; inset: 0; z-index: 7; background: rgba(3, 5, 8, 0.6); opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
+.sheet-backdrop[data-open='true'] { opacity: 1; pointer-events: auto; transition-duration: 300ms; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; width: 100%; max-width: 44rem; margin: 0 auto; height: 88dvh;
+  display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line-2); border-bottom: none; border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: var(--shadow-float); outline: none;
+  transform: translateY(100%); visibility: hidden; transition: transform 200ms var(--ease-drawer), visibility 0s 200ms;
+}
+.sheet[data-open='true'] { transform: none; visibility: visible; transition: transform 300ms var(--ease-drawer), visibility 0s; }
+.sheet-grab { position: relative; flex: none; height: 2.75rem; display: grid; place-items: center; touch-action: none; cursor: grab; }
+.sheet-grab:active { cursor: grabbing; }
+.sheet-handle { width: 36px; height: 4px; border-radius: 999px; background: var(--line-3); }
+.sheet-close { position: absolute; top: 5px; right: var(--sp-3); }
+.sheet-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; container-type: inline-size; padding: 0 var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom)); scrollbar-width: thin; scrollbar-color: #3a4350 transparent; }
+.sheet-tabs { position: sticky; top: 0; z-index: 2; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px; padding: 2px; margin-bottom: var(--sp-1); border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--panel); }
+.sheet-tabs button { min-height: 2.5rem; border: none; border-radius: var(--r-sm); background: transparent; color: var(--muted); font-size: var(--fs-sm); font-weight: 600; transition: background-color 150ms ease, color 150ms ease; }
+.sheet-tabs button.on { background: rgba(255, 255, 255, 0.1); color: var(--text); }
+/* The panel's parts are wrappers only for hiding the inactive tabs; otherwise they take no part in layout. */
+.panel-part:not([hidden]) { display: contents; }
+.sheet .range.large { grid-template-columns: minmax(0, 1fr); }
+.sheet .range.large .range-grid { width: 100%; font-size: clamp(0.55rem, 2.6cqw, 0.85rem); }
+.sheet .range.large .range-side { padding-top: 0; }
+.sheet .coach-card { min-height: 0; }
+/* The box sizes itself from its text, which reads as nothing while its tab is hidden; never shorter than one line. */
+.chat-input textarea { min-height: calc(1.45em + 2 * var(--sp-2) + 2px); }
+.sheet-hand { display: flex; flex-direction: column; gap: var(--sp-2); }
+.sheet-hand .label { margin: var(--sp-2) 0 0; }
+.sheet-hand .action-log { max-height: none; justify-content: flex-start; font-size: var(--fs-sm); }
+.sheet-hand .solver-credit { text-align: left; }
+
+/* ---------- Phones: setup and pop-ups ---------- */
+@media (max-width: 640px) {
+  /* Setup fills the screen; the corner account control sits over its top padding. The Deal button stays in reach. */
+  .setup { margin: 0; min-height: 100dvh; border: none; border-radius: 0; padding: 4rem 16px calc(var(--sp-5) + env(safe-area-inset-bottom)); }
+  .setup .jelly-radio { flex-wrap: wrap; }
+  .setup .primary.big { position: sticky; bottom: calc(var(--sp-4) + env(safe-area-inset-bottom)); width: 100%; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 8px 24px rgba(0, 0, 0, 0.5); }
+  /* Big pop-ups become full screens; small dialogs (sign-in, delete) keep the backdrop's 16px gutter. */
+  .modal-backdrop:has(> :is(.modal, .reader, .range-modal, .setup)) { padding: 0; }
+  .modal-backdrop > :is(.modal, .reader, .range-modal, .setup) { width: 100%; height: 100dvh; max-width: none; max-height: none; border: none; border-radius: 0; }
+  .modal-backdrop > .setup { padding-top: max(var(--sp-5), env(safe-area-inset-top)); }
+  .modal { padding: 0 16px calc(var(--sp-4) + env(safe-area-inset-bottom)); }
+  .modal-head { position: sticky; top: 0; z-index: 2; margin: 0 -16px; padding: max(var(--sp-3), env(safe-area-inset-top)) 16px var(--sp-3); background: var(--panel); border-bottom: 1px solid var(--line); }
+  .reader-head { padding: max(var(--sp-3), env(safe-area-inset-top)) 16px var(--sp-3); }
+  .range-modal { padding: max(var(--sp-4), env(safe-area-inset-top)) 16px var(--sp-4); }
+  .range.large .range-grid { width: 100%; }
+  .chat-input textarea { font-size: 16px; }
+  input, select, textarea { font-size: max(16px, 1em); }
+  .profile-inner { padding: max(var(--sp-5), env(safe-area-inset-top)) 16px calc(var(--sp-7) + env(safe-area-inset-bottom)); gap: var(--sp-6); }
+}
+
+/* ---------- Phones on their side: table on the left; strip, action bar and sheet on the right ---------- */
+@media (max-width: 1023px) and (orientation: landscape) and (max-height: 540px) {
+  .app header { padding-top: var(--sp-1); padding-bottom: var(--sp-1); }
+  .banner { display: none; }
+  .left { grid-template-columns: minmax(0, 1fr) minmax(15rem, 21rem); grid-template-rows: minmax(0, 1fr) auto auto; column-gap: var(--sp-4); }
+  .table-area { grid-row: 1 / span 3; }
+  .feedback-strip { grid-column: 2; grid-row: 2; }
+  .controls { grid-column: 2; grid-row: 3; }
+  .actions { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-columns: auto; }
+  .act-group { grid-column: 1 / -1; }
+  .sheet-body { padding-right: max(var(--sp-4), env(safe-area-inset-right)); }
+  .sheet { left: auto; right: 0; width: min(26rem, 55vw); max-width: none; margin: 0; height: 100dvh; border-radius: var(--r-lg) 0 0 var(--r-lg); border-bottom: 1px solid var(--line-2); }
+}
+
+/* Reduced motion: the sheet fades instead of sliding. */
+@media (prefers-reduced-motion: reduce) {
+  .sheet { transform: none !important; opacity: 0; transition: opacity 150ms ease, visibility 0s 150ms; }
+  .sheet[data-open='true'] { opacity: 1; transition: opacity 150ms ease, visibility 0s; }
+  .strip-streak { animation-name: fade !important; animation-duration: 150ms !important; }
+}

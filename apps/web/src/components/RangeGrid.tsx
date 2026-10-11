@@ -21,9 +21,11 @@ interface RangeGridProps {
   onOpenChange?: (open: boolean) => void;
   /** Hero's next decision is waiting: the enlarged view offers a way to it. */
   onNext?: () => void;
+  /** Phone sheet: the explorable large chart in place, with no enlarged pop-up. */
+  inline?: boolean;
 }
 
-export function RangeGrid({ nodeKey, highlight, onOpenChange, onNext }: RangeGridProps) {
+export function RangeGrid({ nodeKey, highlight, onOpenChange, onNext, inline }: RangeGridProps) {
   const { data, isPending, error } = useQuery({ queryKey: ['chart', nodeKey, highlight], queryFn: () => api.chart(nodeKey, highlight) });
   const [expanded, setExpanded] = useState(false);
   useEffect(() => onOpenChange?.(expanded), [expanded]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -60,6 +62,7 @@ export function RangeGrid({ nodeKey, highlight, onOpenChange, onNext }: RangeGri
       </SkeletonGroup>
     );
   if (error) return <p className="error small">{error.message}</p>;
+  if (inline) return <RangeView data={data} highlight={highlight} large selected={selected} onSelect={setSelected} />;
 
   return (
     <>

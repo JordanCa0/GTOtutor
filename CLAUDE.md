@@ -4,9 +4,11 @@ A browser poker trainer: play preflop spots, get a verdict against range charts,
 
 20bb and 60bb (equal and mixed stacks) are planned in `docs/stack-depths-plan.md`. Limping from every position and 33/66/100% flop bets (`preflop-v9`) are planned in `docs/game-tree-v9-plan.md`, to be done first.
 
-Ideas planned for later (opponent archetypes, heads-up exploit mode, player style chart, glossary and beginner section, hand replayer, mobile layout) are in `docs/future-ideas.md`.
+Phones and tablets get a one-screen layout below 1024px: a tall table, a feedback strip, and a bottom sheet for the verdict, chart and coach. See `docs/mobile-plan.md` (a check on real phones is still to do).
 
-Accounts and a database run on Supabase: sign-in with Google only, guest play that carries over on sign-up, and every hand and decision saved in Postgres, along with coach threads, session reviews and starred decisions. Signed-in players have a profile page (account menu → Profile): all-time review, style chart, starred decisions. Tags, settings sync and "My hands" filters are next. Solver data lives in S3, not Supabase (see Hosting below). See `docs/accounts-and-data.md` and `docs/database-schema.md`.
+Ideas planned for later (opponent archetypes, heads-up exploit mode, player style chart, glossary and beginner section, hand replayer) are in `docs/future-ideas.md`.
+
+Accounts and a database run on Supabase: sign-in with Google only, guest play that carries over on sign-up, and every hand and decision saved in Postgres, along with coach threads, session reviews and starred decisions. Signed-in players have a profile page (the header's My progress button): all-time review, style chart, starred decisions. Tags, settings sync and "My hands" filters are next. Solver data lives in S3, not Supabase (see Hosting below). See `docs/accounts-and-data.md` and `docs/database-schema.md`.
 
 Hosting is on AWS: web on S3 + CloudFront, the API in Docker on one EC2 instance (it keeps live hands in memory, so never more than one), flop files synced from S3. Runbook in `docs/deployment.md`; files in `deploy/` and `apps/api/Dockerfile`.
 
@@ -35,6 +37,7 @@ Hosting is on AWS: web on S3 + CloudFront, the API in Docker on one EC2 instance
 
 - `npm run dev` starts both servers: web on :5173, API on :3001.
 - `npm test`, `npm run typecheck`, `npm run build`.
+- `npm run test:e2e -w apps/web`: Playwright layout checks at phone, tablet and desktop sizes (no sideways scrolling, play fits one screen, the sheet works). Uses the running dev servers or starts them. First time: `npx playwright install chromium`.
 - Live turn and river solving in development:
   1. Build it: `cargo build --release --features service` in `solver/`.
   2. Run `solver/target/release/live --serve 7879`.

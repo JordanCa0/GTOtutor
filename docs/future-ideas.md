@@ -133,6 +133,8 @@ Bring the app up to WCAG 2.2 AA, then keep it there by checking every UI change 
 
 ## Mobile layout
 
+**Now planned in `docs/mobile-plan.md`** (2026-10-10). The notes below are kept for history.
+
 Make the app work properly on phones. Found 2026-10-08 while building the chart explorer.
 
 - **The page is wider than a phone screen,** so it scrolls sideways and the header gets cut off at 390px wide.

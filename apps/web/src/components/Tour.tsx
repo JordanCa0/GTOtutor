@@ -161,7 +161,7 @@ function place(r: Rect, w: number, h: number, side: TourStep['side']): { top: nu
   return { top: vh - h - GUTTER, left: Math.max(GUTTER, (vw - w) / 2) };
 }
 
-/** The first element matching the selector that is actually laid out, so a step can name a desktop and a phone target. */
+/** The first element matching the selector that is laid out and not tucked in a closed sheet, so a step can name a desktop and a phone target. */
 function findTarget(selector: string): Element | undefined {
-  return [...document.querySelectorAll(selector)].find((el) => el.getClientRects().length > 0);
+  return [...document.querySelectorAll(selector)].find((el) => el.getClientRects().length > 0 && !el.closest('.sheet[data-open="false"]'));
 }

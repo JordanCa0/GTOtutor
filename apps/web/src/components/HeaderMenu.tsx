@@ -12,7 +12,7 @@ interface Props {
   onHelp: () => void;
 }
 
-/** Phones: every header control in one menu. On wider screens the header shows them as buttons instead. */
+/** Below 1024px (phones and upright tablets): every header control in one menu. Wider screens show them as buttons. */
 export function HeaderMenu({ onConfigure, onReview, onProgress, onHelp }: Props) {
   const { enabled, ready, session } = useAuth();
   const [open, setOpen] = useState(false);

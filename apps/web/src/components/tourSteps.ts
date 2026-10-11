@@ -49,3 +49,35 @@ export const VERDICT_STEPS: TourStep[] = [
     body: 'After a few hands, Session review sums up where you lose the most. You can replay this tour from How it works (the ? button).',
   },
 ];
+
+/** Phone layout: the panel is in a sheet behind the strip under the table, so the tour points there. */
+export const PLAY_STEPS_COMPACT: TourStep[] = [
+  PLAY_STEPS[0],
+  {
+    target: '.feedback-strip',
+    side: 'top',
+    title: 'Read the spot',
+    body: "Tap here for what you're facing, the price to call, and the raiser's range. Stuck? Ask the coach for a hint. Using one is noted on your grade.",
+  },
+  {
+    target: '.actions',
+    side: 'top',
+    title: 'Make your play',
+    body: 'Tap a button. You get graded the moment you act.',
+  },
+];
+
+export const VERDICT_STEPS_COMPACT: TourStep[] = [
+  {
+    target: '.feedback-strip',
+    side: 'top',
+    title: 'Your grade',
+    body: "Green is the chart's main play, yellow is a play it mixes in, and red is a mistake. Tap for the whole range chart and to ask the coach why.",
+  },
+  {
+    target: '.menu-btn',
+    side: 'bottom',
+    title: 'Find your leaks',
+    body: 'After a few hands, Session review in this menu sums up where you lose the most. How it works replays this tour.',
+  },
+];
