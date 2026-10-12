@@ -38,7 +38,9 @@ pub fn curve_name(key: &RealKey) -> String {
 /// Average realization before ranking within the range. Rough published-ballpark values:
 /// position matters most in deep single-raised pots and least when the stack-to-pot ratio is low.
 fn level(key: &RealKey) -> f64 {
+    // At 20bb there is little left to play for after the flop, so position matters least.
     let (ip, oop) = match key.pot_type.as_str() {
+        _ if key.depth <= 20 => (1.0, 0.96),
         "srp" => (1.04, 0.86),
         "3bp" => (1.02, 0.92),
         "4bp" => (1.0, 0.96),
@@ -79,12 +81,14 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn new(keys: &[Option<RealKey>], classes: &[HandClass], file: Option<&RealizationFile>) -> Model {
+    /// `files` maps each depth (20, 60, 100) to its measured realization; a depth without one uses
+    /// the built-in model.
+    pub fn new(keys: &[Option<RealKey>], classes: &[HandClass], files: &HashMap<u32, RealizationFile>) -> Model {
         let curves = keys
             .iter()
             .map(|k| {
                 k.as_ref().map(|key| {
-                    file.and_then(|f| f.curves.get(&curve_name(key)))
+                    files.get(&key.depth).and_then(|f| f.curves.get(&curve_name(key)))
                         .filter(|c| c.len() == BINS)
                         .cloned()
                         // Default: weaker hands in the range realize less (0.7x to 1.3x the level).
@@ -92,6 +96,8 @@ impl Model {
                 })
             })
             .collect();
+        // Playability is a property of the hand, not the depth: taken from the deepest file given.
+        let file = [100, 60, 20].iter().find_map(|d| files.get(d));
         let playability = classes
             .iter()
             .map(|c| file.and_then(|f| f.playability.get(&c.name()).copied()).unwrap_or_else(|| shape(c)))

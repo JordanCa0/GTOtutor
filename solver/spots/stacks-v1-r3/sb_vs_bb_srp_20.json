@@ -1,0 +1,21 @@
+{
+  "name": "sb_vs_bb_srp_20",
+  "description": "SB opens 2, BB calls; 20bb. Ranges from charts stacks-v1-20c.",
+  "chips_per_bb": 20,
+  "pot_bb": 4,
+  "stack_bb": 18,
+  "oop_range": "44:0.340,55:0.821,66:0.421,77:0.357,88:0.995,99:0.089,32s,42s,52s:0.998,53s:0.997,65o:0.998,65s,76s:0.923,82s:0.996,84s,85s,86s,87s:0.813,94s,95s,96s:0.003,97o:0.004,98o:0.187,98s,A2s:0.002,A4s,A5o,A5s,A6o:0.002,A6s,A7o:0.008,A7s:0.952,A8o:0.002,A8s,A9s,AA,AJs:0.064,AKo:0.012,AKs:0.998,AQs:0.615,ATs:0.998,J4s:0.013,J5s:0.157,J7s:0.852,J8s:0.997,J9s:0.998,JJ:0.256,JTo:0.236,JTs:0.966,K2s:0.002,K4s:0.927,K5s:0.894,K6s:0.895,K7s:0.035,K8o:0.003,K8s,K9o:0.222,K9s:0.997,KJo,KJs:0.027,KK,KQo:0.740,KQs:0.893,KTo,KTs:0.544,Q2s:0.002,Q4s,Q5s:0.997,Q7s:0.989,Q8o:0.002,Q8s,Q9s:0.428,QJo,QJs:0.009,QQ:0.998,QTo:0.297,QTs:0.052,T2s:0.998,T3s:0.998,T4s,T5s,T6s,T7o:0.253,T7s:0.002,T8o:0.468,T8s,T9o:0.969,T9s,TT:0.966",
+  "ip_range": "44,55,66,77,88,99:0.010,32s,42s,43s,52s,53o:0.961,53s,54o:0.998,54s,62s,63s,64s,65o,65s,72s,73s,74o:0.968,74s,75o:0.985,75s,76o:0.931,76s,82s,83s,84o,84s,85o,85s,86o:0.998,86s,87o,87s,92s,93s,94s,95o:0.982,95s,96o:0.031,96s:0.993,97o,97s,98o,98s,A2o:0.047,A2s,A3o:0.002,A3s,A4o:0.997,A4s,A5o,A5s,A6o,A6s,A7o,A7s,A8o,A8s,A9o:0.752,A9s,ATo:0.927,ATs,J2s,J3s:0.987,J4o:0.003,J4s,J5o:0.042,J5s,J6o:0.008,J6s:0.996,J7o,J7s,J8o,J8s,J9o:0.998,J9s,JTo,JTs,K2o,K2s,K3o,K3s,K4o,K4s,K5o,K5s,K6o,K6s,K7o,K7s,K8o,K8s,K9o,K9s,KJo,KJs,KQo,KQs,KTo,KTs,Q2o:0.998,Q2s,Q3o:0.961,Q3s,Q4o,Q4s,Q5o,Q5s,Q6o:0.998,Q6s,Q7o,Q7s,Q8o,Q8s,Q9o,Q9s,QJo,QJs,QTo,QTs,T2s,T3o:0.162,T3s,T4o,T4s,T5o:0.998,T5s,T6o,T6s,T7o,T7s,T8o,T8s,T9o,T9s",
+  "flop": [
+    "33%,a",
+    "a"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

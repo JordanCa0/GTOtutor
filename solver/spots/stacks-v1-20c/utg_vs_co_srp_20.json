@@ -1,0 +1,21 @@
+{
+  "name": "utg_vs_co_srp_20",
+  "description": "UTG opens 2, CO calls; 20bb. Ranges from charts stacks-v1-20c.",
+  "chips_per_bb": 20,
+  "pot_bb": 5.5,
+  "stack_bb": 18,
+  "oop_range": "44,55,66,77,88,99,65s,76s:0.693,86s:0.013,87s,98s,A2s:0.151,A4s,A5o:0.004,A5s,A6s,A7s,A8s,A9s,AA,AJo,AJs,AKo,AKs,AQo,AQs,ATo,ATs,J8s:0.918,J9s,JJ,JTs,K8s,K9s,KJo:0.250,KJs,KK,KQo,KQs,KTs,Q8s,Q9s,QJo,QJs,QQ,QTs,T8s,T9s,TT",
+  "ip_range": "44:0.877,AQs:0.406,ATs:0.090,KQs:0.317,TT:0.315",
+  "flop": [
+    "33%,a",
+    "a"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

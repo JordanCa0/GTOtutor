@@ -1,0 +1,21 @@
+{
+  "name": "utg_vs_btn_l3b_60",
+  "description": "UTG limps, BTN raises 4.5, UTG 3-bets 11, BTN calls; 60bb. Ranges from charts stacks-v1-60d.",
+  "chips_per_bb": 20,
+  "pot_bb": 23.5,
+  "stack_bb": 49,
+  "oop_range": "44:0.004,55:0.006,66:0.002,77:0.006,88:0.018,99:0.101,98s:0.001,A5s:0.004,A8s:0.001,AJs:0.015,AKo:0.010,AKs:0.345,AQs:0.019,ATs:0.010,JJ:0.005,JTs:0.001,KJs:0.001,KK:0.006,KQo:0.001,KQs:0.002,KTs:0.002,QJs:0.001,QQ:0.411,QTs:0.001,T9s:0.001,TT:0.003",
+  "ip_range": "44:0.658,55:0.630,66:0.028,77:0.954,88:0.989,99:0.987,65s:0.001,98s:0.023,A2s:0.003,A3s:0.063,A4s:0.614,A5s:0.877,A7s:0.003,A8s:0.076,A9s:0.018,AJs,AKo,AKs,AQo:0.833,AQs,ATs:0.996,JJ,JTs:0.041,K9s:0.001,KJs:0.997,KQo:0.163,KQs,KTs:0.976,QJs:0.178,QQ,QTs:0.002,T9s:0.042,TT",
+  "flop": [
+    "33%,66%,100%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

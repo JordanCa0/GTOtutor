@@ -2,7 +2,7 @@
 
 A browser poker trainer: play preflop spots, get a verdict against range charts, and learn from a Claude-powered coach. Flop decisions are played and graded from offline solver output for spots that have it. With a solver service configured, the turn and river are solved live and played too; otherwise they run out automatically. See `docs/postflop-plan.md`.
 
-20bb and 60bb (equal and mixed stacks) are planned in `docs/stack-depths-plan.md`. Limping from every position and 33/66/100% flop bets (`preflop-v9`) are planned in `docs/game-tree-v9-plan.md`, to be done first.
+20bb (mostly shove or fold), 60bb and mixed stacks are planned in `docs/stack-depths-plan.md`, solved 20bb first and shipped together. Limping from every position and 33/66/100% flop bets (`preflop-v9`, live since 2026-10-10) are described in `docs/game-tree-v9-plan.md`.
 
 Phones and tablets get a one-screen layout below 1024px: a tall table, a feedback strip, and a bottom sheet for the verdict, chart and coach. See `docs/mobile-plan.md` (a check on real phones is still to do).
 

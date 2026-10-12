@@ -1,0 +1,21 @@
+{
+  "name": "hj_vs_sb_srp_20",
+  "description": "HJ opens 2, SB calls; 20bb. Ranges from charts stacks-v1-20a.",
+  "chips_per_bb": 20,
+  "pot_bb": 5,
+  "stack_bb": 18,
+  "oop_range": "22:0.014,33:0.022,44:0.015,66:0.014,77:0.067,88:0.032,98s:0.002,A2s:0.003,A3s:0.004,A4s:0.005,A5s:0.006,A6s:0.003,A7s:0.008,A8s:0.004,A9o:0.005,A9s:0.048,AJo:0.901,AJs,AQo:0.404,AQs:0.585,ATo:0.155,ATs:0.011,KJo:0.002,KQo:0.038,KQs:0.011",
+  "ip_range": "44:0.293,55,66,77,88,99,A4s:0.479,A5s:0.891,A6s:0.944,A7s,A8o:0.928,A8s,A9o,A9s,AA,AJo,AJs,AKo,AKs,AQo,AQs,ATo,ATs,J9s:0.294,JJ,JTs:0.053,K9s:0.969,KJo,KJs,KK,KQo,KQs,KTo:0.087,KTs,Q9s:0.872,QJo:0.060,QJs:0.496,QQ,QTs:0.903,T9s:0.907,TT",
+  "flop": [
+    "33%,a",
+    "a"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

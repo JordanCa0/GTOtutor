@@ -1,0 +1,21 @@
+{
+  "name": "co_vs_sb_srp_60",
+  "description": "CO opens 2.5, SB calls; 60bb. Ranges from charts stacks-v1-60b.",
+  "chips_per_bb": 20,
+  "pot_bb": 6,
+  "stack_bb": 57.5,
+  "oop_range": "66:0.003,65s:0.016,A4s:0.006,A7s:0.234,A8s:0.051,A9s:0.048,AQo:0.010,J5s:0.370,J8s:0.002,K5s:0.236,K9s:0.078,KQo:0.023,Q7s:0.006,Q8s:0.148,QJo:0.023,T9s:0.003",
+  "ip_range": "44:0.993,55:0.980,66,77:0.976,88:0.998,99:0.983,32s,53s:0.585,54s:0.595,65s,87s:0.070,95s,97s:0.453,98o,98s,A2s,A3s:0.440,A4s,A5o:0.499,A5s,A6s:0.998,A7s,A8o:0.002,A8s,A9s,AA,AJo:0.997,AJs:0.883,AKo:0.997,AKs:0.722,AQo:0.994,AQs:0.829,ATo:0.997,ATs,J2s:0.709,J3s:0.987,J5s,J6s:0.994,J7s,J8o,J8s,J9s,JJ:0.896,JTo:0.510,JTs,K4s:0.992,K5s,K6s,K7s:0.782,K8s,K9s,KJo:0.002,KJs,KK:0.994,KQo,KQs:0.965,KTo:0.092,KTs,Q4s,Q5s,Q6s:0.981,Q7s,Q8s,Q9s,QJo,QJs,QQ:0.975,QTo:0.813,QTs,T6o:0.028,T6s,T7s:0.998,T8s,T9o:0.790,T9s,TT:0.758",
+  "flop": [
+    "33%,66%,100%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

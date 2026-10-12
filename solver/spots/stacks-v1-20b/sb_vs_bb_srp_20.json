@@ -1,0 +1,21 @@
+{
+  "name": "sb_vs_bb_srp_20",
+  "description": "SB opens 2, BB calls; 20bb. Ranges from charts stacks-v1-20b.",
+  "chips_per_bb": 20,
+  "pot_bb": 4,
+  "stack_bb": 18,
+  "oop_range": "44:0.959,55:0.412,66:0.548,77:0.487,88:0.845,99:0.089,53s:0.002,65o,65s,84s:0.016,85s,86o,86s,87s,94s:0.014,95s,97o:0.237,98o,98s,A5o,A5s,A6s:0.376,A8s:0.998,A9s:0.253,AA,AKs,AQs:0.812,ATs:0.990,J4s:0.998,J5s,J7s,J8s,J9s,JJ:0.203,JTo:0.519,JTs,K4s:0.003,K5s,K6s,K8s,K9o:0.004,K9s:0.997,KJo,KJs:0.003,KK,KQo:0.923,KQs:0.546,KTo:0.944,KTs:0.544,Q4s,Q5s:0.423,Q8s,Q9s,QJo,QJs:0.003,QQ,QTo,T2s,T3s,T4s,T5s,T6o,T6s,T7s:0.003,T8o,T8s,T9o,T9s,TT:0.961",
+  "ip_range": "44,55,66,77,88,99:0.215,32o,32s,42o,42s,43o,43s,52o,52s,53o,53s,54o:0.018,54s,62o:0.147,62s,63o,63s,64s,65o,65s,72o:0.004,72s,73o:0.998,73s,74o,74s,75o,75s,76o:0.004,76s,82o,82s,83o,83s,84o,84s,85o,85s,86o,86s,87o:0.940,87s,92o:0.023,92s,93o,93s,94o,94s,95o,95s,96o:0.643,96s:0.996,97o:0.818,97s:0.011,98o,98s,A2s,A3s,A4o:0.349,A4s,A5o,A5s,A6o,A6s,A7o:0.842,A7s,A8o,A8s,A9o:0.325,A9s,ATo:0.939,ATs,J2o:0.976,J2s,J3o:0.988,J3s,J4o,J4s,J5o,J5s,J6o:0.502,J6s,J7o,J7s,J8o,J8s,J9o,J9s,JTo,JTs,K2o,K2s,K3o,K3s,K4o,K4s,K5o,K5s,K6o,K6s,K7o,K7s,K8o,K8s,K9o,K9s,KJo,KJs,KQo,KQs,KTo,KTs,Q2o,Q2s,Q3o,Q3s,Q4o,Q4s,Q5o,Q5s,Q6o,Q6s,Q7o,Q7s,Q8o,Q8s,Q9o,Q9s,QJo,QJs,QTo,QTs,T2o,T2s,T3o,T3s,T4o,T4s,T5o,T5s,T6o,T6s,T7o,T7s,T8o,T8s,T9o,T9s,TT:0.973",
+  "flop": [
+    "33%,a",
+    "a"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

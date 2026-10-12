@@ -424,7 +424,7 @@ mod tests {
         let eq = EquityTable::compute(&classes, 3000);
         let tree = build_push_fold(10.0);
         let probs = class_probs(&classes);
-        let model = crate::realization::Model::new(&tree.real_keys, &classes, None);
+        let model = crate::realization::Model::new(&tree.real_keys, &classes, &std::collections::HashMap::new());
         let mut s = Solver::new(&tree, &eq, probs.clone(), model);
         for _ in 0..400 {
             s.iterate();

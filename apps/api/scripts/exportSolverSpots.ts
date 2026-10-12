@@ -2,7 +2,9 @@
 // Run from the repo root:
 //   npx tsx apps/api/scripts/exportSolverSpots.ts                       placeholder charts -> solver/spots/
 //   npx tsx apps/api/scripts/exportSolverSpots.ts --charts <file.json>  solved charts -> solver/spots/<version>/
-//   --flop-bets <sizes>   flop bet sizes (default 33%,66%,100%, game tree v9; preflop-v8 used 33%)
+//   --flop-bets <sizes>   flop bet sizes (default 33%,66%,100%, game tree v9; preflop-v8 used 33%; 20bb: 33%,a)
+//   --stacks 20|60|100    equal stacks (default 100): spots end in _<depth>, with that depth's sizes
+//                         (docs/stack-depths-plan.md). At 20bb only called 2.0 opens and SB limps see a flop.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { SIX_MAX_POSITIONS, type Position } from '@gtotutor/shared-types';
 import { chartsFromEnv } from '../src/charts/solvedCharts.js';
@@ -12,9 +14,16 @@ const chartsArg = process.argv.indexOf('--charts');
 const chartsPath = chartsArg >= 0 ? process.argv[chartsArg + 1] : undefined;
 const charts = chartsFromEnv(chartsPath ?? '');
 const outDir = chartsPath ? `solver/spots/${charts.version}` : 'solver/spots';
-const STACK = 100;
+const stacksArg = process.argv.indexOf('--stacks');
+const STACK = stacksArg >= 0 ? Number(process.argv[stacksArg + 1]) : 100;
+if (![20, 60, 100].includes(STACK)) throw new Error('--stacks must be 20, 60 or 100');
+/** 20bb is shove or fold: the only pots with chips behind are a called 2.0 open and an SB limp. */
+const SHORT = STACK === 20;
 const betsArg = process.argv.indexOf('--flop-bets');
-const FLOP_BETS = betsArg >= 0 ? process.argv[betsArg + 1] : '33%,66%,100%';
+const FLOP_BETS = betsArg >= 0 ? process.argv[betsArg + 1] : SHORT ? '33%,a' : '33%,66%,100%';
+// Sizes by depth, as in the preflop solver's tree (preflop/src/game.rs).
+const openTo = (p: Position) => (SHORT ? 2 : openSize(p));
+const fourBetTo = STACK === 60 ? 20 : FOUR_BET_SIZE;
 
 /** One preflop decision a player made on the way to the flop: chart node + the action taken. */
 type Step = [nodeKey: string, action: string];
@@ -71,7 +80,7 @@ function spot(name: string, description: string, a: Position, aRange: string, b:
     // Small tree to keep each solve cheap: three flop bet sizes (v9; 2.4x the time of one, all three
     // get used: docs/game-tree-v9-plan.md), one size on the turn and river, and no raises there.
     // Dropping those raises made solves 3x faster for ~0.005bb/hand of flop EV (docs/postflop-plan.md).
-    flop: [FLOP_BETS, '3x'],
+    flop: [FLOP_BETS, SHORT ? 'a' : '3x'],
     turn: ['66%', ''],
     river: ['75%', ''],
   };
@@ -87,8 +96,10 @@ for (const [i, opener] of order.entries()) {
     const v = lc(other);
     // Single-raised pot: opener raises, `other` calls.
     spots.push(
-      spot(`${o}_vs_${v}_srp_${STACK}`, `${opener} opens ${openSize(opener)}, ${other} calls`, opener, range(open), other, range([key('VS_OPEN', other, opener), 'call']), openSize(opener)),
+      spot(`${o}_vs_${v}_srp_${STACK}`, `${opener} opens ${openTo(opener)}, ${other} calls`, opener, range(open), other, range([key('VS_OPEN', other, opener), 'call']), openTo(opener)),
     );
+    // At 20bb every re-raise is all-in: no 3-bet or 4-bet pot reaches a flop.
+    if (SHORT) continue;
     // 3-bet pot: `other` 3-bets, opener calls.
     const tb = threeBetSize(other);
     const threeBet: Step = [key('VS_OPEN', other, opener), 'raise'];
@@ -99,12 +110,12 @@ for (const [i, opener] of order.entries()) {
     spots.push(
       spot(
         `${o}_vs_${v}_4bp_${STACK}`,
-        `${opener} opens, ${other} 3-bets ${tb}, ${opener} 4-bets ${FOUR_BET_SIZE}, ${other} calls`,
+        `${opener} opens, ${other} 3-bets ${tb}, ${opener} 4-bets ${fourBetTo}, ${other} calls`,
         opener,
         range(open, [key('VS_3BET', opener, other), 'raise']),
         other,
         range(threeBet, [key('VS_4BET', other, opener), 'call']),
-        FOUR_BET_SIZE,
+        fourBetTo,
       ),
     );
   }
@@ -117,6 +128,8 @@ for (const [i, limper] of order.entries()) {
   const limp: Step = [key('RFI', limper), 'call'];
   const l = lc(limper);
   limpSpot(() => spot(`${l}_vs_bb_limp_${STACK}`, `${limper} limps, BB checks`, limper, range(limp), 'BB', range([key('VS_LIMP', 'BB', limper), 'check']), 1));
+  // At 20bb an isolation is all-in: no isolated pot reaches a flop.
+  if (SHORT) continue;
   for (const iso of order.slice(i + 1)) {
     const size = isoSize(iso, limper);
     const isoStep: Step = [key('VS_LIMP', iso, limper), 'raise'];

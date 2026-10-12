@@ -1,0 +1,51 @@
+# Stack depths, 60bb full flop run on the frozen chart preflop/charts/stacks-v1/60.json (calibration
+# converged: 2.3% of decisions changed in round 4). Mirrors preflop-v9's pass A: the same 48 spots less btn_vs_sb_srp
+# (empty at 60bb: the SB never flats the BTN), 187
+# coverage-picked flops each, most played first. Afterwards the folders move to output/stacks-v1.
+--spot spots/stacks-v1-60/sb_vs_bb_limp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/btn_vs_bb_srp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/hj_vs_bb_srp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/utg_vs_co_srp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/utg_vs_hj_srp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/co_vs_btn_srp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/co_vs_btn_3bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/btn_vs_bb_3bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/co_vs_bb_3bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/utg_vs_btn_3bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/hj_vs_bb_3bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/utg_vs_co_3bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/utg_vs_hj_3bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/sb_vs_bb_3bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/co_vs_sb_4bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/utg_vs_sb_4bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/co_vs_btn_4bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/utg_vs_btn_4bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/hj_vs_bb_4bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/utg_vs_co_4bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/utg_vs_hj_4bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/co_vs_bb_srp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/sb_vs_bb_srp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/utg_vs_bb_srp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/utg_vs_btn_srp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/hj_vs_btn_srp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/hj_vs_co_srp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/sb_vs_bb_iso_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/btn_vs_sb_3bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/co_vs_sb_3bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/hj_vs_btn_3bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/hj_vs_co_3bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/hj_vs_sb_3bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/utg_vs_sb_srp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/utg_vs_sb_3bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/utg_vs_bb_3bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/sb_vs_bb_l3b_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/hj_vs_sb_srp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/btn_vs_sb_4bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/co_vs_sb_srp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/hj_vs_sb_4bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/utg_vs_bb_4bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/btn_vs_bb_4bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/hj_vs_btn_4bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/co_vs_bb_4bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/hj_vs_co_4bp_60.json --out output/stacks-v1-60 --flops flops-184.txt
+--spot spots/stacks-v1-60/sb_vs_bb_4bp_60.json --out output/stacks-v1-60 --flops flops-184.txt

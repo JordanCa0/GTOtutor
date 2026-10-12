@@ -1,0 +1,18 @@
+# Stack depths calibration, round 3 (docs/stack-depths-plan.md, phase 3): 20bb and 60bb spots from the
+# round-2 preflop re-solves (preflop/charts/stacks-v1/20c.json, 60c.json, realization from rounds 1-2), solved
+# together in one run (spot names end in _20 or _60). Same spot mix as earlier rounds: every
+# pot type and role, 60 flops each, 40 for the limped pots. 20bb has no 3-bet, 4-bet or isolated pots.
+# 60bb first: its solves are the slow ones.
+--spot spots/stacks-v1-r3/sb_vs_bb_4bp_60.json --out output/stacks-v1-r3 --limit 60
+--spot spots/stacks-v1-r3/btn_vs_bb_4bp_60.json --out output/stacks-v1-r3 --limit 60
+--spot spots/stacks-v1-r3/btn_vs_bb_3bp_60.json --out output/stacks-v1-r3 --limit 60
+--spot spots/stacks-v1-r3/co_vs_btn_3bp_60.json --out output/stacks-v1-r3 --limit 60
+--spot spots/stacks-v1-r3/sb_vs_bb_srp_60.json --out output/stacks-v1-r3 --limit 60
+--spot spots/stacks-v1-r3/co_vs_bb_srp_60.json --out output/stacks-v1-r3 --limit 60
+--spot spots/stacks-v1-r3/btn_vs_bb_srp_60.json --out output/stacks-v1-r3 --limit 60
+--spot spots/stacks-v1-r3/sb_vs_bb_iso_60.json --out output/stacks-v1-r3 --limit 40
+--spot spots/stacks-v1-r3/sb_vs_bb_limp_60.json --out output/stacks-v1-r3 --limit 40
+--spot spots/stacks-v1-r3/sb_vs_bb_srp_20.json --out output/stacks-v1-r3 --limit 60
+--spot spots/stacks-v1-r3/co_vs_bb_srp_20.json --out output/stacks-v1-r3 --limit 60
+--spot spots/stacks-v1-r3/btn_vs_bb_srp_20.json --out output/stacks-v1-r3 --limit 60
+--spot spots/stacks-v1-r3/sb_vs_bb_limp_20.json --out output/stacks-v1-r3 --limit 40

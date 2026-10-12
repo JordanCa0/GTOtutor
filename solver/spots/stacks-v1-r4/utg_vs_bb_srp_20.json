@@ -1,0 +1,21 @@
+{
+  "name": "utg_vs_bb_srp_20",
+  "description": "UTG opens 2, BB calls; 20bb. Ranges from charts stacks-v1-20.",
+  "chips_per_bb": 20,
+  "pot_bb": 4.5,
+  "stack_bb": 18,
+  "oop_range": "44,55,66,77,88:0.648,32s,42s,43s,52s,53s,54s,63s,64s,65o,65s,74s,75s,76s,82s:0.657,84s,85s,86s,87o,87s,94s,95s,96s,97s,98o,98s,A2o,A2s:0.997,A3o,A3s:0.761,A4o,A4s:0.002,A5o,A5s,A6o,A6s,A7o,A7s,A8o,A8s,A9o,A9s,AJo,AJs,AQo:0.722,ATo,ATs,J4s,J5s,J6s,J7s,J8s,J9o:0.284,J9s:0.986,JTo,K2s,K3s,K4s,K5s,K6o:0.008,K6s,K7o:0.147,K7s,K8o,K8s,K9o,K9s,KJo,KJs:0.905,KQo,KQs,KTo,KTs:0.006,Q2s,Q3s,Q4s,Q5s,Q6s,Q7s,Q8o,Q8s,Q9o,Q9s:0.035,QJo,QJs:0.899,QTo:0.864,T3s:0.003,T4s,T5s,T6s,T7s,T8o,T8s,T9o,T9s:0.998",
+  "ip_range": "44,55,66,77,88,99,65s,76s:0.484,86s:0.002,87s,98s,A2s:0.893,A3s:0.405,A4s,A5o:0.002,A5s,A6s,A7s,A8s,A9s,AA,AJo,AJs,AKo,AKs,AQo,AQs,ATo,ATs,J8s,J9s,JJ,JTs,K8s,K9s,KJo:0.021,KJs,KK,KQo,KQs,KTs,Q8s,Q9s,QJo,QJs,QQ,QTs,T8s,T9s,TT",
+  "flop": [
+    "33%,a",
+    "a"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

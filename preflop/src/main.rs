@@ -19,7 +19,10 @@ use std::time::Instant;
 struct Args {
     iterations: u32,
     samples: u32,
-    realization: Option<PathBuf>,
+    /// Measured realization per depth (20, 60, 100); a bare path is the 100bb file.
+    realization: Vec<(u32, PathBuf)>,
+    /// Stack profile: "100", "60", "20", or a base plus exceptions like "100:BB20".
+    stacks: String,
     version: String,
     out: Option<PathBuf>,
     report_every: u32,
@@ -33,7 +36,7 @@ fn die(msg: &str) -> ! {
 }
 
 fn parse_args() -> Args {
-    let mut a = Args { iterations: 2000, samples: 20_000, realization: None, version: "preflop-v1".into(), out: None, report_every: 250, limp_floor: 1.0 };
+    let mut a = Args { iterations: 2000, samples: 20_000, realization: Vec::new(), stacks: "100".into(), version: "preflop-v1".into(), out: None, report_every: 250, limp_floor: 1.0 };
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let mut i = 0;
     while i < argv.len() {
@@ -42,7 +45,17 @@ fn parse_args() -> Args {
         match argv[i].as_str() {
             "--iterations" => a.iterations = num(val()),
             "--samples" => a.samples = num(val()),
-            "--realization" => a.realization = Some(val().into()),
+            "--realization" => {
+                let v = val();
+                let entry = match v.split_once('=') {
+                    Some((d, p)) if ["20", "60", "100"].contains(&d) => (d.parse().unwrap(), PathBuf::from(p)),
+                    Some(_) => die("--realization takes <file> or <depth>=<file>, with depth 20, 60 or 100"),
+                    None => (100, PathBuf::from(v)),
+                };
+                a.realization.retain(|(d, _)| *d != entry.0);
+                a.realization.push(entry);
+            }
+            "--stacks" => a.stacks = val(),
             "--version" => a.version = val(),
             "--out" => a.out = Some(val().into()),
             "--report-every" => a.report_every = num(val()).max(1),
@@ -52,7 +65,8 @@ fn parse_args() -> Args {
                     "gtotutor-preflop (run from the preflop/ folder)\n\n  cargo run --release -- [options]\n\n  \
                      --iterations <n>     CFR iterations (default 2000)\n  \
                      --samples <n>        Monte Carlo samples per class matchup for the equity table (default 20000; cached)\n  \
-                     --realization <file> measured realization factors from calibrateRealization.ts (default: built-in model)\n  \
+                     --stacks <profile>   stacks: 100, 60, 20, or a base plus exceptions like 100:BB20 (default 100)\n  \
+                     --realization [<depth>=]<file>  measured realization from calibrateRealization.ts, per depth (20, 60 or 100;\n                          a bare file is 100bb; repeat the flag for each depth; default: built-in model)\n  \
                      --version <name>     chart version written into the output (default preflop-v1)\n  \
                      --out <file>         output path (default charts/<version>.json)\n  \
                      --report-every <n>   print exploitability every n iterations (default 250)
@@ -79,18 +93,29 @@ fn main() {
     let probs = class_probs(&classes);
     let eq = equity::EquityTable::load_or_compute(&classes, args.samples, &PathBuf::from(format!("cache/equity-{}.json", args.samples)));
 
-    let tree = game::build_six_max();
-    let file: Option<realization::RealizationFile> = args.realization.as_ref().map(|p| {
-        serde_json::from_str(&std::fs::read_to_string(p).unwrap_or_else(|e| die(&format!("cannot read {}: {e}", p.display()))))
-            .unwrap_or_else(|e| die(&format!("bad realization file: {e}")))
-    });
-    let model = realization::Model::new(&tree.real_keys, &classes, file.as_ref());
+    let profile = game::Profile::parse(&args.stacks).unwrap_or_else(|e| die(&e));
+    let tree = game::build_six_max(&profile);
+    let files: std::collections::HashMap<u32, realization::RealizationFile> = args
+        .realization
+        .iter()
+        .map(|(depth, p)| {
+            let file = serde_json::from_str(&std::fs::read_to_string(p).unwrap_or_else(|e| die(&format!("cannot read {}: {e}", p.display()))))
+                .unwrap_or_else(|e| die(&format!("bad realization file {}: {e}", p.display())));
+            (*depth, file)
+        })
+        .collect();
+    let model = realization::Model::new(&tree.real_keys, &classes, &files);
+    let realization_desc = if args.realization.is_empty() {
+        "built-in model".to_string()
+    } else {
+        args.realization.iter().map(|(d, p)| format!("{d}bb {}", p.display())).collect::<Vec<_>>().join(", ")
+    };
     println!(
-        "tree: {} nodes, {} info sets ({} exported) | realization: {}",
+        "stacks {} | tree: {} nodes, {} info sets ({} exported) | realization: {realization_desc}",
+        profile.id,
         tree.nodes.len(),
         tree.infosets.len(),
         tree.infosets.iter().filter(|i| i.export).count(),
-        args.realization.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "built-in model".into())
     );
 
     let mut solver = cfr::Solver::new(&tree, &eq, probs.clone(), model);
@@ -175,7 +200,10 @@ fn main() {
             "equitySamples": args.samples,
             "exploitabilityMbbPerPlayer": round(nash_conv / 6.0 * 1000.0, 2),
             "fullHistoryExploitabilityMbbPerPlayer": round(full_history / 6.0 * 1000.0, 2),
-            "realization": args.realization.as_ref().map(|p| p.display().to_string()),
+            "stacks": profile.id,
+            // The 100bb file as a plain string (as before stack profiles), other depths by depth.
+            "realization": args.realization.iter().find(|(d, _)| *d == 100).map(|(_, p)| p.display().to_string()),
+            "realizationByDepth": args.realization.iter().map(|(d, p)| (d.to_string(), json!(p.display().to_string()))).collect::<Map<String, Value>>(),
             "limpFloorPct": args.limp_floor,
             "seatValuesBb": values.iter().zip(game::POSITIONS).map(|(v, p)| (p.to_string(), json!(round(*v, 4)))).collect::<Map<String, Value>>(),
             "evUnits": "bb, net result from the start of the hand",

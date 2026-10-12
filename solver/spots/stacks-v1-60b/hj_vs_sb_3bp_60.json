@@ -1,0 +1,21 @@
+{
+  "name": "hj_vs_sb_3bp_60",
+  "description": "HJ opens 2.5, SB 3-bets 10, HJ calls; 60bb. Ranges from charts stacks-v1-60b.",
+  "chips_per_bb": 20,
+  "pot_bb": 21,
+  "stack_bb": 50,
+  "oop_range": "44:0.901,55:0.975,66:0.913,77:0.970,88,99,A5s,A8s:0.423,A9s:0.002,AA,AJs:0.967,AKo:0.997,AKs,AQo:0.740,AQs,ATs,J9s:0.003,JJ,JTs:0.995,KJs:0.990,KK,KQo:0.908,KQs,KTs:0.993,Q8s:0.124,QJs,QQ,QTs:0.984,T9s:0.365,TT",
+  "ip_range": "44:0.665,55:0.768,66:0.988,77:0.965,88:0.882,99:0.912,65s:0.998,95s:0.065,98o:0.525,98s:0.993,A5s:0.995,A8s:0.638,A9s:0.418,AJs:0.943,AKo:0.991,AKs:0.621,AQo:0.987,AQs:0.887,ATs:0.944,J5s,JJ:0.893,JTs:0.340,K5s:0.040,KJs:0.682,KQo:0.774,KQs:0.977,KTs:0.991,Q4s:0.029,Q8s:0.997,QJo:0.006,QJs:0.459,QQ:0.013,QTs:0.347,T6s,T8s:0.522,T9s:0.826,TT:0.948",
+  "flop": [
+    "33%,66%,100%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

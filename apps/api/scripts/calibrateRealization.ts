@@ -77,6 +77,7 @@ interface Part {
 const POT_TYPES = ['srp', '3bp', '4bp', 'limp', 'iso', 'l3b'];
 const parts: Part[] = [];
 const summary: string[] = [];
+const depths = new Set<string | undefined>();
 
 for (const dir of dirs) {
   if (!existsSync(join(dir, '_spot.json'))) {
@@ -85,6 +86,10 @@ for (const dir of dirs) {
   }
   const spot = JSON.parse(readFileSync(join(dir, '_spot.json'), 'utf8')) as { name: string; pot_bb: number; oop_range: string; ip_range: string };
   const potType = POT_TYPES.find((t) => spot.name.includes(`_${t}_`));
+  // Each depth (the spot name's last part: _20, _60, _100) gets its own realization file.
+  const depth = spot.name.split('_').at(-1);
+  depths.add(depth);
+  if (depths.size > 1) throw new Error(`solves from several depths (${[...depths].join(', ')}): calibrate one depth at a time`);
   if (!potType) throw new Error(`${dir}: can't tell the pot type from ${spot.name}`);
   const ranges = [parseRange(spot.oop_range), parseRange(spot.ip_range)];
   // Who made the last preflop raise, from the spot name ("<opener>_vs_<other>_<kind>_<stack>").

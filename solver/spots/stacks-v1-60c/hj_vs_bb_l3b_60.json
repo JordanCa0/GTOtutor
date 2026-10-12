@@ -1,0 +1,21 @@
+{
+  "name": "hj_vs_bb_l3b_60",
+  "description": "HJ limps, BB raises 4.5, HJ 3-bets 11, BB calls; 60bb. Ranges from charts stacks-v1-60c.",
+  "chips_per_bb": 20,
+  "pot_bb": 22.5,
+  "stack_bb": 49,
+  "oop_range": "22:0.004,33:0.003,42s:0.001,43s:0.005,52s:0.002,53s:0.005,54s:0.011,63s:0.003,64s:0.003,65s:0.025,75s:0.001,76s:0.003,87s:0.005,97s:0.001,98s:0.005,AKo:0.129,AKs:0.772,JJ:0.062,KK:0.302,QQ:0.981,TT:0.010",
+  "ip_range": "77:0.008,88:0.001,AKs:0.249,AQs:0.007,ATs:0.001,QQ:0.021",
+  "flop": [
+    "33%,66%,100%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "btn_vs_sb_srp_20",
+  "description": "BTN opens 2, SB calls; 20bb. Ranges from charts stacks-v1-20b.",
+  "chips_per_bb": 20,
+  "pot_bb": 5,
+  "stack_bb": 18,
+  "oop_range": "A5s:0.405,A8s:0.228,ATs:0.961,KQo:0.045,QJo",
+  "ip_range": "44:0.928,55,66,77,88,99,65s,86s,87s:0.997,95s,98o:0.985,98s,A4s:0.210,A5o,A5s,A6s,A7s,A8o,A8s,A9o,A9s,AA,AJo,AJs,AKo,AKs,AQo,AQs,ATo,ATs,J5s:0.189,J7s,J8s:0.987,J9s:0.965,JJ,JTo,JTs,K4s,K5s,K6s,K8s,K9o:0.018,K9s,KJo,KJs,KK,KQo,KQs,KTo,KTs,Q4s:0.385,Q5s,Q7s,Q8s,QJo,QJs,QQ,QTo:0.599,QTs:0.874,T6s,T8o,T8s,T9o,T9s,TT",
+  "flop": [
+    "33%,a",
+    "a"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "btn_vs_bb_srp_20",
+  "description": "BTN opens 2, BB calls; 20bb. Ranges from charts stacks-v1-20a.",
+  "chips_per_bb": 20,
+  "pot_bb": 4.5,
+  "stack_bb": 18,
+  "oop_range": "22,33,44,55,66,77,88:0.463,32s,42s,43s,52s,53s,54o:0.602,54s,62s,63s,64o:0.002,64s,65o:0.170,65s,72s:0.823,73s,74s,75o:0.007,75s,76o:0.995,76s,82s,83s,84s,85s,86o:0.022,86s,87o,87s,92s,93s:0.998,94s:0.998,95s,96o:0.003,96s,97o:0.390,97s,98o,98s,A2o,A2s,A3o,A3s,A4o,A4s,A5o,A5s,A6o,A6s,A7o,A7s,A8o,A8s,A9o,A9s,AJo,AJs,AKs:0.002,AQo,AQs,ATo,ATs,J2s,J3s,J4s,J5s,J6s:0.998,J7o:0.003,J7s,J8o:0.021,J8s,J9o:0.982,J9s,JTo:0.968,JTs:0.984,K2o:0.006,K2s,K3o:0.016,K3s,K4o:0.971,K4s,K5o:0.541,K5s,K6o:0.983,K6s,K7o,K7s,K8o,K8s,K9o,K9s,KJo,KJs,KQo,KQs,KTo,KTs,Q2s,Q3s,Q4s,Q5s,Q6s,Q7o:0.002,Q7s,Q8o:0.015,Q8s,Q9o:0.459,Q9s,QJo,QJs,QTo,QTs:0.998,T2s:0.964,T3s:0.906,T4s,T5s:0.469,T6s,T7o:0.023,T7s,T8o:0.108,T8s,T9o:0.974,T9s",
+  "ip_range": "55:0.335,66:0.985,77:0.998,88,99,A2s:0.002,A3s:0.983,A4o:0.404,A4s,A5o:0.939,A5s,A6o:0.990,A6s,A7o,A7s,A8o,A8s,A9o,A9s,AA,AJo,AJs,AKo:0.996,AKs,AQo:0.995,AQs,ATo,ATs,J8s:0.650,JJ,JTo:0.178,K4s:0.002,K5s:0.866,K6s:0.516,K7s:0.002,K8s,K9o:0.987,K9s,KJo,KJs,KK,KQo,KQs,KTo,KTs,Q8s:0.155,Q9s:0.003,QJo:0.998,QJs:0.996,QQ,QTo:0.965,QTs:0.967,TT",
+  "flop": [
+    "33%,a",
+    "a"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

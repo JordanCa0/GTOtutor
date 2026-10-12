@@ -1,0 +1,21 @@
+{
+  "name": "btn_vs_sb_3bp_60",
+  "description": "BTN opens 2.5, SB 3-bets 10, BTN calls; 60bb. Ranges from charts stacks-v1-60b.",
+  "chips_per_bb": 20,
+  "pot_bb": 21,
+  "stack_bb": 50,
+  "oop_range": "44,55,66,77,88,99,65s:0.003,98s,A2s:0.582,A3s:0.012,A4s,A5s,A6s:0.971,A7s,A8s,A9s,AA,AJo,AJs,AKo,AKs,AQo,AQs,ATo,ATs,J5s:0.892,J8s:0.769,J9s,JJ,JTs,K5s,K6s:0.642,K8s:0.888,K9s,KJs,KK,KQo,KQs,KTs,Q8s,Q9s:0.115,QJo,QJs,QQ,QTs,T6s:0.063,T8s:0.998,T9s,TT",
+  "ip_range": "44,55,66:0.946,77:0.332,88:0.821,99:0.794,32s,43s:0.002,53s,54s:0.011,63s:0.745,65s:0.704,84s:0.767,95s,98o:0.854,98s:0.511,A2s,A3s,A4s,A5s:0.997,A6s:0.998,A7s,A8s,A9s:0.997,AJo:0.939,AJs:0.921,AKo:0.788,AQo,AQs,ATo:0.920,ATs:0.050,J2s,J3s,J5s,J8o:0.010,J9s:0.256,JTs,K5s:0.262,K6s:0.037,K8s,K9s,KJo:0.003,KJs,KQo,KQs:0.468,KTo:0.002,KTs,Q7s:0.009,Q8s:0.980,Q9s:0.015,QJo:0.994,QJs,QTs,T6o:0.058,T6s:0.863,T8s:0.942,T9s:0.201,TT:0.002",
+  "flop": [
+    "33%,66%,100%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

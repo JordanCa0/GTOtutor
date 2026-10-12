@@ -1,0 +1,21 @@
+{
+  "name": "co_vs_bb_l3b_60",
+  "description": "CO limps, BB raises 4.5, CO 3-bets 11, BB calls; 60bb. Ranges from charts stacks-v1-60c.",
+  "chips_per_bb": 20,
+  "pot_bb": 22.5,
+  "stack_bb": 49,
+  "oop_range": "44:0.001,99:0.022,54s:0.006,65s:0.182,75s:0.001,76s:0.011,85s:0.002,86s:0.011,87s:0.017,97s:0.001,98s:0.006,AA:0.002,AKo:0.556,AKs:0.621,AQo:0.062,AQs:0.213,J9s:0.004,JJ:0.548,JTs:0.004,KK:0.297,QQ:0.979,T8s:0.002,T9s:0.007,TT:0.209",
+  "ip_range": "44:0.002,A5s:0.004,AKs:0.013,QQ:0.016",
+  "flop": [
+    "33%,66%,100%",
+    "3x"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}

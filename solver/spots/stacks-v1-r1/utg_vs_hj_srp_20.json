@@ -1,0 +1,21 @@
+{
+  "name": "utg_vs_hj_srp_20",
+  "description": "UTG opens 2, HJ calls; 20bb. Ranges from charts stacks-v1-20a.",
+  "chips_per_bb": 20,
+  "pot_bb": 5.5,
+  "stack_bb": 18,
+  "oop_range": "44:0.040,55,66,77,88,99,A4s:0.002,A5s:0.111,A6s:0.329,A7s:0.998,A8o:0.516,A8s,A9o:0.996,A9s,AA,AJo,AJs,AKo,AKs,AQo,AQs,ATo,ATs,J9s:0.007,JJ,JTs:0.997,K9s:0.209,KJo:0.968,KJs,KK,KQo,KQs,KTs,Q9s:0.005,QJo:0.002,QJs,QQ,QTs:0.995,T9s:0.009,TT",
+  "ip_range": "AKs:0.320,AQo:0.060,AQs:0.161,JJ:0.036,TT:0.155",
+  "flop": [
+    "33%,a",
+    "a"
+  ],
+  "turn": [
+    "66%",
+    ""
+  ],
+  "river": [
+    "75%",
+    ""
+  ]
+}
