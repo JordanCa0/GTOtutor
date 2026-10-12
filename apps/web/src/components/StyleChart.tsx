@@ -1,7 +1,8 @@
 import type { PlayerStyle, StyleAxis, StyleLeakRates, StylePoint } from '@gtotutor/shared-types';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { MaximizeIcon } from './icons';
 import { Backdrop, Presence } from './Presence';
+import { shareNoise, Trend, trendOf, type TrendDirection } from './Trend';
 
 /** Below this many decisions on an axis, the point is too uncertain to read much into. */
 export const STYLE_MIN_DECISIONS = 30;
@@ -15,14 +16,17 @@ const SCALES = [5, 10, 15, 20, 30, 40, 50, 75, 100];
  * charts fills the chart instead of sitting in a clump at the centre. Ranges that run past it are cut
  * at the frame, and a thin spot that lands outside is pinned to the edge.
  */
-function scaleFor(style: PlayerStyle): number {
-  const solid = style.bySpot.filter((p) => Math.min(p.x.n || Infinity, p.y.n || Infinity) >= SCALE_MIN_DECISIONS);
-  const reach = Math.max(...[style.overall, ...solid].flatMap((p) => [Math.abs(p.x.value), Math.abs(p.y.value)])) * 1.25;
+function scaleFor(style: PlayerStyle, recent: PlayerStyle | null): number {
+  const solid = [...style.bySpot, ...(recent?.bySpot ?? [])].filter((p) => Math.min(p.x.n || Infinity, p.y.n || Infinity) >= SCALE_MIN_DECISIONS);
+  const overall = recent && !thin(recent.overall) ? [style.overall, recent.overall] : [style.overall];
+  const reach = Math.max(...[...overall, ...solid].flatMap((p) => [Math.abs(p.x.value), Math.abs(p.y.value)])) * 1.25;
   return SCALES.find((s) => s >= reach) ?? 100;
 }
 
 interface PlotProps {
   style: PlayerStyle;
+  /** The same over recent hands: each dot gets a line to a recent dot, green when it moved toward the charts, red when away. */
+  recent: PlayerStyle | null;
   large?: boolean;
   /** The spot to emphasise (hovered in the table), or 'overall'. */
   active?: string | null;
@@ -33,12 +37,12 @@ interface PlotProps {
  * Where the player sits against the charts: tighter to the right, looser to the left; more aggressive
  * up, more passive down. The centre is playing like the charts.
  */
-function StylePlot({ style, large, active, onActive }: PlotProps) {
+function StylePlot({ style, recent, large, active, onActive }: PlotProps) {
   const size = large ? 520 : 360;
   const pad = 36;
   const half = (size - pad * 2) / 2;
   const mid = size / 2;
-  const range = scaleFor(style);
+  const range = scaleFor(style, recent);
   const clip = (v: number) => Math.max(-range, Math.min(range, v));
   // Tighter (negative x) is drawn on the right.
   const sx = (v: number) => mid - (clip(v) / range) * half;
@@ -49,6 +53,8 @@ function StylePlot({ style, large, active, onActive }: PlotProps) {
   const ticks = [-range / 2, range / 2];
   const youX = sx(overall.x.value);
   const youY = sy(overall.y.value);
+  // The small card only shows where "You" went: ten trails on a small chart turn into a tangle.
+  const links = recentLinks(style, recent).filter((l) => large || l.key === 'overall');
   // Labels only exist in the large view. "You" is placed first so it keeps the best spot.
   const labels = large
     ? placeLabels(
@@ -59,6 +65,14 @@ function StylePlot({ style, large, active, onActive }: PlotProps) {
         // The star, the corner and centre labels, and the axis numbers are in the way too.
         [
           { left: youX - 15, right: youX + 15, top: youY - 15, bottom: youY + 15 },
+          // The recent dots, and the middle of each line to them.
+          ...links.flatMap(({ from, to }) => {
+            const [x, y, fx, fy] = [sx(to.x.value), sy(to.y.value), sx(from.x.value), sy(from.y.value)];
+            return [
+              { left: x - 8, right: x + 8, top: y - 8, bottom: y + 8 },
+              { left: (x + fx) / 2 - 4, right: (x + fx) / 2 + 4, top: (y + fy) / 2 - 4, bottom: (y + fy) / 2 + 4 },
+            ];
+          }),
           { left: pad, right: pad + 112, top: pad, bottom: pad + 24 },
           { left: size - pad - 112, right: size - pad, top: pad, bottom: pad + 24 },
           { left: pad, right: pad + 100, top: size - pad - 24, bottom: size - pad },
@@ -126,7 +140,41 @@ function StylePlot({ style, large, active, onActive }: PlotProps) {
         Charts
       </text>
 
-      {style.bySpot.map((p) => {
+      {/*
+        Recent trails under the all-time dots, so each seems to grow out of its dot. The arrow's tip is
+        where recent hands put the spot; for "You" it points at a hollow gold star. Drawn in once, after the dots.
+      */}
+      {links.map(({ key, label, from, to, direction }, i) => {
+        const overallLink = key === 'overall';
+        const trail = trailGeometry(sx(from.x.value), sy(from.y.value), sx(to.x.value), sy(to.y.value), {
+          fromRadius: overallLink ? (large ? 9 : 7) : large ? 6.5 : 5.5,
+          toRadius: overallLink ? (large ? 11 : 9) : 0,
+          head: large ? 7 : 6,
+        });
+        return (
+          <g
+            key={key}
+            className={`style-recent trend-${direction} ${active === key ? 'on' : ''}`}
+            style={{ '--i': i } as CSSProperties}
+            onPointerEnter={() => onActive?.(key)}
+            onPointerLeave={() => onActive?.(null)}
+          >
+            {trail ? (
+              <>
+                <line className="style-recent-hit" x1={trail.x1} y1={trail.y1} x2={trail.tipX} y2={trail.tipY} />
+                <line className="style-trail" pathLength={1} x1={trail.x1} y1={trail.y1} x2={trail.x2} y2={trail.y2} />
+                <polygon className="style-trail-head" points={trail.head} />
+              </>
+            ) : (
+              !overallLink && <circle className="style-trail-head" cx={sx(to.x.value)} cy={sy(to.y.value)} r={3} />
+            )}
+            {overallLink && <polygon className="style-recent-star" points={starPoints(sx(to.x.value), sy(to.y.value), large ? 10 : 8)} />}
+            <title>{`${label}, recent hands: ${describe(to)}`}</title>
+          </g>
+        );
+      })}
+
+      {style.bySpot.map((p, i) => {
         const x = sx(p.x.value);
         const y = sy(p.y.value);
         const on = active === p.spot;
@@ -135,6 +183,7 @@ function StylePlot({ style, large, active, onActive }: PlotProps) {
           <g
             key={p.spot}
             className={`style-spot ${on ? 'on' : ''} ${off(p) ? 'off' : ''} ${thin(p) ? 'thin' : ''}`}
+            style={{ '--i': i + 1 } as CSSProperties}
             onPointerEnter={() => onActive?.(p.spot)}
             onPointerLeave={() => onActive?.(null)}
           >
@@ -145,7 +194,7 @@ function StylePlot({ style, large, active, onActive }: PlotProps) {
         );
       })}
 
-      <g className={`style-player ${active === 'overall' ? 'on' : ''}`} onPointerEnter={() => onActive?.('overall')} onPointerLeave={() => onActive?.(null)}>
+      <g className={`style-player ${active === 'overall' ? 'on' : ''}`} style={{ '--i': 0 } as CSSProperties} onPointerEnter={() => onActive?.('overall')} onPointerLeave={() => onActive?.(null)}>
         <polygon points={starPoints(youX, youY, large ? 14 : 12)} />
         {labels.get('overall') && <LabelText label={labels.get('overall')!} text="You" className="style-you" />}
         <title>{`You: ${describe(overall)}`}</title>
@@ -155,7 +204,7 @@ function StylePlot({ style, large, active, onActive }: PlotProps) {
 }
 
 /** Profile card: the chart (click to expand) beside a plain-words reading of it. */
-export function StyleCard({ style }: { style: PlayerStyle }) {
+export function StyleCard({ style, recent }: { style: PlayerStyle; recent: PlayerStyle | null }) {
   const [open, setOpen] = useState(false);
   const { overall } = style;
   const few = overall.x.n < STYLE_MIN_DECISIONS || overall.y.n < STYLE_MIN_DECISIONS;
@@ -168,7 +217,7 @@ export function StyleCard({ style }: { style: PlayerStyle }) {
   return (
     <div className="style-card">
       <button className="style-open" onClick={() => setOpen(true)} aria-label="Expand your playing style chart">
-        <StylePlot style={style} />
+        <StylePlot style={style} recent={recent} />
         <span className="style-open-hint">
           <MaximizeIcon size={14} /> Expand
         </span>
@@ -179,7 +228,8 @@ export function StyleCard({ style }: { style: PlayerStyle }) {
           Compared with what the charts do in the same spots, over {overall.x.n} decisions where you could fold and {overall.y.n} where you could bet or raise.
           {few && ` That's still a small sample, so treat it as a rough guess for now.`}
         </p>
-        <LeakLines leaks={style.leaks} />
+        <LeakLines leaks={style.leaks} recent={recent?.leaks ?? null} />
+        {recent && <p className="muted small">The arrow from the star points to where your recent hands put you.</p>}
         {outliers.length > 0 && (
           <>
             <p className="label">Furthest from the charts</p>
@@ -198,14 +248,14 @@ export function StyleCard({ style }: { style: PlayerStyle }) {
         </button>
       </div>
       <Presence show={open}>
-        <StyleDetail style={style} onClose={() => setOpen(false)} />
+        <StyleDetail style={style} recent={recent} onClose={() => setOpen(false)} />
       </Presence>
     </div>
   );
 }
 
 /** Expanded view: a large labelled chart and a row per spot; hovering either highlights the other. */
-function StyleDetail({ style, onClose }: { style: PlayerStyle; onClose: () => void }) {
+function StyleDetail({ style, recent, onClose }: { style: PlayerStyle; recent: PlayerStyle | null; onClose: () => void }) {
   const [active, setActive] = useState<string | null>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -229,10 +279,10 @@ function StyleDetail({ style, onClose }: { style: PlayerStyle; onClose: () => vo
           </button>
         </div>
         <div className="style-detail-body">
-          <StylePlot style={style} large active={active} onActive={setActive} />
+          <StylePlot style={style} recent={recent} large active={active} onActive={setActive} />
           <div className="style-detail-side">
             <p className="style-headline">{headline(style.overall)}</p>
-            <LeakLines leaks={style.leaks} />
+            <LeakLines leaks={style.leaks} recent={recent?.leaks ?? null} />
             <table className="spot-table style-table">
               <thead>
                 <tr>
@@ -272,7 +322,7 @@ function StyleDetail({ style, onClose }: { style: PlayerStyle; onClose: () => vo
                 <strong>Bet or raise:</strong> in spots where you could bet or raise, how often you did, next to the charts. The gap is how far up (more aggressive) or down a dot sits.
               </p>
               <p>
-                The gold star is all your decisions together; blue dots are single spot types, hollow when there are too few hands to trust yet. Each axis on the chart runs to {scaleFor(style)} percentage points either side.
+                The gold star is all your decisions together; blue dots are single spot types, hollow when there are too few hands to trust yet.{recent && ' An arrow from a dot points to where your recent hands put it (for you, a hollow star): green when that is closer to the charts, red when further.'} Each axis on the chart runs to {scaleFor(style, recent)} percentage points either side.
               </p>
             </div>
           </div>
@@ -297,10 +347,10 @@ function RatePair({ axis }: { axis: StyleAxis }) {
 const LEAK_MIN_WEIGHT = 5;
 
 /** The two directions behind left/right: hands played that the charts fold, and folded that they play. */
-function LeakLines({ leaks }: { leaks: StyleLeakRates }) {
+function LeakLines({ leaks, recent }: { leaks: StyleLeakRates; recent: StyleLeakRates | null }) {
   const rows = [
-    { key: 'loose', label: 'Played hands the charts fold', ...leaks.playedChartFolds },
-    { key: 'tight', label: 'Folded hands the charts play', ...leaks.foldedChartPlays },
+    { key: 'loose', label: 'Played hands the charts fold', ...leaks.playedChartFolds, recent: recent?.playedChartFolds },
+    { key: 'tight', label: 'Folded hands the charts play', ...leaks.foldedChartPlays, recent: recent?.foldedChartPlays },
   ].filter((r) => r.weight >= LEAK_MIN_WEIGHT);
   if (!rows.length) return null;
   return (
@@ -309,6 +359,16 @@ function LeakLines({ leaks }: { leaks: StyleLeakRates }) {
         <li key={r.key}>
           <span>{r.label}</span>
           <b>{Math.round(r.rate)}%</b>
+          {r.recent && r.recent.weight >= LEAK_MIN_WEIGHT && (
+            <Trend
+              direction={trendOf(r.rate, r.recent.rate, false, shareNoise(r.rate, r.recent.weight, 1, 100))}
+              all={r.rate}
+              recent={r.recent.rate}
+              title="Your most recent 10% of hands"
+            >
+              recent {Math.round(r.recent.rate)}%
+            </Trend>
+          )}
         </li>
       ))}
     </ul>
@@ -403,6 +463,48 @@ function starPoints(cx: number, cy: number, outer: number): string {
     const a = -Math.PI / 2 + (i * Math.PI) / 5;
     return `${(cx + r * Math.cos(a)).toFixed(1)},${(cy + r * Math.sin(a)).toFixed(1)}`;
   }).join(' ');
+}
+
+/**
+ * A line from each all-time dot to its recent dot, for spots with enough recent decisions. Closer to
+ * the centre (the charts) by more than a point is better.
+ */
+function recentLinks(style: PlayerStyle, recent: PlayerStyle | null): { key: string; label: string; from: StylePoint; to: StylePoint; direction: TrendDirection }[] {
+  if (!recent) return [];
+  const pairs: { key: string; label: string; from: StylePoint; to: StylePoint | undefined }[] = [
+    { key: 'overall', label: 'You', from: style.overall, to: recent.overall },
+    ...style.bySpot.map((p) => ({ key: p.spot, label: p.label, from: p, to: recent.bySpot.find((r) => r.spot === p.spot) })),
+  ];
+  return pairs.flatMap(({ key, label, from, to }) =>
+    to && Math.max(to.x.n, to.y.n) >= SCALE_MIN_DECISIONS
+      ? // Two standard errors of the recent point (its own error dwarfs the all-time one's), at least a point.
+        [{ key, label, from, to, direction: trendOf(distance(from), distance(to), false, Math.max(1, 2 * Math.hypot(to.x.se, to.y.se))) }]
+      : [],
+  );
+}
+
+/**
+ * A trail from (fx, fy) to (tx, ty): the line starts at the edge of the all-time marker and ends in an
+ * arrowhead whose tip stops `toRadius` short of the recent point (0 puts the tip on it). Null when the
+ * move is too short to draw a line and an arrowhead.
+ */
+function trailGeometry(fx: number, fy: number, tx: number, ty: number, { fromRadius, toRadius, head }: { fromRadius: number; toRadius: number; head: number }) {
+  const length = Math.hypot(tx - fx, ty - fy);
+  if (length - fromRadius - toRadius < head * 1.6) return null;
+  const [ux, uy] = [(tx - fx) / length, (ty - fy) / length];
+  const [tipX, tipY] = [tx - ux * toRadius, ty - uy * toRadius];
+  // The line stops inside the arrowhead so its square end never pokes past the tip.
+  const [baseX, baseY] = [tipX - ux * head, tipY - uy * head];
+  const w = head * 0.55;
+  return {
+    x1: fx + ux * fromRadius,
+    y1: fy + uy * fromRadius,
+    x2: tipX - ux * head * 0.6,
+    y2: tipY - uy * head * 0.6,
+    tipX,
+    tipY,
+    head: `${tipX},${tipY} ${baseX - uy * w},${baseY + ux * w} ${baseX + uy * w},${baseY - ux * w}`,
+  };
 }
 
 const thin = (p: StylePoint) => Math.max(p.x.n, p.y.n) < STYLE_MIN_DECISIONS;

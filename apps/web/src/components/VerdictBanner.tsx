@@ -9,9 +9,10 @@ const VERB: Record<ActionType, string> = { fold: 'fold', check: 'check', call: '
 const AGGRESSION: Record<ActionType, number> = { fold: 0, check: 1, call: 1, bet: 2, raise: 2, allin: 2 };
 
 /** The verdict in a player's words: "Good fold.", "Too loose.", "Fine. The chart mixes here." */
-export function verdictTitle(feedback: Pick<DecisionFeedback, 'grade' | 'chosenAction' | 'bestAction' | 'sizeOnly'>): string {
+export function verdictTitle(feedback: Pick<DecisionFeedback, 'grade' | 'chosenAction' | 'bestAction' | 'sizeOnly' | 'closeEv'>): string {
   if (feedback.grade === 'best') return `Good ${VERB[feedback.chosenAction]}.`;
   if (feedback.sizeOnly) return 'Right idea, different size.';
+  if (feedback.closeEv) return 'Fine. A close call.';
   if (feedback.grade === 'mixed') return 'Fine. The chart mixes here.';
   const chosen = AGGRESSION[feedback.chosenAction];
   const best = AGGRESSION[feedback.bestAction];
@@ -37,6 +38,8 @@ export function VerdictBanner({ feedback, handId }: { feedback: DecisionFeedback
       ? null
       : feedback.sizeOnly
         ? `${source} ${VERB[chosen.actionId]}s here ${pct(kind.reduce((s, o) => s + o.frequency, 0))} of the time, mostly ${kindBest.label} (${pct(kindBest.frequency)}). ${chosen.label} costs little EV.`
+        : feedback.closeEv && chosen.evBb !== null
+        ? `${source} prefers ${best.label} (${pct(best.frequency)}), but ${chosen.label} gives up only ${Math.max(0, Math.max(...feedback.options.map((o) => o.evBb ?? -Infinity)) - chosen.evBb).toFixed(2)}bb: nearly as good.`
         : feedback.grade === 'mixed'
         ? `${source} prefers ${best.label} (${pct(best.frequency)}) but plays ${chosen.label} ${pct(chosen.frequency)} of the time.`
         : `${source} plays ${best.label} ${pct(best.frequency)} of the time, ${chosen.label} only ${pct(chosen.frequency)}.`;

@@ -12,7 +12,7 @@ import { ClipboardListIcon, HelpIcon, SlidersIcon, TrendingUpIcon } from './comp
 import { Presence } from './components/Presence';
 import { ProfilePage } from './components/ProfilePage';
 import { SettingsMenu } from './components/SettingsMenu';
-import { SetupScreen } from './components/SetupScreen';
+import { dealRequest, SetupScreen, type DealSettings } from './components/SetupScreen';
 import type { Celebration } from './components/Streak';
 import { Table } from './components/Table';
 import { TitleScreen } from './components/TitleScreen';
@@ -39,7 +39,7 @@ const ACTION_SLOTS: { key: 'fold' | 'call' | 'raise'; ids: ActionType[]; placeho
 ];
 
 export function App() {
-  const [settings, setSettings] = useState<StartHandRequest | null>(null);
+  const [settings, setSettings] = useState<DealSettings | null>(null);
   const [hand, setHand] = useState<HandView | null>(null);
   const [sessionId, setSessionId] = useState(getSessionId);
   const [decisionsPlayed, setDecisionsPlayed] = useState(0);
@@ -90,10 +90,10 @@ export function App() {
     },
   });
 
-  const deal = (req: StartHandRequest) => {
+  const deal = (req: DealSettings) => {
     markTitleSeen();
     setSettings(req);
-    start.mutate(req);
+    start.mutate(dealRequest(req, null));
   };
 
   const closeReview = useCallback(() => setReviewOpen(false), []);
@@ -184,7 +184,7 @@ export function App() {
         }}
         streak={streak}
         celebration={celebration}
-        onNext={() => settings && start.mutate(settings)}
+        onNext={() => settings && start.mutate(dealRequest(settings, hand.heroPosition))}
         chats={chats}
         onChat={(id, messages) => setChats((c) => ({ ...c, [id]: messages }))}
         animate={animations}

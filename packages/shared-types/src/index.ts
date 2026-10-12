@@ -107,6 +107,8 @@ export interface DecisionFeedback {
   grade: Grade;
   /** "Right idea, different size": betting or raising was right but at another size, for little EV. Graded 'mixed'. */
   sizeOnly?: boolean;
+  /** "Close call": preflop, an option the chart rarely plays but within a few tenths of a bb of the best EV. Graded 'mixed'. */
+  closeEv?: boolean;
   hintUsed: boolean;
   street: Street;
   /** Board cards when the decision was made (empty preflop). */
@@ -392,6 +394,16 @@ export interface ProfileResponse {
   style: PlayerStyle;
   gto: GtoSummary;
   starredCount: number;
+  /** The same numbers over the most recent tenth of hands, to show progress; null until that's enough decisions to say much. */
+  recent: ProfileRecent | null;
+}
+
+/** Profile numbers over the most recent tenth of hands (see `ProfileResponse.recent`). */
+export interface ProfileRecent {
+  hands: number;
+  stats: SessionStats;
+  style: PlayerStyle;
+  gto: GtoSummary;
 }
 
 /** GET /api/me/profile/review: the coach's write-up of all-time play (saved, refreshed every so often). */

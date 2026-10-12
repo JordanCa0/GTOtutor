@@ -190,6 +190,12 @@ const round2 = (x: number) => Math.round(x * 100) / 100;
 const MIXED_THRESHOLD = 0.1;
 /** "Right idea, different size" when the chosen size gives up at most this share of the pot vs the best size of that action. */
 const SIZE_EV_TOLERANCE = 0.01;
+/**
+ * Preflop, a rarely played option at most this many bb below the best EV is a close call (mixed).
+ * The chart's model often sees two options as nearly equal (calling or 3-betting QQ in position at
+ * 100bb is a few tenths of a bb apart) and settles on one, so picking the other is no mistake.
+ */
+const PREFLOP_CLOSE_EV_BB = 0.3;
 const MAX_DEAL_ATTEMPTS = 200;
 
 /** Hero's option: the only one of that type, or the one of that type at `toBb` (e.g. one of three flop bets). */
@@ -207,9 +213,10 @@ function chooseIndex(actions: LegalAction[], action: ActionType, toBb?: number):
  * best: the most frequent option. mixed: played at least MIXED_THRESHOLD of the time. Otherwise a
  * mistake, unless hero picked the right kind of action (e.g. bet) at a size the solver uses less:
  * that's "right idea, different size" (mixed) when that action is a real option and the size costs
- * little EV (or, without EVs, the solver uses it at least sometimes).
+ * little EV (or, without EVs, the solver uses it at least sometimes). With `closeEvBb`, any option
+ * at most that many bb below the best EV is a close call (mixed, `closeEv`).
  */
-export function gradeDecision(options: ActionOption[], chosen: number, potBb: number): { grade: Grade; sizeOnly: boolean } {
+export function gradeDecision(options: ActionOption[], chosen: number, potBb: number, closeEvBb = 0): { grade: Grade; sizeOnly: boolean; closeEv?: boolean } {
   const maxFreq = Math.max(...options.map((o) => o.frequency));
   const f = options[chosen].frequency;
   if (f >= maxFreq - 1e-9) return { grade: 'best', sizeOnly: false };
@@ -221,6 +228,9 @@ export function gradeDecision(options: ActionOption[], chosen: number, potBb: nu
     const close = ev !== null && bestEv > -Infinity ? bestEv - ev <= SIZE_EV_TOLERANCE * potBb : f >= 0.01;
     if (close) return { grade: 'mixed', sizeOnly: true };
   }
+  const ev = options[chosen].evBb;
+  const bestEv = Math.max(...options.map((o) => o.evBb ?? -Infinity));
+  if (closeEvBb > 0 && ev !== null && bestEv > -Infinity && bestEv - ev <= closeEvBb) return { grade: 'mixed', sizeOnly: false, closeEv: true };
   return { grade: 'mistake', sizeOnly: false };
 }
 const EASY_FOLD_THRESHOLD = 0.98;
@@ -479,7 +489,7 @@ export class HandEngine {
     const bestIdx = options.findIndex((o) => o.frequency === maxFreq);
     const chosenFrequency = options[chosenIdx].frequency;
     const potBb = state.players.reduce((s, p) => s + p.committed, 0);
-    const { grade, sizeOnly } = gradeDecision(options, chosenIdx, potBb);
+    const { grade, sizeOnly, closeEv } = gradeDecision(options, chosenIdx, potBb, pending.street === 'preflop' ? PREFLOP_CLOSE_EV_BB : 0);
 
     const feedback: DecisionFeedback = {
       id: `${state.id}-d${state.decisions.length + 1}`,
@@ -495,6 +505,7 @@ export class HandEngine {
       bestIndex: bestIdx,
       grade,
       ...(sizeOnly && { sizeOnly }),
+      ...(closeEv && { closeEv }),
       hintUsed: state.hintUsedPending,
       street: pending.street,
       board: [...state.board],

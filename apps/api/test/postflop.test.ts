@@ -199,6 +199,15 @@ describe('gradeDecision', () => {
     expect(gradeDecision(sizes([0.94, 0.03, 0.03]), 2, 10)).toEqual({ grade: 'mistake', sizeOnly: false });
   });
 
+  it('calls a rare option a close call when its EV is within the tolerance (preflop)', () => {
+    // QQ in the CO vs a UTG open: the chart calls 95%, the 3-bet is 0.23bb worse.
+    const qq = [{ ...opt('check', 0, 0), actionId: 'fold' as const }, { ...opt('check', 0.95, 3.52), actionId: 'call' as const }, { ...opt('bet', 0.05, 3.29), actionId: 'raise' as const }];
+    expect(gradeDecision(qq, 2, 4, 0.3)).toEqual({ grade: 'mixed', sizeOnly: false, closeEv: true });
+    expect(gradeDecision(qq, 2, 4)).toEqual({ grade: 'mistake', sizeOnly: false }); // no tolerance (postflop)
+    expect(gradeDecision(qq, 0, 4, 0.3)).toEqual({ grade: 'mistake', sizeOnly: false }); // folding gives up 3.5bb
+    expect(gradeDecision([opt('check', 0.95), opt('bet', 0.05)], 1, 4, 0.3)).toEqual({ grade: 'mistake', sizeOnly: false }); // no EVs
+  });
+
   it('without EVs, needs the size to be used at least sometimes', () => {
     const sizes = (rare: number) => [opt('check', 0.5), opt('bet', 0.5 - rare, null, 2), opt('bet', rare, null, 4)];
     expect(gradeDecision(sizes(0.02), 2, 10).sizeOnly).toBe(true);

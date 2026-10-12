@@ -1,5 +1,18 @@
-import { chosenOption, type ActionType, type DecisionFeedback, type GtoSummary, type PlayerStyle, type SpotType, type StyleAxis, type StyleLeakRate, type StyleLeakRates, type StylePoint } from '@gtotutor/shared-types';
-import { spotLabel, spotTypeOf } from './sessionStats.js';
+import { chosenOption, type ActionType, type DecisionFeedback, type GtoSummary, type PlayerStyle, type ProfileRecent, type SpotType, type StyleAxis, type StyleLeakRate, type StyleLeakRates, type StylePoint } from '@gtotutor/shared-types';
+import { computeSessionStats, spotLabel, spotTypeOf } from './sessionStats.js';
+
+/** The profile's "recent" numbers cover this share of the hands... */
+export const RECENT_SHARE = 0.1;
+/** ...and only show once that's at least this many decisions. */
+export const RECENT_MIN_DECISIONS = 20;
+
+/** Profile numbers over the most recent tenth of `hands` (newest first), or null while that's too few decisions. */
+export function recentProfile(hands: { decisions: DecisionFeedback[] }[]): ProfileRecent | null {
+  const latest = hands.slice(0, Math.ceil(hands.length * RECENT_SHARE));
+  const decisions = latest.flatMap((h) => h.decisions);
+  if (decisions.length < RECENT_MIN_DECISIONS) return null;
+  return { hands: latest.length, stats: computeSessionStats(latest, false), style: styleOf(decisions), gto: gtoSummaryOf(decisions) };
+}
 
 const AGGRESSIVE = new Set<ActionType>(['bet', 'raise', 'allin']);
 

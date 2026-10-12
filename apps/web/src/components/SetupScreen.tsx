@@ -11,11 +11,28 @@ import { useEffect, useState } from 'react';
 import { Backdrop } from './Presence';
 import JellyRadio, { type JellyItem } from './reactbits/JellyRadio';
 
+/** The setup's choices: a hand request, plus whether hero moves one seat each hand. */
+export type DealSettings = StartHandRequest & { rotate?: boolean };
+
+/** Hero's next seat when the button moves on, as at a real table: UTG → BB → SB → BTN → CO → HJ → UTG. */
+const NEXT_SEAT: Record<Position, Position> = { UTG: 'BB', BB: 'SB', SB: 'BTN', BTN: 'CO', CO: 'HJ', HJ: 'UTG' };
+
+/**
+ * The request for the next hand. Rotating, the first hand sits at the chosen seat (or a random one)
+ * and each later hand one seat on from `previous`.
+ */
+export function dealRequest(settings: DealSettings, previous: Position | null): StartHandRequest {
+  const { rotate, ...req } = settings;
+  if (!rotate) return req;
+  const first = req.heroPosition === 'random' ? SIX_MAX_POSITIONS[Math.floor(Math.random() * SIX_MAX_POSITIONS.length)] : req.heroPosition;
+  return { ...req, heroPosition: previous ? NEXT_SEAT[previous] : first };
+}
+
 interface Props {
-  initial: StartHandRequest | null;
+  initial: DealSettings | null;
   starting: boolean;
   error: string | null;
-  onStart: (req: StartHandRequest) => void;
+  onStart: (settings: DealSettings) => void;
   /** When set, the setup opens as a popup over the current session and this returns to it. */
   onClose?: () => void;
 }
@@ -44,7 +61,12 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
   const [tableSize, setTableSize] = useState<TableSize>(initial?.tableSize ?? 'SIX_MAX');
   const [stack, setStack] = useState<StackDepth>(initial?.stackDepthBb ?? 100);
   const [position, setPosition] = useState<Position | 'random'>(initial?.heroPosition ?? 'random');
+  const [rotate, setRotate] = useState(initial?.rotate ?? false);
   const [opponent, setOpponent] = useState<Position | 'any'>(initial?.opponentPosition ?? 'any');
+  // An opponent needs hero in one fixed seat. The pick is kept while it doesn't apply, so turning
+  // Rotate on and off again (or trying Random) doesn't lose it.
+  const fixedSeat = position !== 'random' && !rotate;
+  const activeOpponent = fixedSeat && opponent !== position ? opponent : 'any';
   const [skipEasyFolds, setSkipEasyFolds] = useState(initial?.skipEasyFolds ?? true);
   const [simplePots, setSimplePots] = useState(initial?.simplePots ?? false);
 
@@ -94,39 +116,41 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
           ariaLabel="Your position"
           items={POSITION_ITEMS}
           value={position}
-          onChange={(v) => {
-            setPosition(v as Position | 'random');
-            if (v === 'random' || v === opponent) setOpponent('any');
-          }}
+          onChange={(v) => setPosition(v as Position | 'random')}
         />
+        <label className="toggle setup-rotate">
+          <input type="checkbox" checked={rotate} onChange={(e) => setRotate(e.target.checked)} />
+          <span>
+            Rotate positions
+            <small>The button moves round the table after each hand, so your position moves one place earlier: BTN, then CO, HJ, UTG, BB, SB.</small>
+          </span>
+        </label>
       </fieldset>
 
       <fieldset>
         <legend>Opponent</legend>
-        {position === 'random' ? (
-          // Greyed until hero picks a seat, with why on hover or tap: the wrapper takes focus, as the disabled chips can't.
-          <span className="setup-tip pos-tip" tabIndex={0} aria-describedby="opponent-tip">
-            <JellyRadio {...JELLY_THEME} disabled ariaLabel="Opponent" items={OPPONENT_ITEMS} value="any" onChange={() => {}} />
-            <span role="tooltip" id="opponent-tip" className="tooltip tip-below">
-              Select your position to choose an opponent.
-            </span>
-          </span>
+        {!fixedSeat ? (
+          // Greyed until hero has one fixed seat. The line below says why, so touch screens see it too.
+          <JellyRadio {...JELLY_THEME} disabled ariaLabel="Opponent" items={OPPONENT_ITEMS} value="any" onChange={() => {}} />
         ) : (
-          <>
-            <JellyRadio
-              {...JELLY_THEME}
-              ariaLabel="Opponent"
-              items={OPPONENT_ITEMS.filter((item) => typeof item === 'string' || item.value !== position)}
-              value={opponent}
-              onChange={(v) => setOpponent(v as Position | 'any')}
-            />
-            <p className="muted small">
-              {opponent === 'any'
-                ? 'Play the whole table as the charts deal it.'
-                : `Every hand is you against the ${opponent}, who always plays on; everyone else folds.`}
-            </p>
-          </>
+          <JellyRadio
+            {...JELLY_THEME}
+            ariaLabel="Opponent"
+            items={OPPONENT_ITEMS.filter((item) => typeof item === 'string' || item.value !== position)}
+            value={activeOpponent}
+            onChange={(v) => setOpponent(v as Position | 'any')}
+          />
         )}
+        {/* Always one line here, so switching Rotate or Random doesn't push the rest of the form around. */}
+        <p className="muted small">
+          {!fixedSeat
+            ? position === 'random'
+              ? 'Pick your position (and leave Rotate positions off) to choose an opponent.'
+              : 'Turn off Rotate positions to choose an opponent.'
+            : activeOpponent === 'any'
+              ? 'Play the whole table as the charts deal it.'
+              : `Every hand is you against the ${activeOpponent}, who always plays on; everyone else folds.`}
+        </p>
       </fieldset>
 
       <fieldset>
@@ -152,7 +176,7 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
 
       <p className="muted small">Cash game only for now. Tournament/ICM, other table sizes, and other stack depths come with the solver.</p>
 
-      <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, heroPosition: position, ...(position !== 'random' && opponent !== 'any' && { opponentPosition: opponent }), skipEasyFolds, simplePots })}>
+      <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, heroPosition: position, rotate, ...(activeOpponent !== 'any' && { opponentPosition: activeOpponent }), skipEasyFolds, simplePots })}>
         {starting ? 'Dealing…' : onClose ? 'Deal with these settings' : 'Deal a hand'}
       </button>
       {error && <p className="error">{error}</p>}

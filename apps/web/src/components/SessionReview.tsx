@@ -6,6 +6,7 @@ import { CoachLoader } from "./CoachLoader";
 import { PlayingCard } from "./PlayingCard";
 import { Backdrop } from "./Presence";
 import { Skeleton, SkeletonGroup, useSkeleton } from "./Skeleton";
+import { shareNoise, Trend, trendOf } from "./Trend";
 
 const pct = (n: number, d: number) =>
   d ? `${Math.round((n / d) * 100)}%` : "—";
@@ -132,6 +133,25 @@ function ReviewBody({
   );
 }
 
+/** Below this many recent decisions in a spot, its recent match rate isn't shown. */
+const RECENT_SPOT_MIN = 5;
+
+/** A spot's recent match rate, green or red against its all-time rate when the gap is more than luck. */
+function recentMatched(all: SessionStats["bySpot"][number], recent: SessionStats) {
+  const r = recent.bySpot.find((x) => x.spot === all.spot);
+  if (!r || r.decisions < RECENT_SPOT_MIN) return <span className="muted">–</span>;
+  return (
+    <Trend
+      direction={trendOf(all.best / all.decisions, r.best / r.decisions, true, shareNoise(all.best / all.decisions, r.decisions, 0.02))}
+      all={all.best / all.decisions}
+      recent={r.best / r.decisions}
+      title={`${r.decisions} recent decisions`}
+    >
+      {pct(r.best, r.decisions)}
+    </Trend>
+  );
+}
+
 /**
  * Grades, the by-spot table, and the biggest mistakes (session review and profile page). The profile
  * shows its own accuracy summary, so it passes `headline={false}`.
@@ -139,9 +159,12 @@ function ReviewBody({
 export function StatsSection({
   stats,
   headline = true,
+  recent,
 }: {
   stats: SessionStats;
   headline?: boolean;
+  /** The same stats over recent hands (the profile): adds a column comparing each spot's match rate. */
+  recent?: SessionStats;
 }) {
   const g = stats.grades;
   return (
@@ -179,6 +202,7 @@ export function StatsSection({
             <th>Decisions</th>
             <th>Matched</th>
             <th>Mistakes</th>
+            {recent && <th title="Matched, over your most recent 10% of hands">Recent</th>}
           </tr>
         </thead>
         <tbody>
@@ -190,6 +214,7 @@ export function StatsSection({
                 {pct(s.best, s.decisions)}
               </td>
               <td>{s.mistakes}</td>
+              {recent && <td>{recentMatched(s, recent)}</td>}
             </tr>
           ))}
         </tbody>

@@ -184,7 +184,9 @@ export function buildContext(input: ExplainInput): string {
       ? 'highest-frequency action'
       : d.sizeOnly
         ? 'right kind of action at a size the solver uses less, for little EV ("right idea, different size")'
-        : d.grade === 'mixed'
+        : d.closeEv
+          ? 'rarely taken by the chart, but within a few tenths of a bb of the best EV: a close call, not a mistake'
+          : d.grade === 'mixed'
           ? 'part of a mixed strategy, not the main action'
           : 'rarely or never taken by the chart';
   const whole = spotData(input);

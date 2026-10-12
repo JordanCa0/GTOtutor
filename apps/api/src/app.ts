@@ -29,7 +29,7 @@ import { playerKey, type CoachMessage } from './db/repo.js';
 import { HttpError, isFlopNodeKey, type HandEngine } from './engine/handEngine.js';
 import type { HandContext, HandService } from './engine/handService.js';
 import type { ExplainInput, LlmTeacher, SpotContext } from './teacher/llmTeacher.js';
-import { gtoSummaryOf, styleOf } from './teacher/playerStyle.js';
+import { gtoSummaryOf, recentProfile, styleOf } from './teacher/playerStyle.js';
 import { computeSessionStats } from './teacher/sessionStats.js';
 
 /** The profile looks at an account's most recent decisions, up to this many. */
@@ -307,6 +307,8 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
       style: styleOf(decisions),
       gto: gtoSummaryOf(decisions),
       starredCount: await hands.starredCount(userId),
+      // Hands come newest first.
+      recent: recentProfile(played),
     };
   });
 

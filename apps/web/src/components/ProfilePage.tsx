@@ -11,6 +11,7 @@ import { ProfileCoach } from './ProfileCoach';
 import { Skeleton, SkeletonGroup, useSkeleton } from './Skeleton';
 import { StatsSection } from './SessionReview';
 import { StyleCard } from './StyleChart';
+import { shareNoise, Trend, trendOf } from './Trend';
 import { VerdictBanner, verdictTitle } from './VerdictBanner';
 
 const pct = (f: number) => `${Math.round(f * 100)}%`;
@@ -64,54 +65,86 @@ function ProfileBody({ onOpen }: { onOpen: (item: StarredDecision) => void }) {
   const skeleton = useSkeleton(profile.isPending);
   if (skeleton.active || profile.isPending) return <ProfileSkeleton visible={skeleton.visible} />;
   if (profile.error) return <p className="error">{profile.error.message}</p>;
-  const { stats, style, gto, starredCount } = profile.data;
+  const { stats, style, gto, starredCount, recent } = profile.data;
   if (stats.decisions === 0) return <p className="muted">Play some hands while signed in and your profile fills in here.</p>;
 
   const g = stats.grades;
+  const recentLabel = recent && `Your last ${recent.hands} hand${recent.hands === 1 ? '' : 's'} (the most recent 10%)`;
+  // EV loss per decision comes without its spread, and is skewed (mostly 0, now and then a big loss):
+  // take the spread as about twice the mean, so two standard errors are 4 × mean / √n.
+  const evNoise = (all: number, n: number) => Math.max(0.01, (4 * all) / Math.sqrt(Math.max(1, n)));
 
   return (
     <>
-      <section className="profile-stats" aria-label="Summary">
-        <div className="profile-stat">
-          <p className="profile-stat-label">Accuracy</p>
-          <p className="profile-stat-value">{pct(gto.accuracy)}</p>
-          <div className="grade-bar" aria-hidden>
-            <span className="good" style={{ flex: g.best }} />
-            <span className="ok" style={{ flex: g.mixed }} />
-            <span className="bad" style={{ flex: g.mistake }} />
+      <div className="profile-summary">
+        <section className="profile-stats" aria-label="Summary">
+          <div className="profile-stat">
+            <p className="profile-stat-label">Accuracy</p>
+            <p className="profile-stat-value">{pct(gto.accuracy)}</p>
+            <div className="grade-bar" aria-hidden>
+              <span className="good" style={{ flex: g.best }} />
+              <span className="ok" style={{ flex: g.mixed }} />
+              <span className="bad" style={{ flex: g.mistake }} />
+            </div>
+            <p className="muted small">
+              Best or mixed play in {stats.decisions} decisions. {g.mistake} mistake{g.mistake === 1 ? '' : 's'}.
+              {(stats.bestStreak ?? 0) >= 2 && ` Best streak: ${stats.bestStreak} in a row.`}
+            </p>
+            {recent && (
+              <Trend
+                direction={trendOf(gto.accuracy, recent.gto.accuracy, true, shareNoise(gto.accuracy, recent.stats.decisions, 0.01))}
+                all={gto.accuracy}
+                recent={recent.gto.accuracy}
+                title={recentLabel!}
+              >
+                Recent {pct(recent.gto.accuracy)}
+              </Trend>
+            )}
           </div>
+          <div className="profile-stat">
+            <p className="profile-stat-label">EV lost per decision</p>
+            <p className={`profile-stat-value ${gto.evLossBb === null ? '' : evLossClass(gto.evLossBb)}`}>{gto.evLossBb === null ? '–' : `${gto.evLossBb.toFixed(2)}bb`}</p>
+            <p className="muted small">
+              {gto.evLossBb === null
+                ? 'Shows up once you play flop spots or solved charts: the placeholder preflop charts have no EVs.'
+                : `What your choices gave up against the best play in each spot, so 0 is perfect. Over ${gto.evDecisions} decisions with EVs.`}
+            </p>
+            {gto.evLossBb !== null && recent?.gto.evLossBb != null && (
+              <Trend
+                direction={trendOf(gto.evLossBb, recent.gto.evLossBb, false, evNoise(gto.evLossBb, recent.gto.evDecisions))}
+                all={gto.evLossBb}
+                recent={recent.gto.evLossBb}
+                title={recentLabel!}
+              >
+                Recent {recent.gto.evLossBb.toFixed(2)}bb
+              </Trend>
+            )}
+          </div>
+          <div className="profile-stat">
+            <p className="profile-stat-label">Hands</p>
+            <p className="profile-stat-value">{stats.hands}</p>
+            <p className="muted small">
+              {stats.hintsUsed} hint{stats.hintsUsed === 1 ? '' : 's'} used.
+            </p>
+          </div>
+        </section>
+        {recent && (
           <p className="muted small">
-            Best or mixed play in {stats.decisions} decisions. {g.mistake} mistake{g.mistake === 1 ? '' : 's'}.
-            {(stats.bestStreak ?? 0) >= 2 && ` Best streak: ${stats.bestStreak} in a row.`}
+            {recentLabel} are the “recent” numbers: green where they beat your all-time numbers, red where they trail, grey when the gap is too
+            small to tell from luck.
           </p>
-        </div>
-        <div className="profile-stat">
-          <p className="profile-stat-label">EV lost per decision</p>
-          <p className={`profile-stat-value ${gto.evLossBb === null ? '' : evLossClass(gto.evLossBb)}`}>{gto.evLossBb === null ? '–' : `${gto.evLossBb.toFixed(2)}bb`}</p>
-          <p className="muted small">
-            {gto.evLossBb === null
-              ? 'Shows up once you play flop spots or solved charts: the placeholder preflop charts have no EVs.'
-              : `What your choices gave up against the best play in each spot, so 0 is perfect. Over ${gto.evDecisions} decisions with EVs.`}
-          </p>
-        </div>
-        <div className="profile-stat">
-          <p className="profile-stat-label">Hands</p>
-          <p className="profile-stat-value">{stats.hands}</p>
-          <p className="muted small">
-            {stats.hintsUsed} hint{stats.hintsUsed === 1 ? '' : 's'} used.
-          </p>
-        </div>
-      </section>
+        )}
+      </div>
 
       <section className="profile-section">
         <h2>Playing style</h2>
-        <StyleCard style={style} />
+        <StyleCard style={style} recent={recent?.style ?? null} />
       </section>
 
       <section className="profile-section">
         <h2>Leaks</h2>
         <div className="review-grid">
-          <StatsSection stats={stats} headline={false} />
+          <StatsSection stats={stats} headline={false} recent={recent?.stats} />
           <ProfileCoach stats={stats} coach={review.isPending ? undefined : review.data?.coach ?? { status: 'unavailable', reason: review.error?.message ?? 'No review.' }} onRetry={() => review.refetch()} />
         </div>
       </section>

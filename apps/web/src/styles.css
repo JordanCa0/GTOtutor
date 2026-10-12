@@ -117,6 +117,8 @@ fieldset { border: none; padding: 0; margin: var(--sp-5) 0 0; }
 legend { font-size: var(--fs-sm); font-weight: 600; color: var(--text); margin-bottom: var(--sp-2); }
 .toggle { display: flex; gap: var(--sp-3); align-items: flex-start; cursor: pointer; }
 .toggle input { margin-top: var(--sp-1); accent-color: #cfd3d8; width: 16px; height: 16px; }
+/* Room between the position chips and the Rotate toggle under them. */
+.setup-rotate { margin-top: var(--sp-3); }
 .toggle small { display: block; color: var(--muted); font-size: var(--fs-sm); }
 
 /* ---------- One-screen shell ---------- */
@@ -337,10 +339,6 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 .act-tip { display: flex; cursor: help; border-radius: var(--r-md); outline-offset: 2px; }
 .act-tip > .act { flex: 1; pointer-events: none; }
 .act-tip .tooltip { max-width: min(320px, 86vw); }
-/* A greyed setup option with why on hover or tap (shares .pos-tip's tooltip styles). */
-.setup-tip { position: relative; display: inline-block; cursor: help; border-radius: var(--r-md); outline-offset: 2px; }
-.setup-tip > * { pointer-events: none; }
-.setup-tip > .tooltip { left: 0; }
 .result-strip { display: flex; gap: var(--sp-4); align-items: center; justify-content: center; flex-wrap: wrap; animation: pop 0.3s var(--ease) both; }
 /* Turn and river credit: postflop-solver (AGPL-3.0) and the source link the license requires. */
 .solver-credit { text-align: center; margin: var(--sp-2) 0 0; }
@@ -723,7 +721,8 @@ button.primary.danger { background: #c25a4b; color: #fff; }
   *, *::before, *::after { animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-property: opacity, color, background-color, border-color !important; }
   .board-card, .dealt, .flip, .action-bubble, .bet, .hand-name, .win-tag, .result-strip, .action-log li, .hand-verdict,
   .verdict, .verdict-icon, .range, .coach-card, .bubble, .spot-card, .hint, .title-preview > *, .next-ready, .coach-actions, .streak-badge,
-  .modal, .reader, .range-modal, .auth-card, .modal-backdrop .setup, .settings-pop, .account-menu, .header-sheet, .auth-toast, .tour-card {
+  .modal, .reader, .range-modal, .auth-card, .modal-backdrop .setup, .settings-pop, .account-menu, .header-sheet, .auth-toast, .tour-card,
+  .style-spot circle, .style-player polygon, .style-trail, .style-trail-head, .style-recent-star {
     animation-name: fade !important; animation-duration: 150ms !important;
   }
   .modal-backdrop[data-closing] > * { animation: none !important; }
@@ -742,6 +741,8 @@ button.primary.danger { background: #c25a4b; color: #fff; }
 .profile-head h1 { font-family: var(--serif); font-size: var(--fs-xl); margin: 0; }
 /* Three numbers in one strip: hairline dividers instead of three separate boxes. */
 .profile-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+.profile-summary { display: flex; flex-direction: column; gap: var(--sp-2); }
+.profile-summary > p { margin: 0; }
 .profile-stat { background: var(--panel); padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.35rem; }
 .profile-stat p { margin: 0; }
 .profile-stat-label { font-size: var(--fs-sm); color: var(--muted); }
@@ -801,6 +802,31 @@ button.primary.danger { background: #c25a4b; color: #fff; }
 .style-leaks { list-style: none; margin: 0.25rem 0 0; padding: 0; width: 100%; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
 .style-leaks li { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: 0.45rem 0.7rem; background: var(--raised); font-size: var(--fs-sm); }
 .style-leaks b { font-variant-numeric: tabular-nums; }
+.style-leaks li > span:first-child { margin-right: auto; }
+/* Recent numbers next to all-time ones (profile): green when better, red when worse. */
+.trend { font-size: var(--fs-xs); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.trend-better { color: var(--good); }
+.trend-worse { color: var(--bad); }
+.trend-same { color: var(--muted); }
+/* Recent trails on the style chart: the trend colour says closer to (green) or further from (red) the charts. */
+.style-trail { stroke: currentColor; stroke-width: 1.75; opacity: 0.8; }
+.style-trail-head { fill: currentColor; }
+/* "You, lately": still gold, but hollow so it doesn't read as a second you. */
+.style-recent-star { fill: var(--raised); stroke: var(--gold); stroke-width: 1.5; stroke-linejoin: round; }
+.style-recent-hit { stroke: transparent; stroke-width: 12; }
+.style-recent.on .style-trail { opacity: 1; stroke-width: 2.5; }
+/*
+ * Entrance, once when the chart mounts: the star and dots pop in (25ms apart), then each trail draws
+ * out of its dot and its arrowhead lands. The large view waits for its modal to open first.
+ */
+.style-plot { --base: 0ms; }
+.style-plot.large { --base: 160ms; }
+.style-spot circle, .style-player polygon, .style-trail-head, .style-recent-star { transform-box: fill-box; transform-origin: center; }
+.style-spot circle, .style-player polygon { animation: style-pop 320ms var(--ease) both; animation-delay: calc(var(--base) + var(--i, 0) * 25ms); }
+.style-trail { stroke-dasharray: 1; animation: style-draw 480ms var(--ease) both; animation-delay: calc(var(--base) + 240ms + var(--i, 0) * 40ms); }
+.style-trail-head, .style-recent-star { animation: style-pop 220ms var(--ease) both; animation-delay: calc(var(--base) + 600ms + var(--i, 0) * 40ms); }
+@keyframes style-pop { from { opacity: 0; transform: scale(0.5); } }
+@keyframes style-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 .style-explain { display: grid; gap: 0.4rem; line-height: 1.5; }
 @media (max-width: 1023px) { .style-card, .style-detail-body { grid-template-columns: 1fr; } }
 /* Phones: let the value columns wrap so all four columns fit. */

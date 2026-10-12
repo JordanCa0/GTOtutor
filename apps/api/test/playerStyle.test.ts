@@ -1,6 +1,6 @@
 import type { ActionType, DecisionFeedback, Grade } from '@gtotutor/shared-types';
 import { describe, expect, it } from 'vitest';
-import { gtoSummaryOf, styleOf } from '../src/teacher/playerStyle.js';
+import { gtoSummaryOf, recentProfile, styleOf } from '../src/teacher/playerStyle.js';
 
 let n = 0;
 /** A decision at a node offering these actions at these chart frequencies (and optional EVs). */
@@ -100,5 +100,23 @@ describe('GTO summary', () => {
     d.options = [d.options[0], { ...d.options[1], label: 'bet 33%', toBb: 2 }, { ...d.options[1], label: 'bet 75%', toBb: 4.5, frequency: 0, evBb: 1.2 }];
     d.chosenIndex = 2;
     expect(gtoSummaryOf([d]).evLossBb).toBe(0.8);
+  });
+});
+
+describe('recent profile', () => {
+  // Two decisions a hand, graded the same.
+  const hand = (grade: Grade) => ({ decisions: [decision('fold', { fold: 0.2, call: 0.8 }, { grade }), decision('fold', { fold: 0.2, call: 0.8 }, { grade })] });
+
+  it('covers the newest tenth of hands, once that is enough decisions', () => {
+    const hands = [...Array.from({ length: 10 }, () => hand('mistake')), ...Array.from({ length: 90 }, () => hand('best'))];
+    const recent = recentProfile(hands)!;
+    expect(recent.hands).toBe(10);
+    expect(recent.stats.decisions).toBe(20);
+    expect(recent.gto.accuracy).toBe(0);
+    expect(gtoSummaryOf(hands.flatMap((h) => h.decisions)).accuracy).toBe(0.9);
+  });
+
+  it('is null while the newest tenth is too few decisions', () => {
+    expect(recentProfile(Array.from({ length: 30 }, () => hand('best')))).toBeNull();
   });
 });
