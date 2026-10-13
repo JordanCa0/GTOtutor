@@ -10,6 +10,8 @@ export interface HandContext {
   owner: Player;
   heroPosition: string;
   stackDepthBb: number;
+  /** Each seat's starting stack, when they differ from `stackDepthBb` (mixed stacks). */
+  stacks?: Partial<Record<string, number>>;
   board: string[];
   actionLog: ActionLogEntry[];
   decisions: DecisionFeedback[];
@@ -150,6 +152,7 @@ export class HandService {
       owner: rec.owner,
       heroPosition: rec.heroPosition,
       stackDepthBb: rec.config.stackDepthBb,
+      stacks: (rec.config as { stacks?: Record<string, number> }).stacks,
       board: rec.replay?.result.board ?? [],
       actionLog: rec.replay?.actionLog ?? [],
       decisions: rec.decisions,
@@ -273,6 +276,7 @@ const contextOf = (id: string, owner: Player, s: Pick<HandState, 'heroPosition' 
   owner,
   heroPosition: s.heroPosition,
   stackDepthBb: s.config.stackDepthBb,
+  stacks: s.config.stacks,
   board: s.board,
   actionLog: s.actionLog,
   decisions: s.decisions,

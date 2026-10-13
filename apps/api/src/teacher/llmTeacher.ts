@@ -57,6 +57,8 @@ export interface SpotContext {
   priorDecisions: DecisionFeedback[];
   heroPosition: string;
   stackDepthBb: number;
+  /** Each seat's starting stack (hands dealt since stack profiles); with mixed stacks they differ. */
+  stacks?: Partial<Record<string, number>>;
   rangeSummary: { label: string; share: number }[];
   dataSource: DataSource;
   /** Board cards at the decision (empty preflop). */
@@ -143,6 +145,15 @@ export function positionLine(heroPosition: string, actionsBefore: ActionLogEntry
   return `Postflop position: if the hand continues, hero (${heroPosition}) will be ${inPosition ? 'IN POSITION (acts last)' : 'OUT OF POSITION (acts first)'} against the ${aggressor.position}.`;
 }
 
+const mixedStacks = (spot: Pick<SpotContext, 'stacks'>) => new Set(Object.values(spot.stacks ?? {})).size > 1;
+
+/** "100bb effective stacks", or with mixed stacks "stacks 100bb, except BB 20bb". */
+function stacksLine(spot: Pick<SpotContext, 'stackDepthBb' | 'stacks'>): string {
+  const odd = Object.entries(spot.stacks ?? {}).filter(([, s]) => s !== spot.stackDepthBb);
+  if (!odd.length) return `${spot.stackDepthBb}bb effective stacks`;
+  return `stacks ${spot.stackDepthBb}bb, except ${odd.map(([pos, s]) => `${pos} ${s}bb`).join(' and ')} (a pot is played for the smaller of its two stacks)`;
+}
+
 export function buildSpotContext(spot: SpotContext): string {
   const before = spot.actionsBefore.length
     ? spot.actionsBefore.map(describeAction).join(', ')
@@ -150,7 +161,7 @@ export function buildSpotContext(spot: SpotContext): string {
   const hasEv = spot.options.some((o) => o.evBb !== null);
   const position = positionLine(spot.heroPosition, spot.actionsBefore);
   const lines = [
-    `Game: 6-max cash, ${spot.stackDepthBb}bb effective stacks. Hero is ${spot.heroPosition}.`,
+    `Game: 6-max cash, ${stacksLine(spot)}. Hero is ${spot.heroPosition}.`,
     `Action before hero: ${before}`,
     ...(position ? [position] : []),
     ...(spot.board.length
@@ -158,6 +169,9 @@ export function buildSpotContext(spot: SpotContext): string {
           spot.board.length === 3
             ? `Board: ${spot.board.join(' ')}. Strategy numbers come from a solver run on ${spot.approxFlop ? `the similar flop ${spot.approxFlop} (this exact flop isn't solved, so treat the numbers as approximate)` : 'this flop'}.`
             : `Board: ${spot.board.join(' ')}. Strategy numbers come from a live ${spot.board.length === 4 ? 'turn' : 'river'} solve${spot.approxFlop ? ` on the similar flop ${spot.approxFlop} with the turn and river cards translated to it (treat the numbers as approximate)` : ''}, with turn bets of 33/75/125% of the pot and river bets of 50/100% or all-in.`,
+          ...(mixedStacks(spot)
+            ? ['Stacks differ at this table, so the postflop numbers come from a solve with every stack equal to this pot’s smaller stack: the ranges and pot size differ a little, so treat them as approximate.']
+            : []),
         ]
       : []),
     `Spot: ${spot.nodeLabel}`,

@@ -117,8 +117,8 @@ fieldset { border: none; padding: 0; margin: var(--sp-5) 0 0; }
 legend { font-size: var(--fs-sm); font-weight: 600; color: var(--text); margin-bottom: var(--sp-2); }
 .toggle { display: flex; gap: var(--sp-3); align-items: flex-start; cursor: pointer; }
 .toggle input { margin-top: var(--sp-1); accent-color: #cfd3d8; width: 16px; height: 16px; }
-/* Room between the position chips and the Rotate toggle under them. */
-.setup-rotate { margin-top: var(--sp-3); }
+/* Room between a row of setup chips and the toggle under it (Rotate positions, Mixed stacks). */
+.setup-subtoggle { margin-top: var(--sp-3); }
 .toggle small { display: block; color: var(--muted); font-size: var(--fs-sm); }
 
 /* ---------- One-screen shell ---------- */

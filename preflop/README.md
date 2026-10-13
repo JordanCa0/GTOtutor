@@ -58,6 +58,23 @@ cargo run --release -- --iterations 1500 --version preflop-v3 --realization real
   npx tsx apps/api/scripts/compareCharts.ts <a.json> <b.json>
   ```
 
+## Stack profiles
+
+`--stacks` solves one stack profile (`docs/stack-depths-plan.md`):
+- `20`, `60` or `100` for equal stacks;
+- a base plus exceptions, like `100:BB20` or `100:UTG20:CO60:SB60`. Exceptions are listed in seat order, UTG to BB, because the profile id is part of every chart key.
+
+**Many profiles at once.** The CFR loop runs on one core, so `solve-profiles.sh` solves a list of profiles 12 at a time into `charts/<set>/`, with the stacks-v1 settings. It skips profiles that already have a chart, so a stopped run resumes.
+```bash
+bash solve-profiles.sh profiles-stacks-v1-multi.txt stacks-v1 12   # the 60 "several short" tables, ~10 minutes on 16 cores
+```
+Then add the new files to the manifest, `charts/stacks-v1.json`, which maps each profile to its chart file. The API loads the manifest as `PREFLOP_CHARTS`.
+
+**Review the charts** (ranges by depth, short seats against the equal-stacks charts, mixing, spot checks):
+```bash
+npx tsx apps/api/scripts/reviewStackCharts.ts preflop/charts/stacks-v1.json
+```
+
 ## Calibration
 
 Realization factors come from the flop solver.

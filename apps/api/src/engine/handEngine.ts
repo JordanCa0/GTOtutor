@@ -9,10 +9,13 @@ import {
   type Grade,
   type HandConfig,
   type HandResult,
+  type HandStacks,
+  type MixedStacks,
   type HandView,
   type LegalAction,
   type NoCallReason,
   type Position,
+  type StackDepth,
   type StartHandRequest,
   type Street,
   type VillainRange,
@@ -20,6 +23,7 @@ import {
 import type { ChartService } from '../charts/chartService.js';
 import type { ChartNode } from '../charts/types.js';
 import { FACING_TYPES, makeNodeKey, NOCALL_SUFFIX } from '../charts/nodeKeys.js';
+import { mixedKind, parseProfile, profileBase, tierDepth } from '../charts/stackProfile.js';
 
 /** What a raise is called at each raise level: the open is level 1, so re-raising it is a 3-bet. */
 const RAISE_NAMES: Record<number, string> = { 1: '3-bet', 2: '4-bet', 3: '5-bet' };
@@ -55,7 +59,8 @@ export interface HandState {
   id: string;
   sessionId: string | null;
   easyFoldsSkipped: boolean;
-  config: HandConfig;
+  /** The request's table settings, plus the stacks as dealt (hands saved before mixed stacks lack them). */
+  config: HandConfig & Partial<HandStacks>;
   heroPosition: Position;
   players: Player[];
   deck: string[];
@@ -186,6 +191,11 @@ export function parseFlopNodeKey(nodeKey: string): { spot: string; flop: string;
 /** Postflop acting order: SB, BB, then UTG..BTN. */
 const postflopIndex = (p: Position) => ['SB', 'BB', 'UTG', 'HJ', 'CO', 'BTN'].indexOf(p);
 
+/** The chart profile a hand plays ("100", "100:BB20"); hands saved before mixed stacks are their depth. */
+const profileOf = (state: HandState) => state.config.profile ?? String(state.config.stackDepthBb);
+/** A seat's starting stack in bb. */
+const stackOf = (state: HandState, pos: Position) => state.config.stacks?.[pos] ?? state.config.stackDepthBb;
+
 const round2 = (x: number) => Math.round(x * 100) / 100;
 const MIXED_THRESHOLD = 0.1;
 /** "Right idea, different size" when the chosen size gives up at most this share of the pot vs the best size of that action. */
@@ -267,9 +277,14 @@ export class HandEngine {
   private readonly recentLive = new Map<string, LiveData>();
 
   start(req: StartHandRequest): HandState {
-    if (req.tableSize !== 'SIX_MAX' || req.stackDepthBb !== 100) {
-      throw new HttpError(400, 'Only 6-max at 100bb is available in this version.');
+    if (req.tableSize !== 'SIX_MAX') throw new HttpError(400, 'Only 6-max is available in this version.');
+    const depths = this.depthsFor(req.mixedStacks);
+    if (req.stackDepthBb === 'random' ? !depths.length : !depths.includes(req.stackDepthBb)) {
+      const at = req.stackDepthBb === 'random' ? '' : ` at ${req.stackDepthBb}bb`;
+      const what = req.mixedStacks ? `Mixed stacks (${req.mixedStacks === 'one' ? 'one short seat' : 'several short seats'})${at} are` : req.stackDepthBb === 'random' ? 'Random stack depths are' : `${req.stackDepthBb}bb is`;
+      throw new HttpError(400, `${what} not available with these charts.`);
     }
+    if (req.flopPractice && (req.stackDepthBb !== 100 || req.mixedStacks)) throw new HttpError(400, 'Flop practice is 100bb only.');
     if (req.heroPosition !== 'random' && !SIX_MAX_POSITIONS.includes(req.heroPosition)) {
       throw new HttpError(400, `Unknown position ${req.heroPosition}`);
     }
@@ -281,9 +296,11 @@ export class HandEngine {
       if (opponent === req.heroPosition) throw new HttpError(400, "Your opponent can't sit in your seat.");
     }
     const skipEasyFolds = (req.skipEasyFolds ?? true) && this.rng.float() >= UNFILTERED_DEAL_RATE;
+    // Mixed stacks: one solved profile per hand, picked before the redeals so they reuse its chart.
+    const profile = this.pickProfile(req);
     // Redeal hands with nothing to train on: walks in the BB, and (mostly) trivial folds.
     for (let attempt = 0; attempt < MAX_DEAL_ATTEMPTS; attempt++) {
-      const state = this.deal(req);
+      const state = this.deal(req, profile);
       this.advance(state);
       if (!state.heroToAct) continue;
       if (skipEasyFolds && this.isEasyFold(state)) continue;
@@ -314,7 +331,7 @@ export class HandEngine {
       return node.strategy.get(handClass(p.cards[0], p.cards[1]))![node.actions.findIndex((a) => a.id === action)];
     };
     for (let attempt = 0; attempt < MAX_DEAL_ATTEMPTS * 20; attempt++) {
-      const state = this.deal({ ...req, heroPosition });
+      const state = this.deal({ ...req, heroPosition }, '100');
       const byPos = (pos: Position) => state.players.find((p) => p.position === pos)!;
       // Keep the deal with the chance that BTN opens and BB calls with these exact hands.
       if (this.rng.float() >= freq(byPos('BTN'), line[3][2], 'raise') * freq(byPos('BB'), line[5][2], 'call')) continue;
@@ -534,7 +551,6 @@ export class HandEngine {
   }
 
   view(state: HandState): HandView {
-    const stack = state.config.stackDepthBb;
     const complete = state.result !== null;
     const pending = this.pendingDecision(state);
     return {
@@ -545,7 +561,7 @@ export class HandEngine {
       seats: state.players.map((p) => ({
         position: p.position,
         isHero: p.isHero,
-        stackBb: round2(stack - p.committed),
+        stackBb: round2(stackOf(state, p.position) - p.committed),
         committedBb: p.committed,
         folded: p.folded,
         allIn: p.allIn,
@@ -573,7 +589,29 @@ export class HandEngine {
     };
   }
 
-  private deal(req: StartHandRequest): HandState {
+  /** Solved mixed-stack profiles of one kind on a base depth ("100:BB20", or "100:UTG20:CO60:SB60"…). */
+  private mixedProfiles(depth: number, kind: MixedStacks): string[] {
+    return this.charts.profiles.filter((p) => mixedKind(p) === kind && profileBase(p) === depth && parseProfile(p));
+  }
+
+  /** The table depths the charts can deal, with equal stacks or with mixed stacks of one kind. */
+  private depthsFor(kind: MixedStacks | undefined): number[] {
+    const ids = kind ? this.charts.profiles.filter((p) => mixedKind(p) === kind && parseProfile(p)) : this.charts.profiles.filter((p) => mixedKind(p) === null);
+    return [...new Set(ids.map(profileBase))];
+  }
+
+  /**
+   * The chart profile for a hand: its depth (a random one for 'random'), or with mixed stacks a
+   * random solved profile of that kind on that depth.
+   */
+  private pickProfile(req: StartHandRequest): string {
+    const depths = this.depthsFor(req.mixedStacks);
+    const depth = req.stackDepthBb === 'random' ? depths[this.rng.int(depths.length)] : req.stackDepthBb;
+    const mixed = req.mixedStacks ? this.mixedProfiles(depth, req.mixedStacks) : [];
+    return mixed.length ? mixed[this.rng.int(mixed.length)] : String(depth);
+  }
+
+  private deal(req: StartHandRequest, profile: string): HandState {
     const heroPosition = req.heroPosition === 'random' ? SIX_MAX_POSITIONS[this.rng.int(6)] : req.heroPosition;
     const deck = shuffle(fullDeck(), this.rng);
     const players: Player[] = SIX_MAX_POSITIONS.map((position) => ({
@@ -592,7 +630,7 @@ export class HandEngine {
       flopPractice: req.flopPractice ?? false,
       simplePots: req.simplePots ?? false,
       opponentPosition: req.opponentPosition && req.opponentPosition !== 'any' ? req.opponentPosition : null,
-      config: { tableSize: req.tableSize, stackDepthBb: req.stackDepthBb },
+      config: { tableSize: req.tableSize, stackDepthBb: profileBase(profile) as StackDepth, ...(req.mixedStacks && { mixedStacks: req.mixedStacks }), profile, stacks: parseProfile(profile)! },
       heroPosition,
       players,
       deck,
@@ -621,7 +659,8 @@ export class HandEngine {
    */
   private nodeKeyFor(state: HandState, player: Player): string {
     const key = this.baseNodeKeyFor(state, player);
-    const matched = state.players.filter((p) => p !== player && !p.folded && p.committed >= state.currentBet).length;
+    // A short stack all in for less than the bet has matched all it can.
+    const matched = state.players.filter((p) => p !== player && !p.folded && p.committed >= Math.min(state.currentBet, stackOf(state, p.position))).length;
     // Facing a limp there's no call to block (fold or isolate), so those nodes have no "|nocall" variant.
     const hasCall = !this.charts.hasNode(key) || this.charts.getNode(key).actions.some((a) => a.id === 'call');
     return matched >= 2 && hasCall ? `${key}${NOCALL_SUFFIX}` : key;
@@ -637,32 +676,34 @@ export class HandEngine {
 
   /** Normalizes the live action history into a chart lookup key (2-player subgame abstraction). */
   private baseNodeKeyFor(state: HandState, player: Player): string {
-    const { tableSize, stackDepthBb } = state.config;
+    const { tableSize } = state.config;
+    const profile = profileOf(state);
     const pos = player.position;
+    // Facing an all-in below the 5-bet (only with a 20bb stack at the table): fold or call, under its
+    // own key, as the same spot facing a normal raise offers a re-raise (game.rs `tier_node`).
+    const raiser = state.lastRaiser && state.players.find((p) => p.position === state.lastRaiser);
+    if (state.raiseLevel < 4 && raiser?.allIn) return makeNodeKey(tableSize, profile, 'VS_ALLIN', pos, raiser.position);
     if (state.raiseLevel === 0) {
       // Facing a limp: fold/check or isolate. Otherwise first in.
-      return state.limper ? makeNodeKey(tableSize, stackDepthBb, 'VS_LIMP', pos, state.limper) : makeNodeKey(tableSize, stackDepthBb, 'RFI', pos);
+      return state.limper ? makeNodeKey(tableSize, profile, 'VS_LIMP', pos, state.limper) : makeNodeKey(tableSize, profile, 'RFI', pos);
     }
     if (state.raiseLevel === 1) {
-      return pos === state.limper
-        ? makeNodeKey(tableSize, stackDepthBb, 'VS_ISO', pos, state.opener!)
-        : makeNodeKey(tableSize, stackDepthBb, 'VS_OPEN', pos, state.opener!);
+      return pos === state.limper ? makeNodeKey(tableSize, profile, 'VS_ISO', pos, state.opener!) : makeNodeKey(tableSize, profile, 'VS_OPEN', pos, state.opener!);
     }
     const types = FACING_TYPES[state.raiseLevel];
-    return pos === state.prevRaiser
-      ? makeNodeKey(tableSize, stackDepthBb, types.direct, pos, state.lastRaiser!)
-      : makeNodeKey(tableSize, stackDepthBb, types.cold, pos);
+    return pos === state.prevRaiser ? makeNodeKey(tableSize, profile, types.direct, pos, state.lastRaiser!) : makeNodeKey(tableSize, profile, types.cold, pos);
   }
 
   private legalActions(state: HandState, player: Player): LegalAction[] {
     const node = this.charts.getNode(this.nodeKeyFor(state, player));
-    const callTo = Math.min(state.currentBet, state.config.stackDepthBb);
-    const callLabel = state.raiseLevel === 0 ? 'Limp' : callTo >= state.config.stackDepthBb ? `Call all-in ${callTo}` : `Call ${callTo}`;
+    const stack = stackOf(state, player.position);
+    const callTo = Math.min(state.currentBet, stack);
+    const callLabel = state.raiseLevel === 0 ? 'Limp' : callTo >= stack ? `Call all-in ${callTo}` : `Call ${callTo}`;
     return node.actions.map((a) => (a.id === 'call' ? { ...a, label: callLabel, toBb: callTo } : a));
   }
 
   private apply(state: HandState, player: Player, action: LegalAction): void {
-    const stack = state.config.stackDepthBb;
+    const stack = stackOf(state, player.position);
     let toBb = player.committed;
     if (action.id === 'fold') {
       player.folded = true;
@@ -676,7 +717,7 @@ export class HandEngine {
       state.lastRaiseNode = { position: player.position, nodeKey: this.nodeKeyFor(state, player), actionId: action.id };
       toBb = action.id === 'allin' ? stack : Math.min(action.toBb!, stack);
       player.committed = toBb;
-      state.currentBet = toBb;
+      state.currentBet = Math.max(state.currentBet, toBb);
       if (state.raiseLevel === 0) state.opener = player.position;
       state.prevRaiser = state.lastRaiser;
       state.lastRaiser = player.position;
@@ -802,7 +843,8 @@ export class HandEngine {
   private spotName(state: HandState): string | null {
     const live = state.players.filter((p) => !p.folded).map((p) => p.position);
     if (live.length !== 2) return null;
-    const suffix = state.config.stackDepthBb;
+    // Flops are solved per equal-stack depth: a heads-up pot plays the effective (smaller) stack's.
+    const suffix = tierDepth(this.effectiveStack(state));
     if (state.limper) {
       // Limped lines are always limper vs BB (check behind) or limper vs isolator.
       const kind = ['limp', 'iso', 'l3b'][state.raiseLevel];
@@ -820,6 +862,11 @@ export class HandEngine {
     return null;
   }
 
+  /** The smallest starting stack among the players still in: all anyone can win or lose. */
+  private effectiveStack(state: HandState): number {
+    return Math.min(...state.players.filter((p) => !p.folded).map((p) => stackOf(state, p.position)));
+  }
+
   /** Deals the flop and starts solver-driven flop play when this spot has solved flops. */
   private startFlop(state: HandState): boolean {
     if (!this.flops || state.postflop || state.board.length) return false;
@@ -832,11 +879,14 @@ export class HandEngine {
     // A flop shape with no solved example: the board stays and the hand runs out as before.
     if (!lookup) return false;
     const seats = [...live].sort((a, b) => postflopIndex(a.position) - postflopIndex(b.position));
+    const hands: [number, number] = [this.flops.handFor(lookup, 0, seats[0].cards), this.flops.handFor(lookup, 1, seats[1].cards)];
+    // A hand with no place in the solved ranges (an empty range): run out rather than play blind.
+    if (hands.some((h) => h < 0)) return false;
     state.postflop = {
       spot,
       lookup,
       seats: [seats[0].position, seats[1].position],
-      hands: [this.flops.handFor(lookup, 0, seats[0].cards), this.flops.handFor(lookup, 1, seats[1].cards)],
+      hands,
       street: 'flop',
       history: [],
       flopLine: null,
@@ -1108,19 +1158,36 @@ export class HandEngine {
     const player = state.players.find((p) => p.position === pos)!;
     const action = this.flopActions(pf, node)[idx];
     let street = pf.streetBets[pos] ?? 0;
+    // Bets are capped at the effective stack: a bigger stack's chips beyond it can't be called.
+    const effective = this.effectiveStack(state);
     if (action.id === 'fold') player.folded = true;
-    else if (action.id !== 'check') street = Math.min(action.toBb!, state.config.stackDepthBb - pf.base);
+    else if (action.id !== 'check') street = Math.min(action.toBb!, effective - pf.base);
     pf.streetBets[pos] = street;
     player.committed = round2(pf.base + street);
-    if (player.committed >= state.config.stackDepthBb) player.allIn = true;
+    if (player.committed >= effective) player.allIn = true;
     pf.history.push(idx);
     state.actionLog.push({ position: pos, action: action.id, toBb: player.committed, isHero: player.isHero, street: pf.street, streetBb: street });
   }
 
   private finish(state: HandState): void {
-    const pot = round2(state.players.reduce((s, p) => s + p.committed, 0));
     const live = state.players.filter((p) => !p.folded);
+    const returned: Partial<Record<Position, number>> = {};
+    if (live.length > 1) {
+      // A shorter stack called all in for less: the bigger stack's chips nobody matched go back.
+      const [top, next] = [...state.players].sort((a, b) => b.committed - a.committed);
+      if (top.committed > next.committed) {
+        returned[top.position] = round2(top.committed - next.committed);
+        top.committed = next.committed;
+      }
+    }
+    const pot = round2(state.players.reduce((s, p) => s + p.committed, 0));
     const hero = state.players.find((p) => p.isHero)!;
+    // A short stack all in can win only up to its own stake from each player. What anyone put in
+    // beyond it (folded players' dead money included) is a side pot for the bigger stack left in.
+    const shortStake = Math.min(...live.map((p) => p.committed));
+    const sideOwner = live.length > 1 ? live.find((p) => p.committed > shortStake) : undefined;
+    const side = sideOwner ? round2(state.players.reduce((s, p) => s + Math.max(0, p.committed - shortStake), 0)) : 0;
+    const main = round2(pot - side);
     let board: string[] = [...state.board];
     let showdown: HandResult['showdown'] = null;
     let winners: Position[];
@@ -1142,19 +1209,24 @@ export class HandEngine {
       const winningHand = outcome.entries.find((e) => e.isWinner)!.handName.toLowerCase();
       summary =
         winners.length === 1
-          ? `${winners[0]} wins ${pot}bb at showdown with ${winningHand}.`
-          : `${winners.join(' and ')} split ${pot}bb with ${winningHand}.`;
+          ? `${winners[0]} wins ${main}bb at showdown with ${winningHand}.`
+          : `${winners.join(' and ')} split ${main}bb with ${winningHand}.`;
+      if (sideOwner) summary += ` ${sideOwner.position} also takes the ${side}bb side pot the all-in stack couldn't cover.`;
     }
 
-    const heroWon = winners.includes(hero.position) ? pot / winners.length : 0;
+    const won: Partial<Record<Position, number>> = {};
+    for (const w of winners) won[w] = round2(main / winners.length);
+    if (sideOwner) won[sideOwner.position] = round2((won[sideOwner.position] ?? 0) + side);
     state.result = {
       board,
       showdown,
       winners,
       potBb: pot,
-      heroNetBb: round2(heroWon - hero.committed),
+      heroNetBb: round2((won[hero.position] ?? 0) - hero.committed),
       summary,
       foldReveal: hero.folded ? this.foldReveal(state, board) : null,
+      won,
+      ...(Object.keys(returned).length && { returned }),
     };
     state.heroToAct = false;
   }

@@ -7,6 +7,9 @@ solver
 preflop/target
 preflop/cache
 preflop/realization
+# Calibration rounds of the stack-depth charts: only the final 20.json and 60.json ship.
+preflop/charts/stacks-v1/20?.json
+preflop/charts/stacks-v1/60?.json
 docs
 deploy
 *.log

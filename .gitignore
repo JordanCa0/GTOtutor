@@ -27,3 +27,7 @@ preflop/compare-preflop-v9*.txt
 # Playwright runs (apps/web/e2e)
 apps/web/test-results/
 apps/web/playwright-report/
+# Live solver built separately while a flop queue holds solver/target (CARGO_TARGET_DIR=target-live)
+solver/target-live
+# Output of preflop/solve-profiles.sh runs
+preflop/logs-*.txt

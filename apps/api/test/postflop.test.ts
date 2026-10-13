@@ -45,6 +45,16 @@ describe('flop shapes and nearest flop', () => {
     expect(hands[mapHand(parseCards('QdJd'), mapper, hands, handIndex(hands))]).toBe('QsJs');
   });
 
+  it('still finds a hand when the range has none of its kind', () => {
+    // Some solved ranges are all suited (a 20bb BTN flatting a CO open), or have no offsuit hands (HJ
+    // calling a 100bb 4-bet): a player who calls there anyway with AKo still gets the closest hand.
+    const mapper = new CardMapper(parseCards('Kc7h2d'), parseCards('Kh7d2c'));
+    const hands = ['AsKs', 'QsJs', '9s8s'];
+    expect(hands[mapHand(parseCards('AdKc'), mapper, hands, handIndex(hands))]).toBe('AsKs');
+    // Hands of the right kind still come first, even when a hand of another kind is closer in rank.
+    expect(hands[mapHand(parseCards('AhKh'), mapper, ['AsKd', 'QsJs'], handIndex(['AsKd', 'QsJs']))]).toBe('QsJs');
+  });
+
   it('reads solver action labels', () => {
     expect(parseSolverAction('bet 1.8')).toEqual({ id: 'bet', label: 'Bet 1.8', toBb: 1.8 });
     expect(parseSolverAction('check')).toEqual({ id: 'check', label: 'Check', toBb: null });

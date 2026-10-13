@@ -14,4 +14,6 @@ export interface ChartSet {
   version: string;
   dataSource: DataSource;
   nodes: Map<string, ChartNode>;
+  /** Profiles left on disk until needed (ChartService loads them): profile -> chart file. */
+  lazy?: Record<string, string>;
 }

@@ -1,6 +1,7 @@
 // How often each heads-up flop spot comes up when every seat plays the charts. Used to decide which
 // spots get every flop solved (the most-played ones) and which get a sample.
-// Run from the repo root: npx tsx apps/api/scripts/spotFrequency.ts [charts.json] [hands]
+// Run from the repo root: npx tsx apps/api/scripts/spotFrequency.ts [charts.json] [hands] [depth]
+// (depth 20 or 60 needs a manifest with that profile, e.g. preflop/charts/stacks-v1.json; default 100)
 import type { ActionType, HandView } from '@gtotutor/shared-types';
 import { ChartService } from '../src/charts/chartService.js';
 import { chartsFromEnv } from '../src/charts/solvedCharts.js';
@@ -9,7 +10,8 @@ import { runoutResolver } from '../src/engine/showdownResolver.js';
 import { handClass } from '../src/poker/cards.js';
 import { seededRng } from '../src/poker/rng.js';
 
-const [chartsPath, handsArg] = process.argv.slice(2);
+const [chartsPath, handsArg, depthArg] = process.argv.slice(2);
+const depth = Number(depthArg) || 100;
 const charts = new ChartService(chartsFromEnv(chartsPath ?? ''));
 const engine = new HandEngine(charts, seededRng(1), runoutResolver);
 const rng = seededRng(2);
@@ -28,16 +30,16 @@ function spotOf(view: HandView): string | null {
   if (live.length !== 2) return null;
   const raises = pre.filter((a) => a.action === 'raise' || a.action === 'allin');
   const limped = pre.some((a) => a.action === 'call' && a.toBb === 1);
-  if (limped) return `sb_vs_bb_${['limp', 'iso', 'l3b'][raises.length] ?? 'other'}_100`;
+  if (limped) return `sb_vs_bb_${['limp', 'iso', 'l3b'][raises.length] ?? 'other'}_${depth}`;
   const opener = raises[0]?.position;
   if (!opener) return null;
   const other = live.find((p) => p !== opener)!;
   const kind = raises.length === 1 ? 'srp' : raises.length === 2 ? '3bp' : raises.length === 3 ? '4bp' : 'allin';
-  return `${opener.toLowerCase()}_vs_${other.toLowerCase()}_${kind}_100`;
+  return `${opener.toLowerCase()}_vs_${other.toLowerCase()}_${kind}_${depth}`;
 }
 
 for (let i = 0; i < hands; i++) {
-  const state = engine.start({ tableSize: 'SIX_MAX', stackDepthBb: 100, heroPosition: POSITIONS[rng.int(6)] as never });
+  const state = engine.start({ tableSize: 'SIX_MAX', stackDepthBb: depth as never, heroPosition: POSITIONS[rng.int(6)] as never });
   let view = engine.view(state);
   // Hero plays the charts too: sample its action from the chart strategy for its hand.
   while (view.status === 'awaiting_hero') {
@@ -58,7 +60,9 @@ for (let i = 0; i < hands; i++) {
     engine.decide(state, action);
     view = engine.view(state);
   }
-  if ((view.result?.board.length ?? 0) >= 3 || view.actionLog.some((a) => a.street === 'flop')) {
+  // Hands all in before the flop just run out: no flop to solve.
+  const allInPreflop = view.actionLog.some((a) => a.street === 'preflop' && a.action === 'allin');
+  if (!allInPreflop && ((view.result?.board.length ?? 0) >= 3 || view.actionLog.some((a) => a.street === 'flop'))) {
     flops++;
     const s = spotOf(view);
     if (s) counts.set(s, (counts.get(s) ?? 0) + 1);

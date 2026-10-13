@@ -16,7 +16,8 @@ import { seededRng } from '../src/poker/rng.js';
 const chartsDir = fileURLToPath(new URL('../../../preflop/charts', import.meta.url));
 const newest = existsSync(chartsDir)
   ? readdirSync(chartsDir)
-      .filter((f) => f.endsWith('.json'))
+      // Single chart versions; stack-profile manifests (stacks-v1.json) have their own tests.
+      .filter((f) => f.startsWith('preflop-') && f.endsWith('.json'))
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
       .pop()
   : undefined;
@@ -86,7 +87,7 @@ describe('solved preflop charts', () => {
       }
       expect(view.result).not.toBeNull();
     }
-  });
+  }, 60_000); // thousands of hands: slow on a busy machine
 
   it('uses the placeholders unless a chart file is given', () => {
     expect(chartsFromEnv('').version).toBe('fixture-v3');

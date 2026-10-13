@@ -28,10 +28,35 @@ export interface DataSource {
 
 export interface HandConfig {
   tableSize: TableSize;
+  /** The table's stack depth; with mixed stacks, the base everyone has unless `stacks` says otherwise. */
   stackDepthBb: StackDepth;
+  /**
+   * Deal a solved mixed-stack table on `stackDepthBb` (docs/stack-depths-plan.md): one shorter seat,
+   * or several (one 20bb and two 60bb at 100bb). Only offered where the loaded charts have them.
+   */
+  mixedStacks?: MixedStacks;
 }
 
-export interface StartHandRequest extends HandConfig {
+/** Mixed-stack tables: one shorter seat, or several. */
+export type MixedStacks = 'one' | 'several';
+
+/** A hand's stacks as dealt: the chart profile ("100", "100:BB20") and each seat's starting stack in bb. */
+export interface HandStacks {
+  profile: string;
+  stacks: Record<Position, number>;
+}
+
+/** GET /api/options: what the loaded charts can deal. */
+export interface TableOptions {
+  /** Equal-stack depths with solved (or placeholder) charts. */
+  stackDepths: StackDepth[];
+  /** Depths that also have solved mixed-stack tables, with one shorter seat or several. */
+  mixedStacks: Record<MixedStacks, StackDepth[]>;
+}
+
+export interface StartHandRequest extends Omit<HandConfig, 'stackDepthBb'> {
+  /** The table depth, or 'random' for a new one each hand among those the charts have (for the chosen mixed stacks, if any). */
+  stackDepthBb: StackDepth | 'random';
   heroPosition: Position | 'random';
   /**
    * Play every hand against this seat: everyone else folds, so the pot is hero against it. When it
@@ -153,11 +178,15 @@ export interface HandResult {
    * pushed so hero can judge the fold. handName is null before the flop. Missing on older hands.
    */
   foldReveal?: { position: Position; cards: string[]; handName: string | null } | null;
+  /** What each winner takes from the pot (main and side pots). Missing on older hands: split `potBb` evenly. */
+  won?: Partial<Record<Position, number>>;
+  /** Chips handed back uncalled (a shove over a shorter all-in), beyond what the action log shows put in. */
+  returned?: Partial<Record<Position, number>>;
 }
 
 export interface HandView {
   id: string;
-  config: HandConfig;
+  config: HandConfig & Partial<HandStacks>;
   heroPosition: Position;
   heroCards: string[];
   seats: SeatView[];

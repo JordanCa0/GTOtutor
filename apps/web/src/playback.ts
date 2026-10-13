@@ -124,9 +124,23 @@ export function seatsAt(hand: HandView, steps: number): Record<Position, SeatDis
       seat.committed = a.toBb;
       seat.streetBet = a.streetBb ?? a.toBb;
     }
-    if (seat.committed >= hand.config.stackDepthBb) seat.allIn = true;
+    if (seat.committed >= startStack(hand, a.position)) seat.allIn = true;
   }
   return out;
+}
+
+/** A seat's starting stack: its own with mixed stacks, else the table's depth (older hands). */
+export const startStack = (hand: HandView, pos: Position) => hand.config.stacks?.[pos] ?? hand.config.stackDepthBb;
+
+/**
+ * At a mixed-stack table, the depth of the equal-stacks solve a heads-up pot's flop comes from (its
+ * smaller stack's, as the API picks it), else null. Those flop numbers are approximate.
+ */
+export function mixedPotDepth(hand: HandView): number | null {
+  if (new Set(Object.values(hand.config.stacks ?? {})).size <= 1) return null;
+  const folded = new Set(hand.actionLog.filter((a) => a.street === 'preflop' && a.action === 'fold').map((a) => a.position));
+  const effective = Math.min(...hand.seats.filter((s) => !folded.has(s.position)).map((s) => startStack(hand, s.position)));
+  return effective <= 30 ? 20 : effective <= 80 ? 60 : 100;
 }
 
 export const potAt = (seats: Record<Position, SeatDisplay>) =>

@@ -2,12 +2,15 @@ import {
   SIX_MAX_POSITIONS,
   STACK_DEPTHS,
   TABLE_SIZES,
+  type MixedStacks,
   type Position,
   type StackDepth,
   type StartHandRequest,
   type TableSize,
 } from '@gtotutor/shared-types';
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { api } from '../api/client';
 import { Backdrop } from './Presence';
 import JellyRadio, { type JellyItem } from './reactbits/JellyRadio';
 
@@ -53,13 +56,12 @@ const soon = (label: string) => (
 );
 
 const TABLE_ITEMS: JellyItem[] = TABLE_SIZES.map((t) => ({ value: t.id, label: t.available ? t.label : soon(t.label), disabled: !t.available }));
-const STACK_ITEMS: JellyItem[] = STACK_DEPTHS.map((s) => ({ value: String(s.id), label: s.available ? `${s.id}bb` : soon(`${s.id}bb`), disabled: !s.available }));
 const POSITION_ITEMS: JellyItem[] = [{ value: 'random', label: 'Random' }, ...SIX_MAX_POSITIONS.map((p) => ({ value: p, label: p }))];
 const OPPONENT_ITEMS: JellyItem[] = [{ value: 'any', label: 'Anyone' }, ...SIX_MAX_POSITIONS.map((p) => ({ value: p, label: p }))];
 
 export function SetupScreen({ initial, starting, error, onStart, onClose }: Props) {
   const [tableSize, setTableSize] = useState<TableSize>(initial?.tableSize ?? 'SIX_MAX');
-  const [stack, setStack] = useState<StackDepth>(initial?.stackDepthBb ?? 100);
+  const [stack, setStack] = useState<StackDepth | 'random'>(initial?.stackDepthBb ?? 100);
   const [position, setPosition] = useState<Position | 'random'>(initial?.heroPosition ?? 'random');
   const [rotate, setRotate] = useState(initial?.rotate ?? false);
   const [opponent, setOpponent] = useState<Position | 'any'>(initial?.opponentPosition ?? 'any');
@@ -69,6 +71,27 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
   const activeOpponent = fixedSeat && opponent !== position ? opponent : 'any';
   const [skipEasyFolds, setSkipEasyFolds] = useState(initial?.skipEasyFolds ?? true);
   const [simplePots, setSimplePots] = useState(initial?.simplePots ?? false);
+  const [mix, setMix] = useState<MixedStacks | 'equal'>(initial?.mixedStacks ?? 'equal');
+
+  // The depths the API's charts can deal (until it answers, the ones every build has).
+  const options = useQuery({ queryKey: ['table-options'], queryFn: api.options, staleTime: Infinity });
+  const depths = options.data?.stackDepths ?? STACK_DEPTHS.filter((s) => s.available).map((s) => s.id);
+  const stackItems: JellyItem[] = [
+    { value: 'random', label: 'Random', disabled: depths.length < 2 },
+    ...STACK_DEPTHS.map((s) => {
+      const ok = depths.includes(s.id);
+      return { value: String(s.id), label: ok ? `${s.id}bb` : soon(`${s.id}bb`), disabled: !ok };
+    }),
+  ];
+  // Random deals a new depth each hand, among those with charts for the chosen stacks.
+  const mixedDepths = (kind: MixedStacks) => options.data?.mixedStacks[kind] ?? [];
+  const mixedAvailable = (kind: MixedStacks) => (stack === 'random' ? mixedDepths(kind).length > 0 : mixedDepths(kind).includes(stack));
+  const depthText = (kind: MixedStacks | 'equal') => {
+    const ids = kind === 'equal' ? depths : mixedDepths(kind);
+    return stack !== 'random' ? `${stack}bb` : ids.length > 1 ? `${ids.slice(0, -1).join(', ')} or ${ids.at(-1)}bb` : `${ids[0]}bb`;
+  };
+  // The stacks choice holds while it doesn't apply at the chosen depth, as the opponent does.
+  const activeMix = mix !== 'equal' && mixedAvailable(mix) ? mix : 'equal';
 
   useEffect(() => {
     if (!onClose) return;
@@ -106,7 +129,31 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
 
       <fieldset>
         <legend>Stack depth</legend>
-        <JellyRadio {...JELLY_THEME} ariaLabel="Stack depth" items={STACK_ITEMS} value={String(stack)} onChange={(v) => setStack(Number(v) as StackDepth)} />
+        <JellyRadio {...JELLY_THEME} ariaLabel="Stack depth" items={stackItems} value={String(stack)} onChange={(v) => setStack(v === 'random' ? v : (Number(v) as StackDepth))} />
+        {(mixedAvailable('one') || mixedAvailable('several')) && (
+          <div className="setup-subtoggle setup-mix">
+            <JellyRadio
+              {...JELLY_THEME}
+              ariaLabel="Stacks"
+              items={[
+                { value: 'equal', label: 'Equal stacks' },
+                { value: 'one', label: 'One short', disabled: !mixedAvailable('one') },
+                { value: 'several', label: 'Several short', disabled: !mixedAvailable('several') },
+              ]}
+              value={activeMix}
+              onChange={(v) => setMix(v as MixedStacks | 'equal')}
+            />
+            <p className="muted small">
+              {activeMix === 'equal'
+                ? stack === 'random'
+                  ? `Each hand deals a new depth, ${depthText('equal')}, and everyone starts with it.`
+                  : `Everyone starts with ${stack}bb.`
+                : activeMix === 'one'
+                  ? `One seat starts shorter (${stack === 60 ? '20bb' : '20bb or 60bb'}) than the rest${stack === 'random' ? ` (${depthText('one')}, new each hand)` : ''}, so you see how a short stack changes the ranges around it.`
+                  : `One seat starts with 20bb and two with 60bb; the rest have ${depthText('several')}. Each hand seats them differently.`}
+            </p>
+          </div>
+        )}
       </fieldset>
 
       <fieldset>
@@ -118,7 +165,7 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
           value={position}
           onChange={(v) => setPosition(v as Position | 'random')}
         />
-        <label className="toggle setup-rotate">
+        <label className="toggle setup-subtoggle">
           <input type="checkbox" checked={rotate} onChange={(e) => setRotate(e.target.checked)} />
           <span>
             Rotate positions
@@ -176,7 +223,7 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
 
       <p className="muted small">Cash game only for now. Tournament/ICM, other table sizes, and other stack depths come with the solver.</p>
 
-      <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, heroPosition: position, rotate, ...(activeOpponent !== 'any' && { opponentPosition: activeOpponent }), skipEasyFolds, simplePots })}>
+      <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, ...(activeMix !== 'equal' && { mixedStacks: activeMix }), heroPosition: position, rotate, ...(activeOpponent !== 'any' && { opponentPosition: activeOpponent }), skipEasyFolds, simplePots })}>
         {starting ? 'Dealing…' : onClose ? 'Deal with these settings' : 'Deal a hand'}
       </button>
       {error && <p className="error">{error}</p>}

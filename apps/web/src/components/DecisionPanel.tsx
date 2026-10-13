@@ -6,6 +6,7 @@ import { RangeGrid } from './RangeGrid';
 import { RangeSkeleton, Skeleton, SkeletonGroup, useSkeleton } from './Skeleton';
 import { StreakBadge } from './Streak';
 import { VerdictBanner } from './VerdictBanner';
+import { mixedPotDepth } from '../playback';
 
 export type SheetTab = 'verdict' | 'chart' | 'coach' | 'hand';
 
@@ -121,7 +122,7 @@ export function DecisionPanel({ hand, playbackDone, chats, onChat, streak = null
         <>
           <div className="panel-part" hidden={hide('verdict')}>
             {selected === hand.decisions.length - 1 && <StreakBadge streak={streak} />}
-            <VerdictBanner feedback={decision} handId={hand.id} />
+            <VerdictBanner feedback={decision} handId={hand.id} approxStacksBb={decision.street === 'preflop' ? null : mixedPotDepth(hand)} />
           </div>
           <div className="panel-part" hidden={hide('chart')}>
             <RangeGrid

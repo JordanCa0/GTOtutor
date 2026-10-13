@@ -61,16 +61,26 @@ export class FlopStore {
   private readonly cache = new Map<string, LoadedFlop>();
   private readonly spots = new Map<string, SpotInfo | null>();
 
+  private readonly roots: string[];
+
   constructor(
-    private readonly root: string,
+    /** The solver output folder, or several (100bb flops in one, 20 and 60bb in another): spot names never repeat. */
+    root: string | string[],
     private readonly maxCached = 64,
-  ) {}
+  ) {
+    this.roots = Array.isArray(root) ? root : [root];
+  }
+
+  /** The folder holding a spot: the first root that has it (the first root when none does). */
+  private spotDir(spot: string): string {
+    return this.roots.map((r) => join(r, spot)).find((d) => existsSync(d)) ?? join(this.roots[0], spot);
+  }
 
   /** Solved flop names for a spot (empty when the spot has no solver output). */
   solvedFlops(spot: string): string[] {
     let list = this.lists.get(spot);
     if (!list) {
-      const dir = join(this.root, spot);
+      const dir = this.spotDir(spot);
       list = existsSync(dir) ? readdirSync(dir).filter((f) => /^([2-9TJQKA][cdhs]){3}\.json$/.test(f)).map((f) => f.slice(0, 6)) : [];
       this.lists.set(spot, list);
     }
@@ -83,7 +93,7 @@ export class FlopStore {
     if (data) {
       this.cache.delete(key);
     } else {
-      const file = JSON.parse(readFileSync(join(this.root, spot, `${flop}.json`), 'utf8')) as FlopFile;
+      const file = JSON.parse(readFileSync(join(this.spotDir(spot), `${flop}.json`), 'utf8')) as FlopFile;
       data = {
         ...file,
         byHistory: new Map(file.nodes.map((n) => [historyKey(n.history), n])),
@@ -110,7 +120,7 @@ export class FlopStore {
   /** The ranges, pot and stacks the spot was solved with (`<spot>/_spot.json`, written by the solver); null if missing. */
   spotInfo(spot: string): SpotInfo | null {
     if (!this.spots.has(spot)) {
-      const path = join(this.root, spot, '_spot.json');
+      const path = join(this.spotDir(spot), '_spot.json');
       this.spots.set(spot, existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as SpotInfo) : null);
     }
     return this.spots.get(spot)!;

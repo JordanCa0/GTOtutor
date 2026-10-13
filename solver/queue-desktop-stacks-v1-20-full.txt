@@ -1,0 +1,21 @@
+# Stack depths, 20bb full flop coverage on the frozen chart preflop/charts/stacks-v1/20.json, desktop run.
+# The six spots that make up 98.8% of 20bb flops (spotFrequency.ts), most played first, in rising rounds
+# (600, 1200, then every flop) so a stop at the deadline leaves every spot improved. Finished flops are skipped.
+--spot spots/stacks-v1-20/utg_vs_bb_srp_20.json --out output/stacks-v1 --limit 600
+--spot spots/stacks-v1-20/hj_vs_bb_srp_20.json --out output/stacks-v1 --limit 600
+--spot spots/stacks-v1-20/co_vs_bb_srp_20.json --out output/stacks-v1 --limit 600
+--spot spots/stacks-v1-20/btn_vs_bb_srp_20.json --out output/stacks-v1 --limit 600
+--spot spots/stacks-v1-20/sb_vs_bb_limp_20.json --out output/stacks-v1 --limit 600
+--spot spots/stacks-v1-20/sb_vs_bb_srp_20.json --out output/stacks-v1 --limit 600
+--spot spots/stacks-v1-20/utg_vs_bb_srp_20.json --out output/stacks-v1 --limit 1200
+--spot spots/stacks-v1-20/hj_vs_bb_srp_20.json --out output/stacks-v1 --limit 1200
+--spot spots/stacks-v1-20/co_vs_bb_srp_20.json --out output/stacks-v1 --limit 1200
+--spot spots/stacks-v1-20/btn_vs_bb_srp_20.json --out output/stacks-v1 --limit 1200
+--spot spots/stacks-v1-20/sb_vs_bb_limp_20.json --out output/stacks-v1 --limit 1200
+--spot spots/stacks-v1-20/sb_vs_bb_srp_20.json --out output/stacks-v1 --limit 1200
+--spot spots/stacks-v1-20/utg_vs_bb_srp_20.json --out output/stacks-v1
+--spot spots/stacks-v1-20/hj_vs_bb_srp_20.json --out output/stacks-v1
+--spot spots/stacks-v1-20/co_vs_bb_srp_20.json --out output/stacks-v1
+--spot spots/stacks-v1-20/btn_vs_bb_srp_20.json --out output/stacks-v1
+--spot spots/stacks-v1-20/sb_vs_bb_limp_20.json --out output/stacks-v1
+--spot spots/stacks-v1-20/sb_vs_bb_srp_20.json --out output/stacks-v1

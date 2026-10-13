@@ -38,6 +38,12 @@ const ACTION_SLOTS: { key: 'fold' | 'call' | 'raise'; ids: ActionType[]; placeho
   { key: 'raise', ids: ['raise', 'bet', 'allin'], placeholder: 'Raise' },
 ];
 
+/** "100bb", or with mixed stacks "100bb (BB 20bb)". */
+function stacksText(hand: HandView): string {
+  const odd = Object.entries(hand.config.stacks ?? {}).filter(([, s]) => s !== hand.config.stackDepthBb);
+  return `${hand.config.stackDepthBb}bb${odd.length ? ` (${odd.map(([pos, s]) => `${pos} ${s}bb`).join(', ')})` : ''}`;
+}
+
 export function App() {
   const [settings, setSettings] = useState<DealSettings | null>(null);
   const [hand, setHand] = useState<HandView | null>(null);
@@ -138,7 +144,7 @@ export function App() {
           GTO<span>tutor</span>
         </strong>
         <span className="muted">
-          {hand.config.stackDepthBb}bb 6-max cash, you're in the <b>{hand.heroPosition}</b>
+          {stacksText(hand)} 6-max cash, you're in the <b>{hand.heroPosition}</b>
         </span>
         <span className="spacer" />
         {/* The table on one side, you and your progress on the other. Phones get HeaderMenu instead. */}

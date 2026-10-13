@@ -18,6 +18,7 @@ import {
   type StarredResponse,
   type StarRequest,
   type StartHandRequest,
+  type TableOptions,
   type SubmitDecisionRequest,
   type SubmitDecisionResponse,
 } from '@gtotutor/shared-types';
@@ -55,13 +56,14 @@ const startHandSchema = {
   additionalProperties: false,
   properties: {
     tableSize: { enum: ['HU', 'SIX_MAX', 'NINE_MAX'] },
-    stackDepthBb: { enum: [20, 40, 60, 100, 150] },
+    stackDepthBb: { enum: ['random', 20, 40, 60, 100, 150] },
     heroPosition: { enum: ['random', 'UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'] },
     opponentPosition: { enum: ['any', 'UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'] },
     sessionId: sessionIdSchema,
     skipEasyFolds: { type: 'boolean' },
     simplePots: { type: 'boolean' },
     flopPractice: { type: 'boolean' },
+    mixedStacks: { enum: ['one', 'several'] },
   },
 } as const;
 
@@ -115,11 +117,12 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
     return reply.status(500).send({ error: 'Internal error' });
   });
 
-  const baseSpot = (ctx: Pick<HandContext, 'heroPosition' | 'stackDepthBb'>, spot: { nodeKey: string; nodeLabel: string; board: string[]; approxFlop: string | null }) => ({
+  const baseSpot = (ctx: Pick<HandContext, 'heroPosition' | 'stackDepthBb' | 'stacks'>, spot: { nodeKey: string; nodeLabel: string; board: string[]; approxFlop: string | null }) => ({
     nodeKey: spot.nodeKey,
     nodeLabel: spot.nodeLabel,
     heroPosition: ctx.heroPosition,
     stackDepthBb: ctx.stackDepthBb,
+    stacks: ctx.stacks,
     rangeSummary: engine.rangeSummary(spot.nodeKey),
     board: spot.board,
     approxFlop: spot.approxFlop,
@@ -148,6 +151,9 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
 
   app.get('/api/health', async () => ({ ok: true }));
 
+  // The setup offers the stack depths the loaded charts cover.
+  app.get('/api/options', async (): Promise<TableOptions> => charts.tableOptions());
+
   app.post<{ Body: StartHandRequest }>('/api/hands', { schema: { body: startHandSchema } }, async (req): Promise<HandView> => {
     const state = await hands.start(await players.player(req), req.body);
     return engine.view(state);
@@ -170,7 +176,7 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
     const pending = engine.pendingDecision(state);
     if (!pending) throw new HttpError(409, 'There is no pending decision to hint at.');
     const spot: SpotContext = {
-      ...baseSpot({ heroPosition: state.heroPosition, stackDepthBb: state.config.stackDepthBb }, { ...pending, board: state.board }),
+      ...baseSpot({ heroPosition: state.heroPosition, stackDepthBb: state.config.stackDepthBb, stacks: state.config.stacks }, { ...pending, board: state.board }),
       heroCards: pending.heroCards,
       handClass: pending.handClass,
       options: pending.options,

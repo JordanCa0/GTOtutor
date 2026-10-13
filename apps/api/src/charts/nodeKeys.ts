@@ -10,7 +10,9 @@ export type NodeType =
   | 'VS_5BET'
   | 'COLD_VS_3BET'
   | 'COLD_VS_4BET'
-  | 'COLD_VS_5BET';
+  | 'COLD_VS_5BET'
+  /** Facing an all-in below the 5-bet (only with a 20bb stack at the table): fold or call. */
+  | 'VS_ALLIN';
 
 export const FACING_TYPES: Record<number, { direct: NodeType; cold: NodeType }> = {
   2: { direct: 'VS_3BET', cold: 'COLD_VS_3BET' },
@@ -20,7 +22,8 @@ export const FACING_TYPES: Record<number, { direct: NodeType; cold: NodeType }> 
 
 export function makeNodeKey(
   tableSize: TableSize,
-  stackBb: number,
+  /** The stack profile: a depth (100) or a mixed profile ("100:BB20"), as in the chart files. */
+  stackBb: number | string,
   type: NodeType,
   pos: Position,
   vs?: Position,

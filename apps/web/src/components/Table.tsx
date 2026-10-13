@@ -1,6 +1,6 @@
 import type { ActionLogEntry, HandView, Position } from '@gtotutor/shared-types';
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
-import { actingAt, potAt, seatsAt, type PlaybackState } from '../playback';
+import { actingAt, potAt, seatsAt, startStack, type PlaybackState } from '../playback';
 import { ChipStack } from './ChipStack';
 import { PlayingCard } from './PlayingCard';
 import { POSITION_INFO } from '../positions';
@@ -142,7 +142,6 @@ export function Table({ hand, playback, onSkip, celebration }: Props) {
   const showdown = new Map((playback.showdown ? (result?.showdown ?? []) : []).map((s) => [s.position, s]));
   // Hero folded to a bet or raise: that player's cards flip once the pot is pushed.
   const reveal = playback.awarded ? result?.foldReveal : null;
-  const stack = hand.config.stackDepthBb;
 
   const chipTarget = (pos: Position): Point => {
     if (winners.length === 1) return betSpot(slotOf(winners[0]));
@@ -186,7 +185,9 @@ export function Table({ hand, playback, onSkip, celebration }: Props) {
         const d = display[seat.position];
         const sd = showdown.get(seat.position);
         const isWinner = winners.includes(seat.position);
-        const won = isWinner && result ? result.potBb / result.winners.length : 0;
+        // Once the pot is pushed: what this seat takes (a side pot counts too), and chips handed back uncalled.
+        const won = playback.awarded && result ? (result.won ? (result.won[seat.position] ?? 0) : isWinner ? result.potBb / result.winners.length : 0) : 0;
+        const returned = playback.awarded ? (result?.returned?.[seat.position] ?? 0) : 0;
         const shown = sd ?? (reveal?.position === seat.position ? reveal : null);
         const cards = seat.isHero ? seat.cards : shown ? shown.cards : null;
         const dealOrder = (i - hand.seats.findIndex((s) => s.position === 'SB') + n) % n;
@@ -220,7 +221,7 @@ export function Table({ hand, playback, onSkip, celebration }: Props) {
                 {seat.position}
                 {seat.position === 'BTN' && <span className="dealer">D</span>}
               </span>
-              <span className="stack">{Math.round((stack - d.committed + won) * 100) / 100}bb</span>
+              <span className="stack">{Math.round((startStack(hand, seat.position) - d.committed + won + returned) * 100) / 100}bb</span>
               {d.lastAction && !sd && !playback.awarded && (
                 <span key={d.lastAction.toBb + d.lastAction.action} className={`action-bubble act-${d.lastAction.action}`}>
                   {ACTION_TEXT[d.lastAction.action](d.lastAction)}
@@ -230,7 +231,7 @@ export function Table({ hand, playback, onSkip, celebration }: Props) {
             </div>
             {sd && <div className={`hand-name ${sd.isWinner ? 'win' : ''}`}>{sd.handName}</div>}
             {!sd && shown?.handName && <div className="hand-name">{shown.handName}</div>}
-            {isWinner && <div className="win-tag">+{Math.round(won * 100) / 100}</div>}
+            {won > 0 && <div className="win-tag">+{Math.round(won * 100) / 100}</div>}
           </div>
         );
       })}

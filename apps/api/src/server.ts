@@ -22,9 +22,11 @@ try {
 }
 
 // Preflop charts: solver output when PREFLOP_CHARTS names a file (preflop/charts/*.json), else the placeholders.
-const charts = new ChartService(chartsFromEnv());
+const charts = new ChartService(chartsFromEnv(process.env.PREFLOP_CHARTS, { lazyMixed: true }));
 // Solved flops, one folder per spot (see solver/README.md). Spots without a folder run out after preflop.
-const flops = new FlopStore(process.env.SOLVER_OUTPUT_DIR || fileURLToPath(new URL('../../../solver/output', import.meta.url)));
+// SOLVER_OUTPUT_DIR may list several folders, comma-separated (e.g. the 100bb flops and the 20/60bb ones).
+const flopDirs = (process.env.SOLVER_OUTPUT_DIR ?? '').split(',').map((d) => d.trim()).filter(Boolean);
+const flops = new FlopStore(flopDirs.length ? flopDirs : fileURLToPath(new URL('../../../solver/output', import.meta.url)));
 // Live turn and river solving (docs/postflop-plan.md): off unless a solver service is configured.
 const liveSolver = await liveSolverFromEnv();
 const engine = new HandEngine(charts, cryptoRng, runoutResolver, flops, liveSolver !== null);

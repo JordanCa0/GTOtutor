@@ -98,6 +98,31 @@ To turn on `preflop-v8`, or move to a later version:
 
 Placeholders stay the default until the solved charts are reviewed (see CLAUDE.md).
 
+### Stack depths (20bb, 60bb, mixed stacks)
+The `stacks-v1` manifest (`preflop/charts/stacks-v1.json`) lists one chart per stack profile:
+- 100bb is `preflop-v9.json`, unchanged;
+- 20bb and 60bb;
+- 18 tables with one short seat, and 60 with several (one 20bb and two 60bb).
+
+The image already ships every file it lists. The setup offers 20bb, 60bb and mixed stacks only while `PREFLOP_CHARTS` points at the manifest; with `preflop-v9.json` the app stays 100bb only. See `docs/stack-depths-plan.md` and the chart review in `docs/stack-depths-review.md`.
+
+To turn it on:
+1. Upload the 20 and 60bb flops. Spot names end in `_20` or `_60`, so they sit next to the 100bb ones in the same prefix (no `--delete`):
+   ```powershell
+   aws s3 sync solver/output/stacks-v1 s3://gtotutor-solver-<account>/solver-output
+   ```
+   Wait until the flop queue has stopped (`solver/queue-desktop-*.log`) so the upload has its last flops; later flops can be synced the same way at any time.
+2. Push an image built from this version (it has the manifest and the charts).
+3. Set `/gtotutor/PREFLOP_CHARTS` to `/app/preflop/charts/stacks-v1.json`.
+4. Run `deploy.sh`. It also downloads the new flops to the server's disk.
+5. Check that `https://gtotutor.app/api/options` lists `[20, 60, 100]` with mixed stacks, then play a 20bb hand and a "Several short" hand.
+
+**Disk:** the 20 and 60bb flops are about 2 GB (2026-10-12, before the desktop queue's extra 20bb flops), next to about 14 GB of 100bb flops on the 40 GB volume.
+
+**Memory:** equal-stack charts load at startup. A mixed profile is read from disk the first time a hand needs it, and only the 16 most recent are kept. In a 1.2 GB container the API levelled off at about 620 MB over 1,000 hands across every setting.
+
+**Turning it off:** set `PREFLOP_CHARTS` back to `/app/preflop/charts/preflop-v9.json` and run `deploy.sh`. The extra flop folders can stay.
+
 ### Settings and secrets
 1. Change the value in **Systems Manager → Parameter Store**. Enter secrets in the console, not the CLI, so they don't land in PowerShell's history.
 2. Run `deploy.sh`.
@@ -201,7 +226,7 @@ Create one parameter per variable under `/gtotutor/`, using the Standard tier (f
 | `/gtotutor/SUPABASE_SERVICE_ROLE_KEY` | SecureString | Service role key |
 | `/gtotutor/COACH_GLOBAL_LIMIT_PER_HOUR` | String | `200`: new coach answers per hour across all players |
 | `/gtotutor/CLAUDE_MODEL` | String | Optional |
-| `/gtotutor/PREFLOP_CHARTS` | String | `/app/preflop/charts/preflop-v9.json` (on since 2026-10-10; leave it out for the placeholder charts) |
+| `/gtotutor/PREFLOP_CHARTS` | String | `/app/preflop/charts/preflop-v9.json` (on since 2026-10-10; leave it out for the placeholder charts). `/app/preflop/charts/stacks-v1.json` adds 20bb, 60bb and mixed stacks (see "Stack depths") |
 | `/gtotutor/TURN_SOLVER_LAMBDA` | String | `gtotutor-turn-solver`: turns on live turn and river solving. Leave it out and hands run out after the flop. |
 | `/gtotutor/TURN_CACHE_BUCKET` | String | `gtotutor-solver-<account>`: where solves are cached (`turn-cache/`) |
 | `/gtotutor/LIVE_SOLVES_PER_HOUR` | String | Optional, default 300: uncached turn solves per player per hour |

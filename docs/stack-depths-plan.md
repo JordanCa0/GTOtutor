@@ -1,6 +1,24 @@
 # Stack depths plan: 20bb, 60bb, 100bb
 
-**Status (2026-10-11): decided, not started.** Builds on the live `preflop-v9` tree. Adds 20bb and 60bb next to today's 100bb, plus mixed-stack tables: a set of common setups solved exactly, and a nearest-match fallback for every other mix.
+**Status (2026-10-12): ready to launch, not live.** Launch steps are in `docs/deployment.md` ("Stack depths").
+- **Charts:** 81 profiles in `preflop/charts/stacks-v1/`, listed in the manifest `preflop/charts/stacks-v1.json`:
+  - 100bb is `preflop-v9.json`, unchanged;
+  - 20bb and 60bb;
+  - 18 tables with one short seat;
+  - 60 with several: one 20bb and two 60bb at 100bb, every seating (solved with `preflop/solve-profiles.sh`).
+- **Flops:** `solver/output/stacks-v1/`.
+  - Every 20 and 60bb spot has 188 coverage-picked flops.
+  - The six 20bb spots that make up 98.8% of 20bb flops are being filled in towards every flop on the desktop (`solver/queue-desktop-stacks-v1-20-full.txt`).
+  - Full 60bb coverage (about 300 desktop hours, or a cloud run like v9's) is still to do. Until then 60bb flops use the nearest solved flop, labelled as approximate.
+- **App (Phase 2):** done.
+  - The setup offers Equal stacks, One short or Several short, dealing solved profiles only.
+  - Postflop decisions at mixed tables are labelled approximate.
+  - Mixed profiles load on demand.
+  - The nearest-profile fallback for unsolved mixes isn't needed while only solved profiles are dealt.
+- **Review (Phase 4):** `docs/stack-depths-review.md`. One open question there: whether a deep player facing a short stack should use the short tree.
+- **To play locally:** set `PREFLOP_CHARTS` to the manifest and `SOLVER_OUTPUT_DIR` to both flop folders, comma-separated.
+
+Builds on the live `preflop-v9` tree. Adds 20bb and 60bb next to today's 100bb, plus mixed-stack tables: a set of common setups solved exactly, and a nearest-match fallback for every other mix.
 
 **Decisions (2026-10-11):**
 - **20bb is mostly shove or fold.** A small tree: open-shoves, a small open for hands that want to see a flop, shoves over opens and limps. See "Bet sizes".

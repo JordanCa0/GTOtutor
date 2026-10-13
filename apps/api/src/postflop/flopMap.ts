@@ -142,7 +142,9 @@ export function handIndex(hands: string[]): Map<string, number> {
 
 /**
  * The solved hand that plays like `hole` does on the real board. Falls back to the closest hand in
- * the solved range when the exact translation isn't there (e.g. two ranks landed on one).
+ * the solved range when the exact translation isn't there (e.g. two ranks landed on one), keeping
+ * pairs with pairs and suited with suited where the range has any. A mixed-stack pot borrows the
+ * equal-stacks solve, whose range can lack hero's kind of hand entirely: then the closest of any kind.
  */
 export function mapHand(hole: Card[], mapper: CardMapper, solvedHands: string[], index: Map<string, number>): number {
   const [m1, m2] = hole.map((c) => mapper.card(c));
@@ -154,12 +156,13 @@ export function mapHand(hole: Card[], mapper: CardMapper, solvedHands: string[],
   let bestCost = Infinity;
   solvedHands.forEach((h, i) => {
     const [x, y] = parseCards(h);
-    if (pair !== (x.r === y.r) || suited !== (x.s === y.s)) return;
+    // Another kind of hand only wins when the range has none of this kind.
+    const kindMismatch = (pair !== (x.r === y.r) ? 1000 : 0) + (suited !== (x.s === y.s) ? 1000 : 0);
     const flushMatch = (x.s === m1.s ? 0 : 1) + (y.s === m2.s ? 0 : 1);
     const flushSwap = (x.s === m2.s ? 0 : 1) + (y.s === m1.s ? 0 : 1);
     const straight = Math.abs(x.r - m1.r) + Math.abs(y.r - m2.r);
     const swapped = Math.abs(x.r - m2.r) + Math.abs(y.r - m1.r);
-    const cost = Math.min(straight + 3 * flushMatch, swapped + 3 * flushSwap);
+    const cost = kindMismatch + Math.min(straight + 3 * flushMatch, swapped + 3 * flushSwap);
     if (cost < bestCost) {
       bestCost = cost;
       best = i;

@@ -23,8 +23,11 @@ export function verdictTitle(feedback: Pick<DecisionFeedback, 'grade' | 'chosenA
 
 const ICONS = { best: CheckIcon, mixed: ApproxIcon, mistake: XIcon } as const;
 
-/** With `handId`, the decision can be starred (and given a note) from the banner. */
-export function VerdictBanner({ feedback, handId }: { feedback: DecisionFeedback; handId?: string }) {
+/**
+ * With `handId`, the decision can be starred (and given a note) from the banner. `approxStacksBb`: a
+ * mixed-stack table's postflop decision, played from the equal-stacks solve at that depth.
+ */
+export function VerdictBanner({ feedback, handId, approxStacksBb }: { feedback: DecisionFeedback; handId?: string; approxStacksBb?: number | null }) {
   const chosen = chosenOption(feedback);
   const best = bestOption(feedback);
   const chosenIdx = feedback.options.indexOf(chosen);
@@ -74,6 +77,7 @@ export function VerdictBanner({ feedback, handId }: { feedback: DecisionFeedback
           <p className="muted small">
             Board {feedback.board.join(' ')}
             {feedback.approxFlop && `. This exact flop isn't solved yet, so these numbers come from the similar flop ${feedback.approxFlop}.`}
+            {approxStacksBb && `. Stacks differ at this table, so these numbers come from the solve with everyone at ${approxStacksBb}bb (this pot's smaller stack) and are approximate.`}
           </p>
         )}
       </div>

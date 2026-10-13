@@ -17,6 +17,7 @@ import type {
   StarRequest,
   StartHandRequest,
   SubmitDecisionResponse,
+  TableOptions,
 } from '@gtotutor/shared-types';
 import { accessToken } from '../auth/auth';
 import { getGuestId } from '../auth/identity';
@@ -62,6 +63,8 @@ export const api = {
   /** `hand`: hero's class, shown on postflop charts even where the solver's line never takes it. */
   chart: (nodeKey: string, hand?: string) =>
     request<ChartNodeView>(`/api/charts/${encodeURIComponent(nodeKey)}${hand ? `?hand=${encodeURIComponent(hand)}` : ''}`),
+  /** The stack depths the API's charts can deal. */
+  options: () => request<TableOptions>('/api/options'),
   me: () => request<MeResponse>('/api/me'),
   profile: () => request<ProfileResponse>('/api/me/profile'),
   profileReview: () => request<ProfileReviewResponse>('/api/me/profile/review'),

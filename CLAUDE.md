@@ -2,7 +2,7 @@
 
 A browser poker trainer: play preflop spots, get a verdict against range charts, and learn from a Claude-powered coach. Flop decisions are played and graded from offline solver output for spots that have it. With a solver service configured, the turn and river are solved live and played too; otherwise they run out automatically. See `docs/postflop-plan.md`.
 
-20bb (mostly shove or fold), 60bb and mixed stacks are planned in `docs/stack-depths-plan.md`, solved 20bb first and shipped together. Limping from every position and 33/66/100% flop bets (`preflop-v9`, live since 2026-10-10) are described in `docs/game-tree-v9-plan.md`.
+20bb (mostly shove or fold), 60bb and mixed stacks (one short seat, or several) are solved and ready to launch together, not live yet: the `stacks-v1` chart manifest, flops in `solver/output/stacks-v1/`. See `docs/stack-depths-plan.md`, the review in `docs/stack-depths-review.md`, and "Stack depths" in `docs/deployment.md`. Limping from every position and 33/66/100% flop bets (`preflop-v9`, live since 2026-10-10) are described in `docs/game-tree-v9-plan.md`.
 
 Phones and tablets get a one-screen layout below 1024px: a tall table, a feedback strip, and a bottom sheet for the verdict, chart and coach. See `docs/mobile-plan.md` (a check on real phones is still to do).
 
@@ -31,6 +31,7 @@ Hosting is on AWS: web on S3 + CloudFront, the API in Docker on one EC2 instance
   - See `solver/README.md`.
 - `preflop/`: Rust preflop solver (our own code, not AGPL).
   - Writes `preflop/charts/<version>.json`. The API loads it with `PREFLOP_CHARTS=<file>`, otherwise it uses the placeholders.
+  - Stack profiles (`--stacks 20`, `100:BB20`…) are listed in a manifest, `preflop/charts/stacks-v1.json`, which `PREFLOP_CHARTS` can also point at. Mixed profiles load on demand. `preflop/solve-profiles.sh` solves a list of them in parallel.
   - See `preflop/README.md`.
 
 ## Commands (repo root)
@@ -56,6 +57,8 @@ Hosting is on AWS: web on S3 + CloudFront, the API in Docker on one EC2 instance
   - `compareCharts.ts`: diff two chart versions.
   - `spotFrequency.ts`: how often each flop spot comes up.
   - `pickFlops.ts`: coverage-picked flop lists for `--flops`.
+  - `reviewStackCharts.ts`: sanity report on the stack-depth charts.
+- `SOLVER_OUTPUT_DIR` takes several folders, comma-separated (locally: `solver/output/preflop-v9` and `solver/output/stacks-v1`).
 - Database: change `apps/api/src/db/schema.ts`, then `npm run db:generate -w apps/api`, review the SQL in `apps/api/drizzle/`, then `npm run db:migrate -w apps/api`. Update `docs/database-schema.md` to match.
 - `RUN_DB_TESTS=1 npx vitest run test/persistence.test.ts` (in `apps/api`) runs the storage tests against Supabase too.
 
