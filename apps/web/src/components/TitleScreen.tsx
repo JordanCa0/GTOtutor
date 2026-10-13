@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import type { PlayerStyle, StyleAxis } from '@gtotutor/shared-types';
+import { useState, type CSSProperties } from 'react';
 import { signInWithGoogle, useAuth } from '../auth/auth';
+import { useSettings } from '../settings';
 import { ACTION_COLORS } from './actionColors';
 import { GoogleMark } from './AccountMenu';
 import { ApproxIcon, SparklesIcon, StarIcon } from './icons';
 import { PlayingCard } from './PlayingCard';
+import { StylePlot } from './StyleChart';
 
 export function TitleScreen({ onGuest }: { onGuest: () => void }) {
   const { enabled } = useAuth();
@@ -54,12 +57,78 @@ export function TitleScreen({ onGuest }: { onGuest: () => void }) {
             “Used by at least one guy.”
           </p>
         </div>
-        <SpotPreview />
+        <FeaturePreview />
       </div>
       <footer className="title-footer">
         <a href="/privacy.html">Privacy</a>
         <a href="/terms.html">Terms</a>
       </footer>
+    </div>
+  );
+}
+
+/** How long each slide stays up before the next one comes in. */
+const SLIDE_MS = 6000;
+
+const SLIDES = [
+  { id: 'spot', label: 'Every decision graded' },
+  { id: 'style', label: 'Your playing style' },
+] as const;
+
+/**
+ * Made-up examples of what the trainer does, taking turns: a graded spot, then the style chart with
+ * the coach's reading of it. Both slides share one grid cell, so the panel never changes height.
+ * The active tab's progress bar is the timer, so pausing it (hover, keyboard focus) pauses the turn.
+ * With reduced motion or animations off, slides only change from the tabs.
+ */
+function FeaturePreview() {
+  const { animations } = useSettings();
+  const [active, setActive] = useState(0);
+  // Bumped each time a slide comes in: restarts the progress bar, and remounts the style chart so
+  // its dots pop in again.
+  const [shown, setShown] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [reduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const auto = animations && !reduced;
+
+  const show = (i: number) => {
+    setActive(i);
+    setShown((n) => n + 1);
+  };
+  const next = () => {
+    // In a background tab, start the bar over rather than turning unseen.
+    if (document.hidden) setShown((n) => n + 1);
+    else show((active + 1) % SLIDES.length);
+  };
+
+  return (
+    <div
+      className="title-preview"
+      data-paused={paused || undefined}
+      style={{ '--slide-ms': `${SLIDE_MS}ms` } as CSSProperties}
+      onPointerEnter={() => setPaused(true)}
+      onPointerLeave={() => setPaused(false)}
+      // Only keyboard focus holds it: a clicked tab shouldn't stop the turning for good.
+      onFocus={(e) => e.target.matches(':focus-visible') && setPaused(true)}
+      onBlur={() => setPaused(false)}
+    >
+      <div className="title-slides" aria-hidden>
+        <div className="title-slide" data-active={active === 0 || undefined}>
+          <SpotSlide />
+        </div>
+        <div className="title-slide" data-active={active === 1 || undefined}>
+          <StyleSlide replay={active === 1 ? shown : 0} />
+        </div>
+      </div>
+      <div className="title-slide-tabs" role="group" aria-label="What the trainer does">
+        {SLIDES.map((s, i) => (
+          <button key={s.id} className="title-slide-tab" aria-pressed={active === i} onClick={() => show(i)}>
+            {s.label}
+            {/* Fills over the slide's time; keyed so it starts over each time. */}
+            {auto && active === i && <span key={shown} className="title-slide-progress" onAnimationEnd={next} />}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -70,11 +139,11 @@ const PREVIEW_OPTIONS = [
   { id: 'fold', label: 'Fold', pct: 8 },
 ] as const;
 
-/** A static, made-up graded spot: what a hand in the trainer looks like. */
-function SpotPreview() {
+/** A made-up graded spot: what a hand in the trainer looks like. */
+function SpotSlide() {
   return (
-    <div className="title-preview" aria-hidden>
-      <div className="preview-spot">
+    <>
+      <div className="preview-spot" style={{ '--i': 0 } as CSSProperties}>
         <div className="spot-hand">
           <PlayingCard card="Kh" />
           <PlayingCard card="Jh" />
@@ -85,7 +154,7 @@ function SpotPreview() {
         </div>
       </div>
 
-      <div className="verdict verdict-mixed">
+      <div className="verdict verdict-mixed" style={{ '--i': 1 } as CSSProperties}>
         <span className="verdict-icon">
           <ApproxIcon size={18} />
         </span>
@@ -105,7 +174,7 @@ function SpotPreview() {
         </div>
       </div>
 
-      <div className="preview-coach">
+      <div className="preview-coach" style={{ '--i': 2 } as CSSProperties}>
         <span className="coach-avatar">
           <SparklesIcon size={15} />
         </span>
@@ -114,6 +183,57 @@ function SpotPreview() {
           <strong>KJs blocks CO's best broadways and takes the initiative, so 3-betting earns a little more.</strong>
         </p>
       </div>
-    </div>
+    </>
+  );
+}
+
+/** One made-up axis: the player's rate is `value` points off the charts' `chart`. */
+const axis = (chart: number, value: number, n: number): StyleAxis => ({ value, n, se: 2, you: chart + value, chart });
+const PREVIEW_LEAKS = { playedChartFolds: { rate: 18, weight: 40 }, foldedChartPlays: { rate: 6, weight: 40 } };
+
+/** A loose-passive player whose recent hands have drifted back toward the charts (a green arrow). */
+const PREVIEW_STYLE: PlayerStyle = {
+  overall: { x: axis(38, 8, 240), y: axis(16, -6, 240) },
+  bySpot: [
+    { spot: 'RFI', label: 'Opening', x: axis(30, 4, 80), y: axis(30, 2, 80) },
+    { spot: 'VS_OPEN', label: 'Facing an open', x: axis(26, 11, 70), y: axis(12, -9, 70) },
+    { spot: 'VS_3BET', label: 'Facing a 3-bet', x: axis(45, 6, 30), y: axis(20, -11, 30) },
+    { spot: 'FLOP', label: 'Flop', x: axis(60, -3, 60), y: axis(35, -4, 60) },
+  ],
+  leaks: PREVIEW_LEAKS,
+};
+const PREVIEW_RECENT: PlayerStyle = { overall: { x: axis(38, 3, 40), y: axis(16, -2, 40) }, bySpot: [], leaks: PREVIEW_LEAKS };
+
+/** The style chart from the profile, with the coach's reading of it. */
+function StyleSlide({ replay }: { replay: number }) {
+  return (
+    <>
+      <div className="preview-style" style={{ '--i': 0 } as CSSProperties}>
+        <StylePlot key={replay} style={PREVIEW_STYLE} recent={PREVIEW_RECENT} />
+        <div className="preview-style-reading">
+          <p className="style-headline">You play looser and more passive than the charts.</p>
+          <ul className="style-leaks">
+            <li>
+              <span>Played hands the charts fold</span>
+              <b>18%</b>
+            </li>
+            <li>
+              <span>Folded hands the charts play</span>
+              <b>6%</b>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div className="preview-coach" style={{ '--i': 1 } as CSSProperties}>
+        <span className="coach-avatar">
+          <SparklesIcon size={15} />
+        </span>
+        <p className="bubble-tldr">
+          <span className="tldr-label">TL;DR</span>
+          <strong>You call too many opens. 3-bet your best suited hands instead, and let the weakest ones go.</strong>
+        </p>
+      </div>
+    </>
   );
 }

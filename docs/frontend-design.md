@@ -115,6 +115,7 @@ Rules:
 | Skeleton shimmer | While loading | A faint band sliding across every 1.6s (translate only); reduced motion shows a still fill |
 | Coach text typing out (profile review and its answers) | Occasionally | At least 90 characters a second, never more than 3s per block; click to show it all; reduced motion shows it at once |
 | Style chart (profile card and its expanded view) | Each time the profile or chart opens | Once on mount: the star and dots pop in (scale 0.5 → 1 with a fade, 320ms `--ease`, 25ms apart), then each recent trail draws out of its dot (480ms) and its arrowhead lands (220ms). The expanded view starts 160ms later, after its modal opens. Never on hover; reduced motion fades |
+| Landing preview (graded spot, then style chart and coach) | Each visit to the title page | Slides take turns every 6s; a slide's parts drop in from above (12px, 420ms `--ease`, 70ms apart) and the leaving one fades out in 150ms. The active tab's 2px bar fills linearly and is the timer, so hover or keyboard focus pauses it. The style chart's dots pop in again each time. With reduced motion or Animations off it only changes from the tabs, and reduced motion fades |
 | Next decision waiting (gold glow on "Now" and the chart's "Go to your next decision") | While studying an earlier decision | 1.6s opacity breathe on a pseudo-element's shadow; the pill rises in over 300ms |
 
 - Use `--ease` (a strong ease-out) for things appearing. Never use `ease-in`.

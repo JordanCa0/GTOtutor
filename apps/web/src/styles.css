@@ -575,14 +575,42 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 @media (hover: hover) and (pointer: fine) {
   .title-footer a:hover { color: var(--text); }
 }
-/* Landing preview: a made-up graded spot, built from the trainer's own components. */
+/* Landing preview: made-up examples built from the trainer's own components, taking turns. */
 .title-preview { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); }
-/* Rare first-visit view, so it can take a little longer and cascade (60ms apart). */
-.title-preview > * { animation: preview-in 420ms var(--ease) both; }
-.title-preview > :nth-child(2) { animation-delay: 60ms; }
-.title-preview > :nth-child(3) { animation-delay: 120ms; }
-.title-preview .verdict-icon { animation-delay: 160ms; }
-@keyframes preview-in { from { opacity: 0; transform: translateY(8px); } }
+/* Every slide in the same cell: the panel is as tall as the tallest, so turning never shifts the page. */
+.title-slides { display: grid; }
+.title-slide { grid-area: 1 / 1; display: flex; flex-direction: column; gap: var(--sp-3); visibility: hidden; pointer-events: none; transition: visibility 0s 150ms; }
+.title-slide[data-active] { visibility: visible; pointer-events: auto; transition: none; }
+/*
+ * A slide's parts drop in from above, 70ms apart (a one-shot entrance, so keyframes). Leaving is a quick
+ * 150ms fade that keeps falling a little, so the eye reads one downward flow.
+ */
+.title-slide > * { opacity: 0; transform: translateY(6px); animation: none; transition: opacity 150ms ease-out, transform 150ms ease-out; }
+.title-slide[data-active] > * { opacity: 1; transform: none; animation: slide-drop 420ms var(--ease) both; animation-delay: calc(var(--i, 0) * 70ms); }
+@keyframes slide-drop { from { opacity: 0; transform: translateY(-12px); } }
+/* The verdict's own entrance would run while hidden; the stamp waits for the slide instead. */
+.title-slide .verdict-icon { animation: none; }
+.title-slide[data-active] .verdict-icon { animation: stamp 0.45s var(--ease) 180ms both; }
+/* The chart's dots pop in once its row has landed. */
+.title-slide .style-plot { --base: 140ms; }
+.title-slide-tabs { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.title-slide-tab { position: relative; overflow: hidden; padding: var(--sp-1) var(--sp-3); border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font-size: var(--fs-xs); transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, transform 160ms var(--ease); }
+.title-slide-tab:active { transform: scale(0.97); }
+.title-slide-tab[aria-pressed='true'] { color: var(--text); background: var(--raised); border-color: var(--line-2); }
+.title-slide-tab:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .title-slide-tab:hover { color: var(--text); } }
+/* Constant progress, so linear. It is the slide timer: it pauses with the panel. */
+.title-slide-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--line-3); transform-origin: left; animation: slide-fill var(--slide-ms) linear both; }
+.title-preview[data-paused] .title-slide-progress { animation-play-state: paused; }
+@keyframes slide-fill { from { transform: scaleX(0); } }
+.preview-style { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-4); align-items: center; }
+.preview-style-reading { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.preview-style-reading p { margin: 0; }
+/* The chart is drawn at 360 units and shown about half that: drop the corner names, enlarge the edges. */
+.preview-style .style-quadrant, .preview-style .style-centre { display: none; }
+.preview-style .style-edge { font-size: 17px; }
+.preview-style .style-spot circle { r: 7px; }
+@media (max-width: 480px) { .preview-style .style-leaks { display: none; } }
 .preview-spot { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md); background: radial-gradient(ellipse at 50% 40%, #1b7a50 0%, #11603c 55%, #0a3f27 100%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 10px 30px rgba(0, 0, 0, 0.4); }
 .preview-spot p { margin: 0; }
 .preview-spot .muted { color: rgba(255, 255, 255, 0.7); }
@@ -720,7 +748,7 @@ button.primary.danger { background: #c25a4b; color: #fff; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-property: opacity, color, background-color, border-color !important; }
   .board-card, .dealt, .flip, .action-bubble, .bet, .hand-name, .win-tag, .result-strip, .action-log li, .hand-verdict,
-  .verdict, .verdict-icon, .range, .coach-card, .bubble, .spot-card, .hint, .title-preview > *, .next-ready, .coach-actions, .streak-badge,
+  .verdict, .verdict-icon, .range, .coach-card, .bubble, .spot-card, .hint, .title-slide[data-active] > *, .next-ready, .coach-actions, .streak-badge,
   .modal, .reader, .range-modal, .auth-card, .modal-backdrop .setup, .settings-pop, .account-menu, .header-sheet, .auth-toast, .tour-card,
   .style-spot circle, .style-player polygon, .style-trail, .style-trail-head, .style-recent-star {
     animation-name: fade !important; animation-duration: 150ms !important;

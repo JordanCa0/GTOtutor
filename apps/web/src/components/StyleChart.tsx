@@ -37,7 +37,7 @@ interface PlotProps {
  * Where the player sits against the charts: tighter to the right, looser to the left; more aggressive
  * up, more passive down. The centre is playing like the charts.
  */
-function StylePlot({ style, recent, large, active, onActive }: PlotProps) {
+export function StylePlot({ style, recent, large, active, onActive }: PlotProps) {
   const size = large ? 520 : 360;
   const pad = 36;
   const half = (size - pad * 2) / 2;
