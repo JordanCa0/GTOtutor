@@ -109,7 +109,9 @@ export class HandService {
   private async playVillains(state: HandState): Promise<void> {
     for (let i = 0; i < 8 && this.engine.awaitingVillain(state); i++) {
       const question = this.engine.villainQuestion(state)!;
-      this.engine.applyVillainChoice(state, await this.engine.archetypes.postflopChoice(question));
+      const started = Date.now();
+      const choice = await this.engine.archetypes.postflopChoice(question);
+      this.engine.applyVillainChoice(state, choice, Date.now() - started);
     }
   }
 

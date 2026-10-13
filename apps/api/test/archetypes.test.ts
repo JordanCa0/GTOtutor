@@ -275,7 +275,7 @@ describe('JEV AI after the flop', () => {
     const state = toFlop(engine);
     engine.applyVillainChoice(state, null);
     // The fake solver always checks here.
-    expect(state.actionLog.at(-1)).toMatchObject({ position: 'BB', action: 'check', street: 'flop' });
+    expect(state.actionLog.at(-1)).toMatchObject({ position: 'BB', action: 'check', street: 'flop', decidedBy: 'solver' });
     expect(state.heroToAct).toBe(true);
   });
 
@@ -299,7 +299,8 @@ describe('JEV AI after the flop', () => {
       const { state: after } = await service.decide(guest, state.id, 'raise');
       if (!after.postflop) continue;
       expect(engine.awaitingVillain(after)).toBe(false);
-      expect(after.actionLog.at(-1)).toMatchObject({ position: 'BB', action: 'bet', street: 'flop' });
+      expect(after.actionLog.at(-1)).toMatchObject({ position: 'BB', action: 'bet', street: 'flop', decidedBy: 'jev' });
+      expect(after.actionLog.at(-1)!.jevMs).toBeGreaterThanOrEqual(0);
       return;
     }
     throw new Error('no flop reached');

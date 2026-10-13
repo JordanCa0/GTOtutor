@@ -104,6 +104,13 @@ export interface ActionLogEntry {
   street: Street;
   /** Postflop: the player's total bet on this street after the action (what "bets 1.8" refers to). */
   streetBb?: number;
+  /**
+   * Postflop actions of an opponent with a player type: JEV AI chose it, or the solver did (no
+   * JEV_API_KEY, or Jev failed or took too long). Shown in the API response for checking, not in the UI.
+   */
+  decidedBy?: 'jev' | 'solver';
+  /** How long the JEV AI request took (ms), when there was one. */
+  jevMs?: number;
 }
 
 export interface SeatView {

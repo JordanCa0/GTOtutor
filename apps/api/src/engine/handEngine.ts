@@ -165,6 +165,8 @@ interface PostflopState {
   forced: number | null;
   /** JEV AI's frequencies for an archetype opponent's pending decision (see `applyVillainChoice`). Not stored. */
   villainChoice?: number[] | null;
+  /** Who made that choice, for the action log (`ActionLogEntry.decidedBy`). Not stored. */
+  villainSource?: { by: 'jev' | 'solver'; ms?: number } | null;
   /** The turn and river strategies once the live solve arrives (not stored). */
   live: LiveData | null;
   /** What each player had in when the current street started. */
@@ -978,16 +980,20 @@ export class HandEngine {
       }
       const h = this.seatHand(pf, node.player);
       let idx: number;
+      let source: PostflopState['villainSource'] = null;
       if (this.jevPlays(state, player)) {
         // JEV AI decides: HandService asks it (`villainQuestion`) and hands the answer back (`applyVillainChoice`).
         if (!pf.villainChoice) return;
         idx = this.sample(pf.villainChoice);
+        source = pf.villainSource ?? null;
         pf.villainChoice = null;
+        pf.villainSource = null;
       } else {
         idx = pf.forced ?? this.sample(node.strategy.map((row) => row[h]));
+        if (state.archetypes?.[player.position]) source = { by: 'solver' };
       }
       pf.forced = null;
-      this.applyFlop(state, node, idx);
+      this.applyFlop(state, node, idx, source);
       if (player.folded) return this.finish(state);
     }
   }
@@ -1082,13 +1088,14 @@ export class HandEngine {
    * JEV AI's answer for the pending decision (frequencies over the node's actions), or null when it
    * failed: the opponent then plays the solver strategy. Plays on to hero's next decision or the end.
    */
-  applyVillainChoice(state: HandState, freqs: number[] | null): void {
+  applyVillainChoice(state: HandState, freqs: number[] | null, ms?: number): void {
     if (!this.awaitingVillain(state)) return;
     const pf = state.postflop!;
     const node = this.streetNode(pf)!;
     const h = this.seatHand(pf, node.player);
     const valid = freqs && freqs.length === node.actions.length && freqs.some((f) => f > 0);
     pf.villainChoice = valid ? freqs : node.strategy.map((row) => row[h]);
+    pf.villainSource = valid ? { by: 'jev', ...(ms !== undefined && { ms }) } : { by: 'solver' };
     this.advance(state);
   }
 
@@ -1246,7 +1253,7 @@ export class HandEngine {
     return node ? { key, data, node } : null;
   }
 
-  private applyFlop(state: HandState, node: FlopNode, idx: number): void {
+  private applyFlop(state: HandState, node: FlopNode, idx: number, source: PostflopState['villainSource'] = null): void {
     const pf = state.postflop!;
     const pos = pf.seats[node.player];
     const player = state.players.find((p) => p.position === pos)!;
@@ -1260,7 +1267,16 @@ export class HandEngine {
     player.committed = round2(pf.base + street);
     if (player.committed >= effective) player.allIn = true;
     pf.history.push(idx);
-    state.actionLog.push({ position: pos, action: action.id, toBb: player.committed, isHero: player.isHero, street: pf.street, streetBb: street });
+    state.actionLog.push({
+      position: pos,
+      action: action.id,
+      toBb: player.committed,
+      isHero: player.isHero,
+      street: pf.street,
+      streetBb: street,
+      ...(source && { decidedBy: source.by }),
+      ...(source?.ms !== undefined && { jevMs: source.ms }),
+    });
   }
 
   private finish(state: HandState): void {
