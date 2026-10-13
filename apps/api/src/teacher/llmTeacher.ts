@@ -3,6 +3,7 @@ import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import type {
   ActionLogEntry,
   ActionOption,
+  Archetype,
   ChatMessage,
   ChatResponse,
   DataSource,
@@ -12,7 +13,8 @@ import type {
   SessionCoachReview,
   SessionStats,
 } from '@gtotutor/shared-types';
-import { chosenOption } from '@gtotutor/shared-types';
+import { ARCHETYPE_NAMES, chosenOption } from '@gtotutor/shared-types';
+import { ARCHETYPE_DEFS } from '../archetypes/archetypes.js';
 import { z } from 'zod';
 import { findUngroundedPercentages } from './grounding.js';
 import { postflopGroup, preflopGroup } from './handGroups.js';
@@ -65,6 +67,8 @@ export interface SpotContext {
   board: string[];
   /** Solved flop the strategy was borrowed from, when it isn't this exact flop. */
   approxFlop: string | null;
+  /** The player type each opponent plays as (opponent archetypes); absent when they play the charts. */
+  opponents?: Partial<Record<string, Archetype>> | null;
 }
 
 export interface ExplainInput extends SpotContext {
@@ -154,6 +158,32 @@ function stacksLine(spot: Pick<SpotContext, 'stackDepthBb' | 'stacks'>): string 
   return `stacks ${spot.stackDepthBb}bb, except ${odd.map(([pos, s]) => `${pos} ${s}bb`).join(' and ')} (a pot is played for the smaller of its two stacks)`;
 }
 
+type OpponentsSpot = Pick<SpotContext, 'opponents' | 'heroPosition' | 'actionsBefore'>;
+
+/** Opponents playing as archetypes who are still in at the decision. */
+function liveOpponents(spot: OpponentsSpot): [string, Archetype][] {
+  const folded = new Set<string>(spot.actionsBefore.filter((a) => a.action === 'fold').map((a) => a.position));
+  return Object.entries(spot.opponents ?? {}).filter((e): e is [string, Archetype] => !!e[1] && e[0] !== spot.heroPosition && !folded.has(e[0]));
+}
+
+/** The opponents' player types, for the coach (null when they play the charts). The grade stays against GTO. */
+export function opponentTypesLine(spot: OpponentsSpot): string | null {
+  const live = liveOpponents(spot);
+  if (!live.length) return null;
+  const list = live.map(([pos, type]) => `${pos} is a ${ARCHETYPE_NAMES[type].toLowerCase()} (${ARCHETYPE_DEFS[type].coach})`).join('; ');
+  return `Opponent player types: these opponents are simulated player types, not balanced players: ${list}. The grade and the chart numbers are still against balanced (GTO) play.`;
+}
+
+/** What the coach does with the opponents' types when explaining or answering (not in hints, which never name a play). */
+const EXPLOIT_TASK = `The opponents here play as player types (see "Opponent player types"). Keep the grade as given. When an opponent's type changes the best practical play against them, say so in one point (or one sentence of a chat answer), labelled "Exploit:": what to do instead against this player and why, e.g. fold more to a nit's raises, value bet thinner and bluff less against a fish. If the type doesn't change the play, don't force it.`;
+
+/** Cache key part for the opponents' types at a decision: empty when they play the charts. */
+const opponentsKey = (spot: OpponentsSpot) =>
+  liveOpponents(spot)
+    .map(([pos, type]) => `${pos}:${type}`)
+    .sort()
+    .join(',');
+
 export function buildSpotContext(spot: SpotContext): string {
   const before = spot.actionsBefore.length
     ? spot.actionsBefore.map(describeAction).join(', ')
@@ -179,6 +209,8 @@ export function buildSpotContext(spot: SpotContext): string {
     `Chart strategy for ${spot.handClass} here: ${spot.options.map((o) => `${o.label} ${pct(o.frequency)}`).join(', ')}. EV: ${hasEv ? spot.options.map((o) => `${o.label} ${o.evBb ?? 'n/a'}bb`).join(', ') : 'not available'}.`,
     `Whole range at this spot (all hands): ${spot.rangeSummary.map((r) => `${r.label} ${pct(r.share)}`).join(', ')}.`,
   ];
+  const types = opponentTypesLine(spot);
+  if (types) lines.push(types);
   if (spot.priorDecisions.length) {
     lines.push(
       `Earlier in this hand hero: ${spot.priorDecisions
@@ -204,7 +236,8 @@ export function buildContext(input: ExplainInput): string {
           ? 'part of a mixed strategy, not the main action'
           : 'rarely or never taken by the chart';
   const whole = spotData(input);
-  return `${buildSpotContext(input)}\nHero chose: ${chosen.label} (chart frequency ${pct(d.chosenFrequency)}). Grade: ${grade}.${whole ? `\n\n<whole_spot>\n${whole.text}\n</whole_spot>` : ''}`;
+  const exploit = opponentsKey(input) ? `\n\n${EXPLOIT_TASK}` : '';
+  return `${buildSpotContext(input)}\nHero chose: ${chosen.label} (chart frequency ${pct(d.chosenFrequency)}). Grade: ${grade}.${whole ? `\n\n<whole_spot>\n${whole.text}\n</whole_spot>` : ''}${exploit}`;
 }
 
 /** Hero's hand group at a decision: by class preflop, by made hand or draw on the real board after. */
@@ -365,7 +398,7 @@ export class LlmTeacher {
 
   async explain(input: ExplainInput, clientKey: string): Promise<ExplanationResponse> {
     const d = input.decision;
-    const cacheKey = this.key(d.nodeKey, d.handClass, chosenKey(d), String(input.priorDecisions.length));
+    const cacheKey = this.key(d.nodeKey, d.handClass, chosenKey(d), String(input.priorDecisions.length), opponentsKey(input));
     const hit = this.explanations.get(cacheKey);
     if (hit) return { status: 'ok', ...hit, cached: true };
 
@@ -384,7 +417,7 @@ export class LlmTeacher {
   }
 
   async hint(spot: SpotContext, clientKey: string): Promise<HintResponse> {
-    const cacheKey = this.key('hint', spot.nodeKey, spot.handClass);
+    const cacheKey = this.key('hint', spot.nodeKey, spot.handClass, opponentsKey(spot));
     const hit = this.hints.get(cacheKey);
     if (hit) return { status: 'ok', hint: hit, cached: true };
 
@@ -408,7 +441,7 @@ export class LlmTeacher {
 
   cachedExplanation(input: ExplainInput): string | null {
     const d = input.decision;
-    const hit = this.explanations.get(this.key(d.nodeKey, d.handClass, chosenKey(d), String(input.priorDecisions.length)));
+    const hit = this.explanations.get(this.key(d.nodeKey, d.handClass, chosenKey(d), String(input.priorDecisions.length), opponentsKey(input)));
     return hit ? [hit.tldr, ...hit.points.map((p) => `- ${p}`)].join('\n') : null;
   }
 

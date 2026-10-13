@@ -6,6 +6,8 @@ Features we want later, not scheduled yet. Each has notes from earlier design di
 
 Villains that play like recognisable player types (nit, tight-aggressive, loose-aggressive, calling station, maniac, …) instead of everyone playing the solved charts. The AI that drives these players is referred to as "JEV AI".
 
+**First version built (2026-10-13)**: fish, nit, LAG and TAG, driven by JEV AI (TypeSafe's Jev). Preflop is premade charts Jev answered once, with the width set in code and rules as the fallback; every postflop decision is a live Jev call; the coach knows the types and adds an exploit. See `docs/archetypes.md`. Still to do: grading against a best response.
+
 - **Preflop.** Build each archetype's ranges from the solved charts, not from scratch:
   - Widen or narrow every range along the solved hand ranking.
   - Shift the raise/call mix (e.g. more calling for a station, more 3-betting for a LAG).

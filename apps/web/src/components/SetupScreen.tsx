@@ -7,6 +7,7 @@ import {
   type StackDepth,
   type StartHandRequest,
   type TableSize,
+  type VillainStyle,
 } from '@gtotutor/shared-types';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -58,6 +59,22 @@ const soon = (label: string) => (
 const TABLE_ITEMS: JellyItem[] = TABLE_SIZES.map((t) => ({ value: t.id, label: t.available ? t.label : soon(t.label), disabled: !t.available }));
 const POSITION_ITEMS: JellyItem[] = [{ value: 'random', label: 'Random' }, ...SIX_MAX_POSITIONS.map((p) => ({ value: p, label: p }))];
 const OPPONENT_ITEMS: JellyItem[] = [{ value: 'any', label: 'Anyone' }, ...SIX_MAX_POSITIONS.map((p) => ({ value: p, label: p }))];
+const STYLE_ITEMS: JellyItem[] = [
+  { value: 'gto', label: 'Charts' },
+  { value: 'fish', label: 'Fish' },
+  { value: 'nit', label: 'Nit' },
+  { value: 'lag', label: 'LAG' },
+  { value: 'tag', label: 'TAG' },
+  { value: 'mixed', label: 'Mixed' },
+];
+const STYLE_TEXT: Record<VillainStyle, string> = {
+  gto: 'Opponents play the charts.',
+  fish: 'Fish play far too many hands, limp and call a lot, and rarely raise without a big hand.',
+  nit: 'Nits play only strong hands and fold almost everything else.',
+  lag: 'Loose-aggressive players play wide and raise and re-raise often.',
+  tag: 'Tight-aggressive players play a fairly tight range, but raise rather than call.',
+  mixed: 'Each opponent is a random player type: fish, nit, loose-aggressive or tight-aggressive.',
+};
 
 export function SetupScreen({ initial, starting, error, onStart, onClose }: Props) {
   const [tableSize, setTableSize] = useState<TableSize>(initial?.tableSize ?? 'SIX_MAX');
@@ -71,6 +88,7 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
   const activeOpponent = fixedSeat && opponent !== position ? opponent : 'any';
   const [skipEasyFolds, setSkipEasyFolds] = useState(initial?.skipEasyFolds ?? true);
   const [simplePots, setSimplePots] = useState(initial?.simplePots ?? false);
+  const [villainStyle, setVillainStyle] = useState<VillainStyle>(initial?.villainStyle ?? 'gto');
   const [mix, setMix] = useState<MixedStacks | 'equal'>(initial?.mixedStacks ?? 'equal');
 
   // The depths the API's charts can deal (until it answers, the ones every build has).
@@ -201,6 +219,15 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
       </fieldset>
 
       <fieldset>
+        <legend>Player types</legend>
+        <JellyRadio {...JELLY_THEME} ariaLabel="Player types" items={STYLE_ITEMS} value={villainStyle} onChange={(v) => setVillainStyle(v as VillainStyle)} />
+        <p className="muted small">
+          {STYLE_TEXT[villainStyle]}
+          {villainStyle !== 'gto' && ' Your decisions are still graded against the charts and the solver.'}
+        </p>
+      </fieldset>
+
+      <fieldset>
         <legend>Hands</legend>
         <label className="toggle">
           <input type="checkbox" checked={skipEasyFolds} onChange={(e) => setSkipEasyFolds(e.target.checked)} />
@@ -223,7 +250,7 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
 
       <p className="muted small">Cash game only for now. Tournament/ICM, other table sizes, and other stack depths come with the solver.</p>
 
-      <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, ...(activeMix !== 'equal' && { mixedStacks: activeMix }), heroPosition: position, rotate, ...(activeOpponent !== 'any' && { opponentPosition: activeOpponent }), skipEasyFolds, simplePots })}>
+      <button className="primary big" disabled={starting} onClick={() => onStart({ tableSize, stackDepthBb: stack, ...(activeMix !== 'equal' && { mixedStacks: activeMix }), heroPosition: position, rotate, ...(activeOpponent !== 'any' && { opponentPosition: activeOpponent }), skipEasyFolds, simplePots, ...(villainStyle !== 'gto' && { villainStyle }) })}>
         {starting ? 'Dealing…' : onClose ? 'Deal with these settings' : 'Deal a hand'}
       </button>
       {error && <p className="error">{error}</p>}

@@ -16,6 +16,8 @@ COPY apps/api apps/api
 # the stack-depth manifest (20, 60, 100bb and mixed stacks; its 100bb entry is preflop-v9.json).
 COPY preflop/charts/preflop-v8.json preflop/charts/preflop-v9.json preflop/charts/stacks-v1.json preflop/charts/
 COPY preflop/charts/stacks-v1 preflop/charts/stacks-v1
+# Premade archetype charts (docs/archetypes.md): the API loads archetypes/<charts version>.json.
+COPY preflop/charts/archetypes preflop/charts/archetypes
 
 # Flop solver output is mounted here (synced from S3), not baked into the image.
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3001 SOLVER_OUTPUT_DIR=/data/solver-output

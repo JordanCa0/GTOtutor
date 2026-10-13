@@ -54,6 +54,13 @@ export interface TableOptions {
   mixedStacks: Record<MixedStacks, StackDepth[]>;
 }
 
+/** Opponent archetypes: player types the opponents can play as instead of the charts (docs/archetypes.md). */
+export type Archetype = 'fish' | 'nit' | 'lag' | 'tag';
+export const ARCHETYPES: Archetype[] = ['fish', 'nit', 'lag', 'tag'];
+export const ARCHETYPE_NAMES: Record<Archetype, string> = { fish: 'Fish', nit: 'Nit', lag: 'Loose-aggressive', tag: 'Tight-aggressive' };
+/** How the opponents play: the charts ('gto'), one archetype at every seat, or a random archetype per seat. */
+export type VillainStyle = 'gto' | Archetype | 'mixed';
+
 export interface StartHandRequest extends Omit<HandConfig, 'stackDepthBb'> {
   /** The table depth, or 'random' for a new one each hand among those the charts have (for the chosen mixed stacks, if any). */
   stackDepthBb: StackDepth | 'random';
@@ -63,6 +70,8 @@ export interface StartHandRequest extends Omit<HandConfig, 'stackDepthBb'> {
    * acts before hero, only deals where it opens or limps are kept. Needs a fixed hero position.
    */
   opponentPosition?: Position | 'any';
+  /** How the opponents play preflop. Defaults to 'gto' (the charts). */
+  villainStyle?: VillainStyle;
   /** The practice session (a sitting of hands) this hand belongs to; the API requires it. */
   sessionId?: string;
   /** Mostly skip hands whose first decision is an obvious fold. Defaults to true. */
@@ -105,6 +114,8 @@ export interface SeatView {
   folded: boolean;
   allIn: boolean;
   cards: string[] | null;
+  /** The player type this opponent plays as; absent when it plays the charts. */
+  archetype?: Archetype;
 }
 
 export interface ActionOption {

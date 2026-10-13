@@ -19,6 +19,24 @@ export class ChartService {
     return this.charts.dataSource;
   }
 
+  get version(): string {
+    return this.charts.version;
+  }
+
+  /**
+   * The version of one profile's charts: its own chart file's in a manifest (stacks-v1's "100" is
+   * preflop-v9), else the charts' version. Archetype charts are named by it, so a manifest reuses the
+   * ones built for its 100bb charts.
+   */
+  profileVersion(profile: string): string {
+    return this.charts.profileVersions?.[profile] ?? this.charts.version;
+  }
+
+  /** The node keys the charts hold (not lazy profiles until loaded, nor derived "|nocall" nodes). */
+  nodeKeys(): string[] {
+    return [...this.charts.nodes.keys()];
+  }
+
   private profileList: string[] | null = null;
 
   /** The stack profiles the charts cover ("100", "20", "100:BB20"…): the loaded node keys' and the lazy ones. */

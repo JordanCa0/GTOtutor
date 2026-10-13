@@ -14,6 +14,8 @@ export interface ChartSet {
   version: string;
   dataSource: DataSource;
   nodes: Map<string, ChartNode>;
+  /** A manifest's equal-stack profiles: profile -> the version of its chart file ("100" -> "preflop-v9"). */
+  profileVersions?: Record<string, string>;
   /** Profiles left on disk until needed (ChartService loads them): profile -> chart file. */
   lazy?: Record<string, string>;
 }

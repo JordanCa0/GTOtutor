@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import {
+  ARCHETYPES,
   SIX_MAX_POSITIONS,
   type ActionLogEntry,
+  type Archetype,
   type ActionOption,
   type ActionType,
   type ChartNodeView,
@@ -20,6 +22,8 @@ import {
   type Street,
   type VillainRange,
 } from '@gtotutor/shared-types';
+import { ArchetypeService, type PostflopQuestion } from '../archetypes/archetypeService.js';
+import { buildPostflopQuestion } from '../archetypes/postflopQuestion.js';
 import type { ChartService } from '../charts/chartService.js';
 import type { ChartNode } from '../charts/types.js';
 import { FACING_TYPES, makeNodeKey, NOCALL_SUFFIX } from '../charts/nodeKeys.js';
@@ -95,6 +99,11 @@ export interface HandState {
    * before it existed lack it.
    */
   opponentPosition?: Position | null;
+  /**
+   * The player type each opponent plays as preflop (docs/archetypes.md); null or missing seats play
+   * the charts. Optional: hands saved before archetypes lack it.
+   */
+  archetypes?: Partial<Record<Position, Archetype>> | null;
   /** Why the turn and river ran out instead of being played (the live solve failed, was too slow, or hit a limit). */
   liveNote?: string | null;
   /** The solver service commit behind this hand's turn and river strategies (AGPL source link). */
@@ -154,6 +163,8 @@ interface PostflopState {
   predraw: Record<number, number> | null;
   /** The bot's next action, fixed by `predraw` once hero has chosen. */
   forced: number | null;
+  /** JEV AI's frequencies for an archetype opponent's pending decision (see `applyVillainChoice`). Not stored. */
+  villainChoice?: number[] | null;
   /** The turn and river strategies once the live solve arrives (not stored). */
   live: LiveData | null;
   /** What each player had in when the current street started. */
@@ -271,6 +282,8 @@ export class HandEngine {
      * the flop betting, as before.
      */
     private readonly liveStreets = false,
+    /** How archetype opponents play preflop; without JEV AI they play from built-in rules. */
+    readonly archetypes: ArchetypeService = new ArchetypeService(),
   ) {}
 
   /** Recent live solves by id, so the coach and the chart view can read their nodes. */
@@ -566,6 +579,7 @@ export class HandEngine {
         folded: p.folded,
         allIn: p.allIn,
         cards: p.isHero || (complete && state.showdownPositions.includes(p.position)) ? p.cards : null,
+        ...(!p.isHero && state.archetypes?.[p.position] && { archetype: state.archetypes[p.position] }),
       })),
       potBb: round2(state.players.reduce((s, p) => s + p.committed, 0)),
       board: state.board,
@@ -582,7 +596,7 @@ export class HandEngine {
       decisions: state.decisions,
       result: state.result,
       dataSource: this.charts.dataSource,
-      solving: this.awaitingSolve(state) ? (state.postflop!.street as 'turn' | 'river') : null,
+      solving: this.awaitingSolve(state) || this.awaitingVillain(state) ? (state.postflop!.street as 'turn' | 'river') : null,
       liveNote: state.liveNote ?? null,
       solverCommit: state.solverCommit ?? null,
       noCallReason: pending ? this.noCallReason(state) : null,
@@ -630,6 +644,7 @@ export class HandEngine {
       flopPractice: req.flopPractice ?? false,
       simplePots: req.simplePots ?? false,
       opponentPosition: req.opponentPosition && req.opponentPosition !== 'any' ? req.opponentPosition : null,
+      archetypes: this.dealArchetypes(req, heroPosition),
       config: { tableSize: req.tableSize, stackDepthBb: profileBase(profile) as StackDepth, ...(req.mixedStacks && { mixedStacks: req.mixedStacks }), profile, stacks: parseProfile(profile)! },
       heroPosition,
       players,
@@ -761,12 +776,30 @@ export class HandEngine {
       const node = this.charts.getNode(this.nodeKeyFor(state, player));
       const playOn = player.position === state.opponentPosition && !player.hasActed;
       if (playOn) this.drawPlayingHand(state, player, node);
-      const chart = node.strategy.get(handClass(player.cards[0], player.cards[1]))!;
+      const chart = this.villainFrequencies(state, player, node, handClass(player.cards[0], player.cards[1]));
       // The drawn hand plays on in its chart proportions without the fold (a mixed hand folds sometimes).
       const playable = chart.map((f, i) => (node.actions[i].id === 'fold' ? 0 : f));
       const freqs = playOn && playable.some((f) => f > 0) ? playable : chart;
       this.apply(state, player, this.botAction(state, player, node.actions[this.sample(freqs)]));
     }
+  }
+
+  /** Each opponent's archetype for a new hand, or null when they all play the charts. */
+  private dealArchetypes(req: StartHandRequest, heroPosition: Position): Partial<Record<Position, Archetype>> | null {
+    const style = req.villainStyle ?? 'gto';
+    if (style === 'gto' || req.flopPractice) return null;
+    const out: Partial<Record<Position, Archetype>> = {};
+    for (const pos of SIX_MAX_POSITIONS) if (pos !== heroPosition) out[pos] = style === 'mixed' ? ARCHETYPES[this.rng.int(ARCHETYPES.length)] : style;
+    return out;
+  }
+
+  /** A bot's frequencies for a hand at a chart node: its archetype's, or the chart's. */
+  private villainFrequencies(state: HandState, player: Player, node: ChartNode, hc: string): number[] {
+    const archetype = state.archetypes?.[player.position];
+    if (!archetype) return node.strategy.get(hc)!;
+    const baseKey = node.nodeKey.endsWith(NOCALL_SUFFIX) ? node.nodeKey.slice(0, -NOCALL_SUFFIX.length) : null;
+    const base = baseKey && this.charts.hasNode(baseKey) ? this.charts.getNode(baseKey) : undefined;
+    return this.archetypes.frequencies(archetype, node, hc, base);
   }
 
   /**
@@ -777,7 +810,7 @@ export class HandEngine {
   private drawPlayingHand(state: HandState, player: Player, node: ChartNode): void {
     const fold = node.actions.findIndex((a) => a.id === 'fold');
     if (fold < 0) return;
-    const playOn = (cards: string[]) => 1 - node.strategy.get(handClass(cards[0], cards[1]))![fold];
+    const playOn = (cards: string[]) => 1 - this.villainFrequencies(state, player, node, handClass(cards[0], cards[1]))[fold];
     if (playOn(player.cards) > 0 && this.rng.float() < playOn(player.cards)) return;
     for (let attempt = 0; attempt < MAX_DEAL_ATTEMPTS * 20; attempt++) {
       const i = this.rng.int(state.deck.length);
@@ -944,7 +977,15 @@ export class HandEngine {
         return;
       }
       const h = this.seatHand(pf, node.player);
-      const idx = pf.forced ?? this.sample(node.strategy.map((row) => row[h]));
+      let idx: number;
+      if (this.jevPlays(state, player)) {
+        // JEV AI decides: HandService asks it (`villainQuestion`) and hands the answer back (`applyVillainChoice`).
+        if (!pf.villainChoice) return;
+        idx = this.sample(pf.villainChoice);
+        pf.villainChoice = null;
+      } else {
+        idx = pf.forced ?? this.sample(node.strategy.map((row) => row[h]));
+      }
       pf.forced = null;
       this.applyFlop(state, node, idx);
       if (player.folded) return this.finish(state);
@@ -996,6 +1037,59 @@ export class HandEngine {
   awaitingSolve(state: HandState): boolean {
     const pf = state.postflop;
     return !!pf && pf.street !== 'flop' && !pf.live && !state.result;
+  }
+
+  /** An archetype opponent that JEV AI plays after the flop (with a key; otherwise the solver plays it). */
+  private jevPlays(state: HandState, player: Player): boolean {
+    return !player.isHero && !!state.archetypes?.[player.position] && this.archetypes.jevEnabled;
+  }
+
+  /** The hand is waiting for JEV AI's postflop decision for an archetype opponent. */
+  awaitingVillain(state: HandState): boolean {
+    const pf = state.postflop;
+    if (!pf || state.result || state.heroToAct || pf.villainChoice || this.awaitingSolve(state)) return false;
+    const node = this.streetNode(pf);
+    return !!node && this.jevPlays(state, state.players.find((p) => p.position === pf.seats[node.player])!);
+  }
+
+  /** The decision JEV AI is waiting to make: the board, the opponent's hand read, the betting and the options. */
+  villainQuestion(state: HandState): PostflopQuestion | null {
+    if (!this.awaitingVillain(state)) return null;
+    const pf = state.postflop!;
+    const node = this.streetNode(pf)!;
+    const pos = pf.seats[node.player];
+    const opponent = pf.seats[1 - node.player];
+    const me = state.players.find((p) => p.position === pos)!;
+    const myBet = pf.streetBets[pos] ?? 0;
+    return buildPostflopQuestion({
+      archetype: state.archetypes![pos]!,
+      street: pf.street,
+      board: state.board,
+      cards: me.cards,
+      position: pos,
+      opponent,
+      inPosition: node.player === 1,
+      potBb: round2(state.players.reduce((s, p) => s + p.committed, 0)),
+      toCallBb: round2(Math.max(0, (pf.streetBets[opponent] ?? 0) - myBet)),
+      behindBb: round2(this.effectiveStack(state) - me.committed),
+      streetBetBb: myBet,
+      actionLog: state.actionLog,
+      actions: this.flopActions(pf, node),
+    });
+  }
+
+  /**
+   * JEV AI's answer for the pending decision (frequencies over the node's actions), or null when it
+   * failed: the opponent then plays the solver strategy. Plays on to hero's next decision or the end.
+   */
+  applyVillainChoice(state: HandState, freqs: number[] | null): void {
+    if (!this.awaitingVillain(state)) return;
+    const pf = state.postflop!;
+    const node = this.streetNode(pf)!;
+    const h = this.seatHand(pf, node.player);
+    const valid = freqs && freqs.length === node.actions.length && freqs.some((f) => f > 0);
+    pf.villainChoice = valid ? freqs : node.strategy.map((row) => row[h]);
+    this.advance(state);
   }
 
   /** The solve the hand is waiting for; null if it can't be built (then the hand runs out). */

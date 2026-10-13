@@ -1,5 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { buildApp } from './app.js';
+import { ArchetypeService } from './archetypes/archetypeService.js';
+import { jevFromEnv } from './archetypes/jevClient.js';
 import { supabaseAccountAdmin } from './auth/accounts.js';
 import { PlayerResolver } from './auth/player.js';
 import { supabaseVerifier } from './auth/verify.js';
@@ -29,7 +31,19 @@ const flopDirs = (process.env.SOLVER_OUTPUT_DIR ?? '').split(',').map((d) => d.t
 const flops = new FlopStore(flopDirs.length ? flopDirs : fileURLToPath(new URL('../../../solver/output', import.meta.url)));
 // Live turn and river solving (docs/postflop-plan.md): off unless a solver service is configured.
 const liveSolver = await liveSolverFromEnv();
-const engine = new HandEngine(charts, cryptoRng, runoutResolver, flops, liveSolver !== null);
+// Opponent archetypes (docs/archetypes.md): preflop from the premade archetype charts for these charts
+// (or rules where they have no answer), postflop from JEV AI with JEV_API_KEY (else the solver).
+// They're built for the 100bb charts, so a manifest (stacks-v1) uses its 100bb charts' file (preflop-v9).
+const jev = jevFromEnv();
+const archetypeVersion = charts.profileVersion('100');
+const archetypeCharts = process.env.ARCHETYPE_CHARTS || fileURLToPath(new URL(`../../../preflop/charts/archetypes/${archetypeVersion}.json`, import.meta.url));
+const archetypes = new ArchetypeService(jev, {
+  chartsFile: archetypeCharts,
+  chartsVersion: archetypeVersion,
+  // Logged during startup, before the app (and its logger) exists.
+  log: (msg) => console.warn(msg),
+});
+const engine = new HandEngine(charts, cryptoRng, runoutResolver, flops, liveSolver !== null, archetypes);
 
 // Player data lives in Supabase Postgres; without DATABASE_URL it's kept in memory (lost on restart).
 const repo: Repo = process.env.DATABASE_URL ? new PgRepo(createDb(process.env.DATABASE_URL)) : new MemoryRepo();
@@ -51,6 +65,10 @@ const app = buildApp({
 });
 if (!process.env.DATABASE_URL) app.log.warn('DATABASE_URL is not set: player data is kept in memory only.');
 app.log.info(liveSolver ? 'live turn and river solving is on' : 'live turn and river solving is off: hands run out after the flop');
+app.log.info(
+  `opponent archetypes: preflop from ${archetypes.chartedNodes ? `${archetypes.chartedNodes} premade spots (rules elsewhere)` : 'built-in rules (no archetype charts built for these charts)'}; ` +
+    `postflop ${jev ? 'by JEV AI' : 'from the solver (JEV_API_KEY is not set)'}`,
+);
 if (!supabaseUrl) app.log.warn('SUPABASE_URL is not set: sign-in is disabled; everyone plays as a guest.');
 
 // Guest data lasts one session: sessions with no new hand for 24 hours are deleted.

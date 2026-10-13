@@ -1,7 +1,7 @@
 import type { DecisionFeedback, SessionStats } from '@gtotutor/shared-types';
 import { describe, expect, it } from 'vitest';
 import { findUngroundedPercentages } from '../src/teacher/grounding.js';
-import { LlmTeacher, OFF_TOPIC_REPLY, buildContext, hintRevealsAnswer, positionLine, type ExplainInput } from '../src/teacher/llmTeacher.js';
+import { LlmTeacher, OFF_TOPIC_REPLY, buildContext, buildSpotContext, hintRevealsAnswer, positionLine, type ExplainInput } from '../src/teacher/llmTeacher.js';
 import { HourlyRateLimiter } from '../src/teacher/rateLimit.js';
 import { fakeLlm, unavailableLlm } from './fakes.js';
 
@@ -235,5 +235,34 @@ describe('session review', () => {
     const review = { status: 'ok' as const, summary: 'Solid.', leaks: [], drill: 'Play.', ungroundedNumbers: [] };
     const teacher = new LlmTeacher(fakeLlm({ structured: { tldr: 'OFF_TOPIC', detail: '' } }), 'test', 10);
     expect(await teacher.reviewChat(stats, review, [{ role: 'user', content: 'Write my essay' }], 'ip')).toMatchObject({ tldr: null, reply: OFF_TOPIC_REPLY });
+  });
+});
+
+describe('coach and opponent player types', () => {
+  const withTypes: ExplainInput = { ...input, opponents: { UTG: 'fish', CO: 'nit', BB: 'lag' } };
+
+  it('names the types of the opponents still in, and asks for an exploit when explaining', () => {
+    const ctx = buildContext(withTypes);
+    expect(ctx).toContain('CO is a nit');
+    expect(ctx).toContain('BB is a loose-aggressive');
+    // UTG folded before hero acted.
+    expect(ctx).not.toContain('UTG is a');
+    expect(ctx).toContain('"Exploit:"');
+    expect(buildContext(input)).not.toContain('Opponent player types');
+    expect(buildContext(input)).not.toContain('Exploit');
+  });
+
+  it('gives hints the types but never the exploit task', () => {
+    const spot = buildSpotContext(withTypes);
+    expect(spot).toContain('Opponent player types');
+    expect(spot).not.toContain('Exploit');
+  });
+
+  it("doesn't share cached explanations between chart and archetype opponents", async () => {
+    const llm = fakeLlm({ structured: grounded });
+    const teacher = new LlmTeacher(llm, 'test', 10);
+    await teacher.explain(input, 'ip');
+    expect(await teacher.explain(withTypes, 'ip')).toMatchObject({ cached: false });
+    expect(await teacher.explain(withTypes, 'ip')).toMatchObject({ cached: true });
   });
 });

@@ -123,6 +123,11 @@ To turn it on:
 
 **Turning it off:** set `PREFLOP_CHARTS` back to `/app/preflop/charts/preflop-v9.json` and run `deploy.sh`. The extra flop folders can stay.
 
+### Opponent archetypes (JEV AI)
+Player types (fish, nit, LAG, TAG) are in Setup for every build; see `docs/archetypes.md`.
+- **Preflop** reads `preflop/charts/archetypes/<100bb charts version>.json`, which ships in the image. Under `stacks-v1` that's `preflop-v9.json` (its 100bb charts); 20bb, 60bb and mixed tables play from the rules preflop. Build it locally with `buildArchetypeCharts.ts --charts preflop/charts/<version>.json` and push a new image. Without a file for the running charts, archetypes play from the rules (the startup log says which).
+- **Postflop** needs `/gtotutor/JEV_API_KEY`. Each archetype decision after the flop is a live Jev call (6 s limit, then the solver strategy).
+
 ### Settings and secrets
 1. Change the value in **Systems Manager → Parameter Store**. Enter secrets in the console, not the CLI, so they don't land in PowerShell's history.
 2. Run `deploy.sh`.
@@ -227,6 +232,7 @@ Create one parameter per variable under `/gtotutor/`, using the Standard tier (f
 | `/gtotutor/COACH_GLOBAL_LIMIT_PER_HOUR` | String | `200`: new coach answers per hour across all players |
 | `/gtotutor/CLAUDE_MODEL` | String | Optional |
 | `/gtotutor/PREFLOP_CHARTS` | String | `/app/preflop/charts/preflop-v9.json` (on since 2026-10-10; leave it out for the placeholder charts). `/app/preflop/charts/stacks-v1.json` adds 20bb, 60bb and mixed stacks (see "Stack depths") |
+| `/gtotutor/JEV_API_KEY` | SecureString | TypeSafe key for JEV AI: opponent archetypes' postflop decisions (see "Opponent archetypes"). Leave it out and archetypes play the solver after the flop. |
 | `/gtotutor/TURN_SOLVER_LAMBDA` | String | `gtotutor-turn-solver`: turns on live turn and river solving. Leave it out and hands run out after the flop. |
 | `/gtotutor/TURN_CACHE_BUCKET` | String | `gtotutor-solver-<account>`: where solves are cached (`turn-cache/`) |
 | `/gtotutor/LIVE_SOLVES_PER_HOUR` | String | Optional, default 300: uncached turn solves per player per hour |

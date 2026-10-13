@@ -210,6 +210,12 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 }
 .seat-info .pos { font-weight: 700; letter-spacing: 0.04em; font-size: var(--fs-xs); color: var(--muted); display: inline-flex; align-items: center; }
 .seat-info .stack { font-variant-numeric: tabular-nums; font-weight: 600; }
+/* An opponent's player type (opponent archetypes): a quiet pill, tinted by type. */
+.seat-info .archetype { font-size: var(--fs-xs); font-weight: 600; padding: 0 var(--sp-2); border-radius: 999px; border: 1px solid var(--line-2); color: var(--muted); }
+.seat-info .arch-fish { color: #8fc7f0; border-color: rgba(143, 199, 240, 0.45); }
+.seat-info .arch-nit { color: #c9c4b8; border-color: rgba(201, 196, 184, 0.45); }
+.seat-info .arch-lag { color: #f0a08f; border-color: rgba(240, 160, 143, 0.45); }
+.seat-info .arch-tag { color: #a8dcb0; border-color: rgba(168, 220, 176, 0.45); }
 .seat.hero .seat-info { border-color: rgba(212, 175, 106, 0.7); }
 .seat.hero .seat-info .pos { color: var(--gold); }
 .seat.acting .seat-info { border-color: rgba(255, 255, 255, 0.7); }
@@ -229,6 +235,8 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
   opacity: 0; visibility: hidden; transform: scale(0.97); pointer-events: none; transition: opacity 150ms ease, transform 200ms var(--ease), visibility 0s 200ms;
 }
 .pos-tip .tooltip strong { font-weight: 700; color: var(--gold); }
+/* The seat's player type, below the position info. */
+.pos-tip .tip-section { display: flex; flex-direction: column; gap: var(--sp-1); margin-top: var(--sp-1); padding-top: var(--sp-2); border-top: 1px solid var(--line-2); }
 .pos-tip .tip-above { bottom: calc(100% + 10px); }
 .pos-tip .tip-below { top: calc(100% + 10px); }
 .pos-tip .tip-center { left: 50%; translate: -50% 0; }

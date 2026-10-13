@@ -50,9 +50,11 @@ export function loadSolvedCharts(path: string, { lazyMixed = false }: LoadOption
   const missing = entries.filter(([, file]) => !existsSync(file));
   if (missing.length) throw new Error(`${path}: missing chart files for ${missing.map(([p]) => p).join(', ')}`);
   const lazy = entries.filter(([profile]) => lazyMixed && profile.includes(':'));
-  const eager = entries.filter((e) => !lazy.includes(e)).map(([, file]) => readChartFile(file));
+  const eagerEntries = entries.filter((e) => !lazy.includes(e));
+  const eager = eagerEntries.map(([, file]) => readChartFile(file));
   return {
     version: json.version,
+    profileVersions: Object.fromEntries(eagerEntries.map(([profile], i) => [profile, eager[i].version])),
     dataSource: (eager[0] ?? readChartFile(entries[0][1])).dataSource,
     nodes: withPlaceholders(eager),
     ...(lazy.length && { lazy: Object.fromEntries(lazy) }),

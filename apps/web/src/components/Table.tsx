@@ -1,4 +1,4 @@
-import type { ActionLogEntry, HandView, Position } from '@gtotutor/shared-types';
+import { ARCHETYPE_NAMES, type ActionLogEntry, type Archetype, type HandView, type Position } from '@gtotutor/shared-types';
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { actingAt, potAt, seatsAt, startStack, type PlaybackState } from '../playback';
 import { ChipStack } from './ChipStack';
@@ -6,6 +6,29 @@ import { PlayingCard } from './PlayingCard';
 import { POSITION_INFO } from '../positions';
 import { useSettings } from '../settings';
 import { ChipRain, type Celebration } from './Streak';
+
+/** Short player-type tags for the seats (the full name is the tag's title). */
+const ARCHETYPE_TAGS: Record<Archetype, string> = { fish: 'Fish', nit: 'Nit', lag: 'LAG', tag: 'TAG' };
+
+/** What each player type does, and how to play against it, for the seat's tooltip. */
+const ARCHETYPE_INFO: Record<Archetype, { what: string; against: string }> = {
+  fish: {
+    what: 'Plays far too many hands, limps and calls a lot, chases draws and rarely bluffs.',
+    against: 'Value bet more often and thinner, and bluff less: they call too much.',
+  },
+  nit: {
+    what: 'Plays only strong hands and folds most of the rest. Big bets and raises usually mean a big hand.',
+    against: 'Steal their blinds often, and give up when they bet big or raise.',
+  },
+  lag: {
+    what: 'Plays a wide range and raises, 3-bets and bluffs often, keeping up the pressure.',
+    against: 'Call down lighter with decent hands and let them bluff into you.',
+  },
+  tag: {
+    what: 'Solid: a fairly tight range of good hands, played aggressively.',
+    against: 'Close to the charts. Respect their raises and stick to sound play.',
+  },
+};
 
 interface Point {
   x: number;
@@ -106,7 +129,7 @@ interface Props {
  * What a seat's position means and how it plays, shown when its info bubble (position and stack) is
  * hovered, focused or tapped. It opens away from the table edge nearest the seat.
  */
-function PositionTooltip({ position, slot }: { position: Position; slot: Point }) {
+function PositionTooltip({ position, slot, archetype }: { position: Position; slot: Point; archetype?: Archetype }) {
   const info = POSITION_INFO[position];
   const side = slot.x < 30 ? 'tip-right' : slot.x > 70 ? 'tip-left' : 'tip-center';
   const vertical = slot.y < 40 ? 'tip-below' : 'tip-above';
@@ -117,6 +140,13 @@ function PositionTooltip({ position, slot }: { position: Position; slot: Point }
       </strong>
       <span>{info.turn}</span>
       <span className="muted">{info.why}</span>
+      {archetype && (
+        <span className="tip-section">
+          <strong>{ARCHETYPE_NAMES[archetype]}</strong>
+          <span>{ARCHETYPE_INFO[archetype].what}</span>
+          <span className="muted">{ARCHETYPE_INFO[archetype].against}</span>
+        </span>
+      )}
     </span>
   );
 }
@@ -221,13 +251,18 @@ export function Table({ hand, playback, onSkip, celebration }: Props) {
                 {seat.position}
                 {seat.position === 'BTN' && <span className="dealer">D</span>}
               </span>
+              {seat.archetype && (
+                <span className={`archetype arch-${seat.archetype}`} title={ARCHETYPE_NAMES[seat.archetype]}>
+                  {ARCHETYPE_TAGS[seat.archetype]}
+                </span>
+              )}
               <span className="stack">{Math.round((startStack(hand, seat.position) - d.committed + won + returned) * 100) / 100}bb</span>
               {d.lastAction && !sd && !playback.awarded && (
                 <span key={d.lastAction.toBb + d.lastAction.action} className={`action-bubble act-${d.lastAction.action}`}>
                   {ACTION_TEXT[d.lastAction.action](d.lastAction)}
                 </span>
               )}
-              <PositionTooltip position={seat.position} slot={slotOf(seat.position)} />
+              <PositionTooltip position={seat.position} slot={slotOf(seat.position)} archetype={seat.archetype} />
             </div>
             {sd && <div className={`hand-name ${sd.isWinner ? 'win' : ''}`}>{sd.handName}</div>}
             {!sd && shown?.handName && <div className="hand-name">{shown.handName}</div>}

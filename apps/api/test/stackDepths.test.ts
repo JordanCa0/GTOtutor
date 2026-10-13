@@ -93,6 +93,13 @@ describe('stack depths (stacks-v1 charts)', () => {
     expect(lazy.loadedProfiles).toHaveLength(2);
   });
 
+  it("names each equal-stack profile by its own chart file, so 100bb shares preflop-v9's archetype charts", () => {
+    expect(charts.version).toBe('stacks-v1');
+    expect(charts.profileVersion('100')).toBe('preflop-v9');
+    expect(charts.profileVersion('20')).toBe('stacks-v1-20');
+    expect(new ChartService(buildFixtureChartSet()).profileVersion('100')).toBe(buildFixtureChartSet().version);
+  });
+
   it('refuses depths the charts lack', () => {
     const engine = new HandEngine(charts, seededRng(1), runoutResolver);
     expect(() => engine.start({ ...base, stackDepthBb: 40 })).toThrow(/not available/);

@@ -59,6 +59,7 @@ const startHandSchema = {
     stackDepthBb: { enum: ['random', 20, 40, 60, 100, 150] },
     heroPosition: { enum: ['random', 'UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'] },
     opponentPosition: { enum: ['any', 'UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'] },
+    villainStyle: { enum: ['gto', 'fish', 'nit', 'lag', 'tag', 'mixed'] },
     sessionId: sessionIdSchema,
     skipEasyFolds: { type: 'boolean' },
     simplePots: { type: 'boolean' },
@@ -117,12 +118,13 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
     return reply.status(500).send({ error: 'Internal error' });
   });
 
-  const baseSpot = (ctx: Pick<HandContext, 'heroPosition' | 'stackDepthBb' | 'stacks'>, spot: { nodeKey: string; nodeLabel: string; board: string[]; approxFlop: string | null }) => ({
+  const baseSpot = (ctx: Pick<HandContext, 'heroPosition' | 'stackDepthBb' | 'stacks' | 'archetypes'>, spot: { nodeKey: string; nodeLabel: string; board: string[]; approxFlop: string | null }) => ({
     nodeKey: spot.nodeKey,
     nodeLabel: spot.nodeLabel,
     heroPosition: ctx.heroPosition,
     stackDepthBb: ctx.stackDepthBb,
     stacks: ctx.stacks,
+    opponents: ctx.archetypes,
     rangeSummary: engine.rangeSummary(spot.nodeKey),
     board: spot.board,
     approxFlop: spot.approxFlop,
@@ -176,7 +178,7 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
     const pending = engine.pendingDecision(state);
     if (!pending) throw new HttpError(409, 'There is no pending decision to hint at.');
     const spot: SpotContext = {
-      ...baseSpot({ heroPosition: state.heroPosition, stackDepthBb: state.config.stackDepthBb, stacks: state.config.stacks }, { ...pending, board: state.board }),
+      ...baseSpot({ heroPosition: state.heroPosition, stackDepthBb: state.config.stackDepthBb, stacks: state.config.stacks, archetypes: state.archetypes }, { ...pending, board: state.board }),
       heroCards: pending.heroCards,
       handClass: pending.handClass,
       options: pending.options,

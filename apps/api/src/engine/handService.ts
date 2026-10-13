@@ -1,4 +1,4 @@
-import type { ActionLogEntry, ActionType, DecisionFeedback, DecisionStar, SessionStats, StartHandRequest, StreakUpdate } from '@gtotutor/shared-types';
+import type { ActionLogEntry, ActionType, Archetype, Position, DecisionFeedback, DecisionStar, SessionStats, StartHandRequest, StreakUpdate } from '@gtotutor/shared-types';
 import { playerKey, samePlayer, type CoachMessage, type HandRecord, type Player, type Repo, type SavedCoachReview } from '../db/repo.js';
 import { LiveSolveError, type LiveSolver } from '../postflop/liveSolver.js';
 import { isStreakMilestone, nextStreak, streakOf } from '../teacher/sessionStats.js';
@@ -15,6 +15,8 @@ export interface HandContext {
   board: string[];
   actionLog: ActionLogEntry[];
   decisions: DecisionFeedback[];
+  /** The opponents' player types (opponent archetypes); null when they played the charts. */
+  archetypes?: Partial<Record<Position, Archetype>> | null;
 }
 
 const notFound = () => new HttpError(404, 'Hand not found.');
@@ -65,6 +67,8 @@ export class HandService {
     if (!rec.state) throw new HttpError(409, 'This hand is finished.');
     const state = this.engine.restore(rec.state as StoredHandState);
     this.remember(player, state);
+    // Saved while JEV AI was deciding for an opponent: ask again.
+    await this.playVillains(state);
     // On the turn or river after a restart: fetch the solve again (usually from the cache).
     this.startSolves(player, state);
     return state;
@@ -73,6 +77,7 @@ export class HandService {
   async decide(player: Player, handId: string, action: ActionType, toBb?: number): Promise<{ state: HandState; feedback: DecisionFeedback; streak: StreakUpdate }> {
     const state = await this.get(player, handId);
     const feedback = this.engine.decide(state, action, toBb);
+    await this.playVillains(state);
     await this.save(player, state);
     this.startSolves(player, state);
     return { state, feedback, streak: await this.streak(state.sessionId!, feedback) };
@@ -97,6 +102,17 @@ export class HandService {
     };
   }
 
+  /**
+   * Archetype opponents after the flop: while the engine waits on one, asks JEV AI and plays its
+   * answer (the solver's strategy if Jev fails or is slow). At most a few in a row before hero acts.
+   */
+  private async playVillains(state: HandState): Promise<void> {
+    for (let i = 0; i < 8 && this.engine.awaitingVillain(state); i++) {
+      const question = this.engine.villainQuestion(state)!;
+      this.engine.applyVillainChoice(state, await this.engine.archetypes.postflopChoice(question));
+    }
+  }
+
   /** Resolves once the hand's pending live solve (if any) has been attached and saved. For tests and shutdown. */
   async settled(handId: string): Promise<void> {
     await this.solving.get(handId);
@@ -114,7 +130,10 @@ export class HandService {
       const job = this.engine.pendingSolve(state);
       const done = (job ? solver.solve(job.request, job.label, who) : Promise.reject(new LiveSolveError('failed', 'no request')))
         .then(
-          (solve) => this.engine.attachLiveSolve(state, solve),
+          (solve) => {
+            this.engine.attachLiveSolve(state, solve);
+            return this.playVillains(state);
+          },
           (err: unknown) => {
             this.log(`live solve for hand ${state.id} failed: ${(err as Error).message}`);
             this.engine.runOut(state, runOutNote(err));
@@ -153,6 +172,7 @@ export class HandService {
       heroPosition: rec.heroPosition,
       stackDepthBb: rec.config.stackDepthBb,
       stacks: (rec.config as { stacks?: Record<string, number> }).stacks,
+      archetypes: (rec.config as { archetypes?: Partial<Record<Position, Archetype>> }).archetypes ?? null,
       board: rec.replay?.result.board ?? [],
       actionLog: rec.replay?.actionLog ?? [],
       decisions: rec.decisions,
@@ -247,7 +267,8 @@ export class HandService {
       owner,
       status: complete ? 'complete' : 'awaiting_hero',
       heroPosition: hero.position,
-      config: { ...state.config, easyFoldsSkipped: state.easyFoldsSkipped },
+      // The opponents' types stay with the hand once it's over, for the coach.
+      config: { ...state.config, easyFoldsSkipped: state.easyFoldsSkipped, ...(state.archetypes && { archetypes: state.archetypes }) },
       flopPractice: state.flopPractice,
       // Once a hand is over, the engine state (deck, every hole card) is dropped; the replay keeps what history needs.
       state: complete ? null : this.engine.serialize(state),
@@ -271,7 +292,7 @@ const decisionOf = (ctx: HandContext, decisionId: string): string => {
   return decisionId;
 };
 
-const contextOf = (id: string, owner: Player, s: Pick<HandState, 'heroPosition' | 'config' | 'board' | 'actionLog' | 'decisions'>): HandContext => ({
+const contextOf = (id: string, owner: Player, s: Pick<HandState, 'heroPosition' | 'config' | 'board' | 'actionLog' | 'decisions' | 'archetypes'>): HandContext => ({
   id,
   owner,
   heroPosition: s.heroPosition,
@@ -280,4 +301,5 @@ const contextOf = (id: string, owner: Player, s: Pick<HandState, 'heroPosition' 
   board: s.board,
   actionLog: s.actionLog,
   decisions: s.decisions,
+  archetypes: s.archetypes ?? null,
 });
