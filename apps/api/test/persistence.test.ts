@@ -64,13 +64,13 @@ describe('player identity and ownership', () => {
     const theirs = client(app, { guestId: OTHER_GUEST });
     const hand = (await mine(flopPractice)).json<HandView>();
     const { feedback } = (await mine({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action: 'check' } })).json<SubmitDecisionResponse>();
-    for (const url of [`/api/hands/${hand.id}`, `/api/hands/${hand.id}/hint`, `/api/hands/${hand.id}/decisions/${feedback.id}/explanation`, '/api/sessions/test-session-0001/review']) {
+    for (const url of [`/api/hands/${hand.id}`, `/api/hands/${hand.id}/hint`, `/api/hands/${hand.id}/decisions/${feedback!.id}/explanation`, '/api/sessions/test-session-0001/review']) {
       expect((await theirs({ method: 'GET', url })).statusCode).toBe(404);
     }
     expect((await theirs({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action: 'check' } })).statusCode).toBe(404);
     // Someone else's session id can't be used to start hands in it.
     expect((await theirs(flopPractice)).statusCode).toBe(403);
-    expect((await mine({ method: 'GET', url: `/api/hands/${hand.id}/decisions/${feedback.id}/explanation` })).json()).toMatchObject({ status: 'ok' });
+    expect((await mine({ method: 'GET', url: `/api/hands/${hand.id}/decisions/${feedback!.id}/explanation` })).json()).toMatchObject({ status: 'ok' });
   });
 });
 
@@ -97,10 +97,10 @@ describe('hands survive a restart', () => {
     const stored = (await repo.getHand(hand.id))!;
     expect(stored.state).toBeNull();
     expect(stored.replay!.actionLog.length).toBeGreaterThan(6);
-    expect(stored.decisions.map((d) => d.id)).toEqual([feedback.id]);
+    expect(stored.decisions.map((d) => d.id)).toEqual([feedback!.id]);
 
     const third = makeApp(repo);
-    const coach = await client(third)({ method: 'GET', url: `/api/hands/${hand.id}/decisions/${feedback.id}/explanation` });
+    const coach = await client(third)({ method: 'GET', url: `/api/hands/${hand.id}/decisions/${feedback!.id}/explanation` });
     expect(coach.json()).toMatchObject({ status: 'ok' });
     expect((await client(third)({ method: 'GET', url: `/api/hands/${hand.id}` })).statusCode).toBe(409);
     const review = (await client(third)({ method: 'GET', url: '/api/sessions/test-session-0001/review' })).json<SessionReviewResponse>();
@@ -117,7 +117,7 @@ describe('saved coach threads', () => {
     const mine = client(before);
     const hand = (await mine(flopPractice)).json<HandView>();
     const { feedback } = (await mine({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action: 'check' } })).json<SubmitDecisionResponse>();
-    const base = `/api/hands/${hand.id}/decisions/${feedback.id}`;
+    const base = `/api/hands/${hand.id}/decisions/${feedback!.id}`;
     expect((await mine({ method: 'GET', url: `${base}/coach` })).json()).toEqual({ explanation: null, messages: [] });
     expect((await mine({ method: 'GET', url: `${base}/explanation` })).json()).toMatchObject({ status: 'ok', cached: false });
     await mine({ method: 'POST', url: `${base}/chat`, payload: { messages: [{ role: 'user', content: 'Why?' }] } });
@@ -153,7 +153,7 @@ describe('starred decisions', () => {
     const mine = client(before);
     const hand = (await mine(flopPractice)).json<HandView>();
     const { feedback } = (await mine({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action: 'check' } })).json<SubmitDecisionResponse>();
-    const url = `/api/hands/${hand.id}/decisions/${feedback.id}/star`;
+    const url = `/api/hands/${hand.id}/decisions/${feedback!.id}/star`;
     expect((await mine({ method: 'GET', url })).json()).toEqual({ starred: false, note: null });
     const put = await mine({ method: 'PUT', url, payload: { starred: true, note: '  Check back vs this sizing  ' } });
     expect(put.json()).toEqual({ starred: true, note: 'Check back vs this sizing' });
@@ -226,7 +226,7 @@ describe('profile page', () => {
       let hand = (await call(flopPractice)).json<HandView>();
       while (hand.status === 'awaiting_hero') {
         const res = (await call({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action: hand.legalActions[0].id } })).json<SubmitDecisionResponse>();
-        made.push({ handId: hand.id, decision: res.feedback });
+        made.push({ handId: hand.id, decision: res.feedback! });
         hand = res.hand;
       }
     }

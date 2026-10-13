@@ -241,6 +241,11 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration
   const decide = useMutation({
     mutationFn: (action: LegalAction) => api.decide(hand.id, action.id, action.toBb),
     onSuccess: ({ hand: h, feedback, streak: s }) => {
+      // Free play (a pot with no solver data): the action is played, not graded.
+      if (!feedback || !s) {
+        onHand(h);
+        return;
+      }
       if (feedback.grade === 'best') playSound('good', 0, { count: s.count, milestone: s.milestone !== null });
       else if (feedback.grade === 'mixed') playSound('mixed');
       else {
@@ -467,6 +472,9 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration
                 </button>
               </div>
             )
+          )}
+          {hand.freePlay && !complete && done && (
+            <p className="muted small free-play-note">Not graded: there's no solver data for this pot, so JEV AI plays your opponent and the hand plays out.</p>
           )}
           {(decide.error || error) && <p className="error small">{decide.error?.message ?? error}</p>}
           {hand.solverCommit && !compact && <SolverCredit commit={hand.solverCommit} />}

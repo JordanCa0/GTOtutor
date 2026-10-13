@@ -38,6 +38,7 @@ import { flopClassStrategy, flopRangeSummary, historyKey, parseSolverAction, typ
 import { lineReach, mapBoardCard, preflopRanges, turnRequest, turnStart, type LiveOut, type LiveRequest } from '../postflop/liveSolve.js';
 import type { SpotRanges } from '../teacher/spotSummary.js';
 import type { Rng } from '../poker/rng.js';
+import { FREE_PLAY_NOTE, freeActions, ruleChoice, type FreePlayState } from './freePlay.js';
 import type { ShowdownResolver } from './showdownResolver.js';
 
 export class HttpError extends Error {
@@ -87,6 +88,11 @@ export interface HandState {
   /** Board cards dealt so far (the flop once postflop play starts). */
   board: string[];
   postflop: PostflopState | null;
+  /**
+   * A heads-up pot with no solved flops against an opponent JEV AI plays: played on a fixed tree,
+   * hero ungraded (engine/freePlay.ts). Optional: hands saved before it existed lack it.
+   */
+  free?: FreePlayState | null;
   /** Dealt in flop practice mode (straight to a BTN vs BB flop). */
   flopPractice: boolean;
   /**
@@ -166,7 +172,7 @@ interface PostflopState {
   /** JEV AI's frequencies for an archetype opponent's pending decision (see `applyVillainChoice`). Not stored. */
   villainChoice?: number[] | null;
   /** Who made that choice, for the action log (`ActionLogEntry.decidedBy`). Not stored. */
-  villainSource?: { by: 'jev' | 'solver'; ms?: number } | null;
+  villainSource?: { by: 'jev' | 'solver' | 'rules'; ms?: number } | null;
   /** The turn and river strategies once the live solve arrives (not stored). */
   live: LiveData | null;
   /** What each player had in when the current street started. */
@@ -182,6 +188,8 @@ export interface LiveSolveJob {
 }
 
 const FLOP_KEY = 'FLOP';
+/** Free play's pending decisions (no strategy behind them). */
+const FREE_KEY = 'FREE';
 const LIVE_KEY = 'LIVE';
 /** Node keys whose strategy comes from the flop solver (FLOP) or a live turn/river solve (LIVE). */
 export const isFlopNodeKey = (nodeKey: string) => nodeKey.startsWith(`${FLOP_KEY}|`) || nodeKey.startsWith(`${LIVE_KEY}|`);
@@ -363,6 +371,19 @@ export class HandEngine {
     if (!state.heroToAct || this.awaitingSolve(state)) return null;
     const hero = state.players.find((p) => p.isHero)!;
     const hc = handClass(hero.cards[0], hero.cards[1]);
+    if (state.free) {
+      const actions = this.freeActionsFor(state);
+      return {
+        nodeKey: `${FREE_KEY}|${state.free.street}`,
+        nodeLabel: this.flopLabel(state, hero.position),
+        street: state.free.street,
+        actions,
+        heroCards: [...hero.cards],
+        handClass: hc,
+        options: actions.map((a) => ({ actionId: a.id, label: a.label, toBb: a.toBb, frequency: 0, evBb: null })),
+        approxFlop: null,
+      };
+    }
     if (state.postflop) {
       const pf = state.postflop;
       const node = this.streetNode(pf)!;
@@ -511,7 +532,20 @@ export class HandEngine {
     if (state.heroToAct) state.hintUsedPending = true;
   }
 
+  /** Hero's decision in free play: applied, not graded (there is no solver answer). */
+  act(state: HandState, action: ActionType, toBb?: number): void {
+    if (!state.free || !state.heroToAct) throw new HttpError(409, 'It is not your turn — this hand is complete.');
+    this.applyFree(state, chooseIndex(this.freeActionsFor(state), action, toBb));
+    this.advance(state);
+  }
+
+  /** The hand is in free play (see `act`). */
+  inFreePlay(state: HandState): boolean {
+    return !!state.free && !state.result;
+  }
+
   decide(state: HandState, action: ActionType, toBb?: number): DecisionFeedback {
+    if (state.free) throw new HttpError(409, 'This decision is not graded; play it with act().');
     const pending = this.pendingDecision(state);
     if (!pending) throw new HttpError(409, 'It is not your turn — this hand is complete.');
     const { options } = pending;
@@ -587,18 +621,19 @@ export class HandEngine {
       board: state.board,
       actionLog: state.actionLog,
       legalActions: pending ? pending.options.map((o, i) => ({ ...pending.actions[i], label: o.label })) : [],
-      pendingSpot: pending && {
+      pendingSpot: pending && !state.free ? {
         nodeKey: pending.nodeKey,
         nodeLabel: pending.nodeLabel,
         handClass: pending.handClass,
         street: pending.street,
         villainRange: pending.street === 'preflop' && state.lastRaiseNode?.position !== state.heroPosition ? (state.lastRaiseNode ?? null) : null,
-      },
+      } : null,
       status: complete ? 'complete' : 'awaiting_hero',
       decisions: state.decisions,
       result: state.result,
       dataSource: this.charts.dataSource,
-      solving: this.awaitingSolve(state) || this.awaitingVillain(state) ? (state.postflop!.street as 'turn' | 'river') : null,
+      solving: state.postflop && (this.awaitingSolve(state) || this.awaitingVillain(state)) ? (state.postflop.street as 'turn' | 'river') : null,
+      freePlay: !!state.free,
       liveNote: state.liveNote ?? null,
       solverCommit: state.solverCommit ?? null,
       noCallReason: pending ? this.noCallReason(state) : null,
@@ -760,6 +795,7 @@ export class HandEngine {
     state.heroToAct = false;
     for (;;) {
       if (state.players.filter((p) => !p.folded).length === 1) return this.finish(state);
+      if (state.free) return this.advanceFree(state);
       if (state.postflop) return this.advanceFlop(state);
       const idx = this.nextToActIndex(state);
       if (idx === null) {
@@ -849,7 +885,7 @@ export class HandEngine {
    * Only comes up with simple pots off.
    */
   private noCallReason(state: HandState): NoCallReason | null {
-    if (state.postflop || !state.heroToAct) return null;
+    if (state.postflop || state.free || !state.heroToAct) return null;
     const hero = state.players.find((p) => p.isHero)!;
     const key = this.nodeKeyFor(state, hero);
     const node = this.charts.getNode(key);
@@ -904,19 +940,19 @@ export class HandEngine {
 
   /** Deals the flop and starts solver-driven flop play when this spot has solved flops. */
   private startFlop(state: HandState): boolean {
-    if (!this.flops || state.postflop || state.board.length) return false;
+    if (state.postflop || state.free || state.board.length) return false;
     const live = state.players.filter((p) => !p.folded);
     if (live.some((p) => p.allIn)) return false;
     const spot = this.spotName(state);
-    if (!spot || this.flops.solvedFlops(spot).length === 0) return false;
+    if (!this.flops || !spot || this.flops.solvedFlops(spot).length === 0) return this.startFreePlay(state);
     state.board = state.deck.splice(0, 3);
     const lookup = this.flops.lookup(spot, state.board);
-    // A flop shape with no solved example: the board stays and the hand runs out as before.
-    if (!lookup) return false;
+    // A flop shape with no solved example: free play against JEV AI, or the hand runs out as before.
+    if (!lookup) return this.startFreePlay(state);
     const seats = [...live].sort((a, b) => postflopIndex(a.position) - postflopIndex(b.position));
     const hands: [number, number] = [this.flops.handFor(lookup, 0, seats[0].cards), this.flops.handFor(lookup, 1, seats[1].cards)];
-    // A hand with no place in the solved ranges (an empty range): run out rather than play blind.
-    if (hands.some((h) => h < 0)) return false;
+    // A hand with no place in the solved ranges (an empty range): free play, or run out rather than play blind.
+    if (hands.some((h) => h < 0)) return this.startFreePlay(state);
     state.postflop = {
       spot,
       lookup,
@@ -936,6 +972,102 @@ export class HandEngine {
   }
 
   /** The decision at the current point of the street, or undefined when the street's betting is over. */
+  /**
+   * Free play (engine/freePlay.ts) when the solver can't play this pot: heads-up with hero still in,
+   * nobody all in, against an opponent JEV AI plays. Otherwise the hand runs out, as before.
+   */
+  private startFreePlay(state: HandState): boolean {
+    const live = state.players.filter((p) => !p.folded);
+    const villain = live.find((p) => !p.isHero);
+    if (live.length !== 2 || !live.some((p) => p.isHero) || live.some((p) => p.allIn) || !villain || !this.jevPlays(state, villain)) return false;
+    if (!state.board.length) state.board = state.deck.splice(0, 3);
+    const seats = [...live].sort((a, b) => postflopIndex(a.position) - postflopIndex(b.position)).map((p) => p.position) as [Position, Position];
+    state.free = { seats, street: 'flop', base: live[0].committed, streetBets: {}, acted: [], aggression: 0 };
+    state.liveNote = FREE_PLAY_NOTE;
+    return true;
+  }
+
+  /** Who acts next in free play; null when the street's betting is over. */
+  private freeToAct(state: HandState): Position | null {
+    const f = state.free!;
+    const last = f.acted.at(-1);
+    if (!last) return f.seats[0];
+    const other = last === f.seats[0] ? f.seats[1] : f.seats[0];
+    if (!f.acted.includes(other) || (f.streetBets[other] ?? 0) < (f.streetBets[last] ?? 0)) return other;
+    return null;
+  }
+
+  private freeActionsFor(state: HandState): LegalAction[] {
+    const f = state.free!;
+    const pos = this.freeToAct(state)!;
+    const other = pos === f.seats[0] ? f.seats[1] : f.seats[0];
+    const myBet = f.streetBets[pos] ?? 0;
+    const potBb = round2(state.players.reduce((s, p) => s + p.committed, 0));
+    return freeActions(f.street, potBb, myBet, f.streetBets[other] ?? 0, round2(this.effectiveStack(state) - f.base - myBet), f.aggression);
+  }
+
+  /** Plays free-play streets until hero must act, JEV AI is awaited, or the hand ends. */
+  private advanceFree(state: HandState): void {
+    for (;;) {
+      const f = state.free!;
+      const pos = this.freeToAct(state);
+      if (pos === null) {
+        // The street's betting is over: showdown after the river or an all-in, else the next card.
+        if (f.street === 'river' || state.players.some((p) => !p.folded && p.allIn)) return this.finish(state);
+        state.board.push(state.deck.shift()!);
+        f.street = f.street === 'flop' ? 'turn' : 'river';
+        f.base = state.players.find((p) => !p.folded)!.committed;
+        f.streetBets = {};
+        f.acted = [];
+        f.aggression = 0;
+        continue;
+      }
+      const player = state.players.find((p) => p.position === pos)!;
+      if (player.isHero) {
+        state.heroToAct = true;
+        return;
+      }
+      // HandService asks JEV AI (`villainQuestion`) and hands the answer back (`applyVillainChoice`).
+      if (!f.villainChoice) return;
+      const idx = this.sample(f.villainChoice);
+      const source = f.villainSource ?? null;
+      f.villainChoice = null;
+      f.villainSource = null;
+      this.applyFree(state, idx, source);
+      if (player.folded) return this.finish(state);
+    }
+  }
+
+  private applyFree(state: HandState, idx: number, source: FreePlayState['villainSource'] = null): void {
+    const f = state.free!;
+    const pos = this.freeToAct(state)!;
+    const other = pos === f.seats[0] ? f.seats[1] : f.seats[0];
+    const action = this.freeActionsFor(state)[idx];
+    const player = state.players.find((p) => p.position === pos)!;
+    const effective = this.effectiveStack(state);
+    let street = f.streetBets[pos] ?? 0;
+    if (action.id === 'fold') player.folded = true;
+    else if (action.id === 'call') street = Math.min(f.streetBets[other] ?? 0, effective - f.base);
+    else if (action.id !== 'check') {
+      street = Math.min(action.toBb!, effective - f.base);
+      if (street > (f.streetBets[other] ?? 0)) f.aggression++;
+    }
+    f.streetBets[pos] = round2(street);
+    player.committed = round2(f.base + street);
+    if (player.committed >= effective) player.allIn = true;
+    f.acted.push(pos);
+    state.actionLog.push({
+      position: pos,
+      action: action.id,
+      toBb: player.committed,
+      isHero: player.isHero,
+      street: f.street,
+      streetBb: round2(street),
+      ...(source && { decidedBy: source.by }),
+      ...(source?.ms !== undefined && { jevMs: source.ms }),
+    });
+  }
+
   private streetNode(pf: PostflopState): FlopNode | undefined {
     const key = historyKey(pf.history);
     if (pf.street === 'flop') return pf.lookup.data.byHistory.get(key);
@@ -955,7 +1087,7 @@ export class HandEngine {
   }
 
   private flopLabel(state: HandState, pos: Position): string {
-    const street = state.postflop?.street ?? 'flop';
+    const street = state.postflop?.street ?? state.free?.street ?? 'flop';
     const last = state.actionLog.filter((a) => a.street === street).at(-1);
     if (!last) return `${pos} first to act on the ${street}`;
     if (last.action === 'check') return `${pos} on the ${street} after ${last.position} checks`;
@@ -1052,6 +1184,11 @@ export class HandEngine {
 
   /** The hand is waiting for JEV AI's postflop decision for an archetype opponent. */
   awaitingVillain(state: HandState): boolean {
+    if (state.free) {
+      if (state.result || state.heroToAct || state.free.villainChoice) return false;
+      const pos = this.freeToAct(state);
+      return pos !== null && this.jevPlays(state, state.players.find((p) => p.position === pos)!);
+    }
     const pf = state.postflop;
     if (!pf || state.result || state.heroToAct || pf.villainChoice || this.awaitingSolve(state)) return false;
     const node = this.streetNode(pf);
@@ -1061,6 +1198,7 @@ export class HandEngine {
   /** The decision JEV AI is waiting to make: the board, the opponent's hand read, the betting and the options. */
   villainQuestion(state: HandState): PostflopQuestion | null {
     if (!this.awaitingVillain(state)) return null;
+    if (state.free) return this.freeQuestion(state);
     const pf = state.postflop!;
     const node = this.streetNode(pf)!;
     const pos = pf.seats[node.player];
@@ -1084,12 +1222,44 @@ export class HandEngine {
     });
   }
 
+  private freeQuestion(state: HandState): PostflopQuestion {
+    const f = state.free!;
+    const pos = this.freeToAct(state)!;
+    const opponent = pos === f.seats[0] ? f.seats[1] : f.seats[0];
+    const me = state.players.find((p) => p.position === pos)!;
+    const myBet = f.streetBets[pos] ?? 0;
+    return buildPostflopQuestion({
+      archetype: state.archetypes![pos]!,
+      street: f.street,
+      board: state.board,
+      cards: me.cards,
+      position: pos,
+      opponent,
+      inPosition: pos === f.seats[1],
+      potBb: round2(state.players.reduce((s, p) => s + p.committed, 0)),
+      toCallBb: round2(Math.max(0, (f.streetBets[opponent] ?? 0) - myBet)),
+      behindBb: round2(this.effectiveStack(state) - me.committed),
+      streetBetBb: myBet,
+      actionLog: state.actionLog,
+      actions: this.freeActionsFor(state),
+    });
+  }
+
   /**
    * JEV AI's answer for the pending decision (frequencies over the node's actions), or null when it
    * failed: the opponent then plays the solver strategy. Plays on to hero's next decision or the end.
    */
   applyVillainChoice(state: HandState, freqs: number[] | null, ms?: number): void {
     if (!this.awaitingVillain(state)) return;
+    if (state.free) {
+      const f = state.free;
+      const actions = this.freeActionsFor(state);
+      const ok = freqs && freqs.length === actions.length && freqs.some((x) => x > 0);
+      const me = state.players.find((p) => p.position === this.freeToAct(state))!;
+      f.villainChoice = ok ? freqs : ruleChoice(actions, me.cards, state.board);
+      f.villainSource = ok ? { by: 'jev', ...(ms !== undefined && { ms }) } : { by: 'rules' };
+      return this.advance(state);
+    }
     const pf = state.postflop!;
     const node = this.streetNode(pf)!;
     const h = this.seatHand(pf, node.player);

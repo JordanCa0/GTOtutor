@@ -65,7 +65,7 @@ describe('HTTP API', () => {
     const hint = await call({ method: 'GET', url: `/api/hands/${hand.id}/hint` });
     expect(hint.json()).toMatchObject({ status: 'ok', hint: 'Think about position and blockers.' });
     const res = await call({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action: 'fold' } });
-    expect(res.json<SubmitDecisionResponse>().feedback.hintUsed).toBe(true);
+    expect(res.json<SubmitDecisionResponse>().feedback!.hintUsed).toBe(true);
     const late = await call({ method: 'GET', url: `/api/hands/${hand.id}/hint` });
     expect(late.statusCode).toBe(409);
   });

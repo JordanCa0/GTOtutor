@@ -306,6 +306,7 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 
 /* Controls under the table */
 .controls { min-height: 56px; display: flex; flex-direction: column; justify-content: center; }
+.free-play-note { margin: var(--sp-2) 0 0; text-align: center; }
 /* Seen on every decision, so only a quick fade: no movement to wait for. */
 .actions { display: flex; gap: var(--sp-3); justify-content: center; flex-wrap: wrap; animation: fade 150ms ease both; }
 /* Fixed slots, coloured like the range charts: Fold grey, Call blue, Raise green (all-in uses the raise slot). */

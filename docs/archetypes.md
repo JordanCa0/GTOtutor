@@ -73,6 +73,18 @@ With a key, JEV AI makes every postflop decision for an archetype opponent, on t
 - **Turn and river** still need the live solver for hero's options and grading.
   - Opponent hands Jev plays off the solver's path stay in the turn solve: `SEAT_HAND_FLOOR` in `liveSolve.ts` keeps both seated hands in range.
 - **Without a key**, archetypes play the solver after the flop, as before.
+- **The action log** marks each of their postflop actions with `decidedBy` (`jev`, `solver`, or `rules` in free play) and `jevMs`, visible in the hand's API response (the browser's network tab), not in the UI.
+
+### Free play: pots with no solver data
+
+Some heads-up pots have no solved flops: limped pots outside the SB (the charts rarely limp there, so they were never solved, but fish limp all the time), a flop shape with no solved example, or a hand outside the solved ranges. With an archetype opponent and a key, those pots are played out instead of running out (`apps/api/src/engine/freePlay.ts`):
+- **The tree:** the solved games' sizes: 33/66/100% of the pot on the flop, 33/75/125% on the turn, 50/100% and all-in on the river; one 3x raise per street, then call or fold; a bet that would reach the effective stack becomes all-in.
+- **The opponent:** JEV AI on every street, with the same question as above. If Jev fails or is too slow, a simple rule plays: check when free, call with a pair or a draw before the river, otherwise fold.
+- **Turn and river** are dealt straight away: no live solve.
+- **Hero isn't graded** after the flop: no verdict, no hint, nothing for streaks, stats or the coach. `HandService.submit` answers with `feedback: null`, and the table says why (`HandView.freePlay`).
+- **Without a key**, or against opponents without a type, these pots run out as before.
+
+Measured on the 100bb charts (2026-10-13, hero still in after preflop): against fish, 36% of hands were unsolved limped or iso pots that ran out; mixed tables, 14%.
 
 ## The coach
 
@@ -91,7 +103,7 @@ charts and the solver. Cached explanations are kept apart for chart and archetyp
 
 ## Limits of this version
 
-- **Hands outside the solved ranges:** the flop solves assume chart ranges, so an archetype that reaches the flop with a hand outside the solved range runs out instead (as any unplayable hand already does).
+- **Pots with no solver data** (mostly limped pots outside the SB) are played out in free play, ungraded (see above). Solving those spots with the archetypes' ranges would let them be graded.
 - **Each postflop decision is a live Jev call**, so the opponent's reply takes as long as Jev does.
   - While it waits after a live solve, the table shows "Solving the turn…".
   - The speculative turn solves started while hero decides on the flop still guess the solver's reply, so they miss more often against Jev.

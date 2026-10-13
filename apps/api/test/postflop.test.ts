@@ -82,9 +82,9 @@ describe('flop play from solver output', () => {
       expect(view.actionLog.at(-1)).toMatchObject({ position: 'BB', action: 'check', street: 'flop' });
       expect(view.legalActions.map((a) => a.label)).toEqual(['Check', 'Bet 1.8']);
       const feedback = engine.decide(state, 'bet');
-      expect(feedback.street).toBe('flop');
-      expect(feedback.grade).toBe('best'); // 50/50 mix: both actions are top frequency
-      expect(feedback.nodeKey).toMatch(/^FLOP\|btn_vs_bb_srp_100\|Kh7d2c\|0$/);
+      expect(feedback!.street).toBe('flop');
+      expect(feedback!.grade).toBe('best'); // 50/50 mix: both actions are top frequency
+      expect(feedback!.nodeKey).toMatch(/^FLOP\|btn_vs_bb_srp_100\|Kh7d2c\|0$/);
 
       // BB calls the bet (fake strategy), then the turn and river run out.
       const done = engine.view(state);
@@ -96,8 +96,8 @@ describe('flop play from solver output', () => {
       expect(done.result!.potBb).toBe(9.1);
       expect(done.result!.board.slice(0, 3)).toEqual(view.board);
       expect(done.result!.board).toHaveLength(5);
-      expect(engine.rangeSummary(feedback.nodeKey).map((r) => r.label)).toEqual(['Check', 'Bet 1.8']);
-      expect(engine.flopChartView(feedback.nodeKey)!.strategy.AA).toEqual([0.5, 0.5]);
+      expect(engine.rangeSummary(feedback!.nodeKey).map((r) => r.label)).toEqual(['Check', 'Bet 1.8']);
+      expect(engine.flopChartView(feedback!.nodeKey)!.strategy.AA).toEqual([0.5, 0.5]);
       played++;
     }
     expect(played).toBe(5);
@@ -159,10 +159,10 @@ describe('flop play over HTTP', () => {
       const res = await call({ method: 'POST', url: `/api/hands/${hand.id}/decisions`, payload: { action } });
       expect(res.statusCode).toBe(200);
       const { feedback } = res.json<SubmitDecisionResponse>();
-      expect(feedback.chosenAction).toBe(action);
-      const chart = await call({ method: 'GET', url: `/api/charts/${encodeURIComponent(feedback.nodeKey)}` });
+      expect(feedback!.chosenAction).toBe(action);
+      const chart = await call({ method: 'GET', url: `/api/charts/${encodeURIComponent(feedback!.nodeKey)}` });
       expect(chart.statusCode).toBe(200);
-      const coach = await call({ method: 'GET', url: `/api/hands/${hand.id}/decisions/${feedback.id}/explanation` });
+      const coach = await call({ method: 'GET', url: `/api/hands/${hand.id}/decisions/${feedback!.id}/explanation` });
       expect(coach.json()).toMatchObject({ status: 'ok' });
     }
   });
@@ -181,7 +181,7 @@ describe('several flop bet sizes (game tree v9)', () => {
     expect(() => engine.decide(state, 'bet', 2)).toThrow('no "bet" of 2bb');
     const feedback = engine.decide(state, 'bet', 3.65);
     expect(feedback).toMatchObject({ chosenAction: 'bet', chosenIndex: 2, bestIndex: 1, chosenFrequency: 0.05 });
-    expect(feedback.options.map((o) => o.toBb)).toEqual([null, 1.8, 3.65, 5.5]);
+    expect(feedback!.options.map((o) => o.toBb)).toEqual([null, 1.8, 3.65, 5.5]);
   });
 
   it('grades a rarely used size that costs little EV as "right idea, different size"', () => {

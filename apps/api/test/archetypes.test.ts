@@ -14,6 +14,7 @@ import { makeNodeKey } from '../src/charts/nodeKeys.js';
 import { MemoryRepo } from '../src/db/repo.js';
 import { HandEngine } from '../src/engine/handEngine.js';
 import { HandService } from '../src/engine/handService.js';
+import { freeActions, ruleChoice } from '../src/engine/freePlay.js';
 import { runoutResolver } from '../src/engine/showdownResolver.js';
 import { FlopStore } from '../src/postflop/flopStore.js';
 import { ALL_HAND_CLASSES } from '../src/poker/cards.js';
@@ -251,7 +252,7 @@ describe('JEV AI after the flop', () => {
       const state = engine.start(req);
       if (engine.pendingDecision(state)!.nodeKey !== 'SIX_MAX|100|RFI|BTN') continue;
       engine.decide(state, 'raise');
-      if (engine.awaitingVillain(state)) return state;
+      if (state.postflop && engine.awaitingVillain(state)) return state;
     }
     throw new Error('no flop reached');
   }
@@ -304,5 +305,103 @@ describe('JEV AI after the flop', () => {
       return;
     }
     throw new Error('no flop reached');
+  });
+});
+
+describe('free play: pots with no solver data against JEV AI', () => {
+  const flops = new FlopStore(fakeSolverOutput());
+  /** Postflop: check or call whenever it can (a passive fish), so hands reach showdown. */
+  const passive = () => fakeJev((names) => Object.fromEntries(names.map((n) => [n, n === 'check' || n === 'call' ? 1 : names.includes('check') || names.includes('call') ? 0 : 1 / names.length])));
+  const req = { tableSize: 'SIX_MAX', stackDepthBb: 100, heroPosition: 'BB', opponentPosition: 'UTG', villainStyle: 'fish', skipEasyFolds: false } as const;
+
+  /** A hand where the UTG fish limped and hero checked the BB: a limped pot the fake solver output lacks. */
+  function toFreePlay(engine: HandEngine) {
+    for (let i = 0; i < 2000; i++) {
+      const state = engine.start(req);
+      const pending = engine.pendingDecision(state)!;
+      if (!pending.actions.some((a) => a.id === 'check')) continue;
+      engine.decide(state, 'check');
+      if (state.free) return state;
+    }
+    throw new Error('no free play reached');
+  }
+
+  it('offers the solved games’ sizes, one raise, and all-in where a bet reaches the stack', () => {
+    expect(freeActions('flop', 3, 0, 0, 98, 0).map((a) => a.label)).toEqual(['Check', 'Bet 1', 'Bet 2', 'Bet 3']);
+    expect(freeActions('river', 10, 0, 0, 90, 0).map((a) => a.label)).toEqual(['Check', 'Bet 5', 'Bet 10', 'All-in 90']);
+    expect(freeActions('turn', 10, 0, 0, 8, 0).map((a) => a.label)).toEqual(['Check', 'Bet 3.3', 'Bet 7.5', 'All-in 8']);
+    expect(freeActions('flop', 10, 0, 3, 50, 1).map((a) => a.label)).toEqual(['Fold', 'Call 3', 'Raise to 9']);
+    // After a raise: call or fold only.
+    expect(freeActions('flop', 22, 3, 9, 47, 2).map((a) => a.label)).toEqual(['Fold', 'Call 9']);
+    expect(freeActions('flop', 10, 0, 3, 6, 1).map((a) => a.label)).toEqual(['Fold', 'Call 3', 'All-in 6']);
+  });
+
+  it('plays a limped pot out against JEV AI without grading hero after the flop', () => {
+    const jev = passive();
+    const engine = new HandEngine(charts, seededRng(11), runoutResolver, flops, false, new ArchetypeService(jev));
+    const state = toFreePlay(engine);
+    const graded = state.decisions.length;
+    expect(state.board).toHaveLength(3);
+    expect(engine.view(state)).toMatchObject({ freePlay: true, pendingSpot: null });
+    for (let i = 0; i < 20 && !state.result; i++) {
+      const q = engine.villainQuestion(state);
+      if (q) {
+        expect(q.state.player).toMatch(/fish/);
+        engine.applyVillainChoice(state, q.options.map(([name]) => (name === 'check' || name === 'call' ? 1 : 0)), 5);
+        continue;
+      }
+      expect(() => engine.decide(state, 'check')).toThrow(/not graded/);
+      engine.act(state, 'check');
+    }
+    expect(state.result?.showdown).toHaveLength(2);
+    expect(state.board).toHaveLength(5);
+    expect(state.decisions).toHaveLength(graded);
+    const villain = state.actionLog.filter((a) => a.street !== 'preflop' && !a.isHero);
+    expect(villain).toHaveLength(3);
+    expect(villain.every((a) => a.decidedBy === 'jev' && a.jevMs === 5)).toBe(true);
+    expect(state.actionLog.filter((a) => a.street !== 'preflop').map((a) => a.street)).toEqual(['flop', 'flop', 'turn', 'turn', 'river', 'river']);
+  });
+
+  it('falls back to simple rules when JEV AI has no answer', () => {
+    expect(ruleChoice(freeActions('flop', 3, 0, 0, 98, 0), ['7c', '2d'], ['Kh', '9s', '4c'])).toEqual([1, 0, 0, 0]);
+    expect(ruleChoice(freeActions('flop', 6, 0, 3, 95, 1), ['Kc', '2d'], ['Kh', '9s', '4c'])).toEqual([0, 1, 0]);
+    expect(ruleChoice(freeActions('flop', 6, 0, 3, 95, 1), ['7c', '2d'], ['Kh', '9s', '4c'])).toEqual([1, 0, 0]);
+    const engine = new HandEngine(charts, seededRng(12), runoutResolver, flops, false, new ArchetypeService(passive()));
+    const state = toFreePlay(engine);
+    while (!engine.villainQuestion(state)) engine.act(state, 'check');
+    engine.applyVillainChoice(state, null);
+    expect(state.actionLog.filter((a) => !a.isHero).at(-1)).toMatchObject({ street: 'flop', action: 'check', decidedBy: 'rules' });
+  });
+
+  it('runs out as before without a JEV AI key', () => {
+    const engine = new HandEngine(charts, seededRng(11), runoutResolver, flops, false, new ArchetypeService(null));
+    for (let i = 0; i < 300; i++) {
+      const state = engine.start(req);
+      if (!engine.pendingDecision(state)!.actions.some((a) => a.id === 'check')) continue;
+      engine.decide(state, 'check');
+      expect(state.free ?? null).toBeNull();
+    }
+  });
+
+  it('answers a free-play decision with no feedback and no streak change', async () => {
+    const jev = passive();
+    const engine = new HandEngine(charts, seededRng(13), runoutResolver, flops, false, new ArchetypeService(jev));
+    const service = new HandService(engine, new MemoryRepo());
+    const guest = { kind: 'guest', guestId: '11111111-1111-4111-8111-111111111111' } as const;
+    for (let i = 0; i < 2000; i++) {
+      const state = await service.start(guest, { ...req, sessionId: `s-${i}` });
+      if (!engine.pendingDecision(state)!.actions.some((a) => a.id === 'check')) continue;
+      const first = await service.submit(guest, state.id, 'check');
+      expect(first.feedback).not.toBeNull();
+      if (!first.state.free || first.state.result) continue;
+      // Hero in the BB acts first after the flop; JEV AI answers for the UTG limper within the request.
+      expect(first.state.heroToAct).toBe(true);
+      const next = await service.submit(guest, state.id, 'check');
+      expect(next).toMatchObject({ feedback: null, streak: null });
+      expect(next.state.actionLog.at(-1)).toMatchObject({ position: 'UTG', street: 'flop', action: 'check', decidedBy: 'jev' });
+      expect(next.state.decisions).toHaveLength(first.state.decisions.length);
+      return;
+    }
+    throw new Error('no free play reached');
   });
 });

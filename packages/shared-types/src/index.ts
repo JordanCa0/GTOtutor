@@ -106,9 +106,10 @@ export interface ActionLogEntry {
   streetBb?: number;
   /**
    * Postflop actions of an opponent with a player type: JEV AI chose it, or the solver did (no
-   * JEV_API_KEY, or Jev failed or took too long). Shown in the API response for checking, not in the UI.
+   * JEV_API_KEY, or Jev failed or took too long), or in free play (`freePlay`) the fallback rules did.
+   * Shown in the API response for checking, not in the UI.
    */
-  decidedBy?: 'jev' | 'solver';
+  decidedBy?: 'jev' | 'solver' | 'rules';
   /** How long the JEV AI request took (ms), when there was one. */
   jevMs?: number;
 }
@@ -220,8 +221,13 @@ export interface HandView {
   dataSource: DataSource;
   /** Set while the hand waits for its live turn solve (or, after a server restart, the river's). */
   solving?: 'turn' | 'river' | null;
-  /** Why the turn and river ran out instead of being played (the live solve failed or was too slow). */
+  /** Why the turn and river ran out instead of being played (the live solve failed or was too slow), or that free play isn't graded. */
   liveNote?: string | null;
+  /**
+   * A pot with no solver data played out against an opponent JEV AI plays: hero's decisions after
+   * the flop aren't graded (docs/archetypes.md, "Free play").
+   */
+  freePlay?: boolean;
   /** Commit of the solver service behind this hand's turn and river strategies, for the source link (AGPL). */
   solverCommit?: string | null;
   /** Why hero has no Call option in this spot (someone already called, or facing a limp), or null. */
@@ -253,9 +259,11 @@ export interface StreakUpdate {
 }
 
 export interface SubmitDecisionResponse {
-  feedback: DecisionFeedback;
+  /** Null for a free-play decision (not graded). */
+  feedback: DecisionFeedback | null;
   hand: HandView;
-  streak: StreakUpdate;
+  /** Null for a free-play decision: the streak is unchanged. */
+  streak: StreakUpdate | null;
 }
 
 export interface ChartNodeView {
