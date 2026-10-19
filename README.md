@@ -17,7 +17,7 @@ In addition, many times the solver doesn't make much sense and good players can 
 - AI coach (powered by Claude) that can analyze decisions, answer any question pertaining to poker, and understand player leaks
 - Style chart: places you on loose/tight x passive/aggressive from your own played hands (all hands vs most recent 10% of hands)
 - Opponent archetypes using JEV AI (tight, nit, passive, fish)
-- Fully Custom position and stack configurations 
+- Fully customizable position and stack configurations 
 - Fully functional on mobile
 
 
