@@ -27,6 +27,16 @@ export function FeedbackStrip({ hand, playbackDone, streak, onOpen }: { hand: Ha
         <span className="strip-cta">Spot and hint</span>
       </>
     );
+  } else if (hand.multiway) {
+    body = (
+      <>
+        <span className="strip-main">
+          <strong>Not graded: multiway pot</strong>
+          <span className="muted">{last ? `Before it: ${verdictTitle(last)}` : 'The charts only cover heads-up pots'}</span>
+        </span>
+        <span className="strip-cta">Why</span>
+      </>
+    );
   } else if (last) {
     const Icon = ICONS[last.grade];
     body = (
@@ -52,10 +62,10 @@ export function FeedbackStrip({ hand, playbackDone, streak, onOpen }: { hand: Ha
     body = <span className="strip-main muted">{complete ? 'No decisions for you this hand' : 'Waiting for your turn…'}</span>;
   }
 
-  const enabled = pending || !!last;
+  const enabled = pending || !!last || !!hand.multiway;
   return (
     <button className="feedback-strip" disabled={!enabled} onClick={() => onOpen('verdict')} aria-haspopup="dialog">
-      <span key={pending ? 'pending' : (last?.id ?? 'none')} className="strip-content">
+      <span key={pending ? 'pending' : hand.multiway ? 'multiway' : (last?.id ?? 'none')} className="strip-content">
         {body}
         {enabled && (
           <span className="strip-chevron" aria-hidden>

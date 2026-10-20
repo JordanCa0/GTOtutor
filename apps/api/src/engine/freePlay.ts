@@ -2,14 +2,15 @@ import type { LegalAction, Position } from '@gtotutor/shared-types';
 import { describeHand } from '../archetypes/handReading.js';
 
 /**
- * Free play (docs/archetypes.md): a heads-up pot against an opponent JEV AI plays, in a spot with no
- * solved flops (a limped pot outside the SB, say). The flop, turn and river are played on a fixed
- * betting tree, the opponent's actions come from Jev, and hero's decisions aren't graded: there is
- * no solver answer to grade them against.
+ * Free play (docs/archetypes.md): a pot the solver can't play, played out against opponents JEV AI
+ * plays. Either heads-up in a spot with no solved flops (a limped pot outside the SB, say), or a
+ * multiway pot (hero called where the charts keep pots heads-up). The flop, turn and river are
+ * played on a fixed betting tree, the opponents' actions come from Jev, and hero's decisions aren't
+ * graded: there is no solver answer to grade them against.
  */
 export interface FreePlayState {
-  /** [OOP, IP]: OOP acts first on every street. */
-  seats: [Position, Position];
+  /** Everyone who saw the flop, in postflop order (first to act first). Folded seats stay listed. */
+  seats: Position[];
   street: 'flop' | 'turn' | 'river';
   /** What each player had in when the street started. */
   base: number;
@@ -34,6 +35,7 @@ const round1 = (x: number) => Math.round(x * 10) / 10;
 const round2 = (x: number) => Math.round(x * 100) / 100;
 
 export const FREE_PLAY_NOTE = "This pot type has no solver data, so the hand is played out against JEV AI and your decisions after the flop aren't graded.";
+export const MULTIWAY_NOTE = "This pot went multiway. The charts and the solver only cover heads-up pots, so the rest of the hand is played out, not graded.";
 
 /**
  * The legal actions for the player to act. Amounts are street totals; `behind` is what the player

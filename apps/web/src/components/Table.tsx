@@ -6,6 +6,7 @@ import { PlayingCard } from './PlayingCard';
 import { POSITION_INFO } from '../positions';
 import { useSettings } from '../settings';
 import { ChipRain, type Celebration } from './Streak';
+import { HeartRain } from './Kaylie';
 
 /** Short player-type tags for the seats (the full name is the tag's title). */
 const ARCHETYPE_TAGS: Record<Archetype, string> = { fish: 'Fish', nit: 'Nit', lag: 'LAG', tag: 'TAG' };
@@ -123,6 +124,8 @@ interface Props {
   onSkip: () => void;
   /** A streak milestone: chips shower behind the seats. */
   celebration?: Celebration | null;
+  /** When Kaylie's name was typed this hand (Kaylie.tsx): a rose-gold felt and a fall of hearts. */
+  kaylie?: number | null;
 }
 
 /**
@@ -151,7 +154,7 @@ function PositionTooltip({ position, slot, archetype }: { position: Position; sl
   );
 }
 
-export function Table({ hand, playback, onSkip, celebration }: Props) {
+export function Table({ hand, playback, onSkip, celebration, kaylie = null }: Props) {
   const { animations, celebrations } = useSettings();
   const ref = useRef<HTMLDivElement>(null);
   const { shape, scale } = useTableShape(ref);
@@ -181,8 +184,9 @@ export function Table({ hand, playback, onSkip, celebration }: Props) {
 
   return (
     <div ref={ref} className={`table-wrap ${shape}`} style={{ ['--table-scale' as string]: scale }} onClick={onSkip} title="Click to skip animation">
-      <div className="felt" />
+      <div className={`felt ${kaylie ? 'rose' : ''}`} />
       {celebration && animations && celebrations && <ChipRain key={celebration.at} celebration={celebration} />}
+      {kaylie && animations && celebrations && <HeartRain key={kaylie} at={kaylie} />}
 
       <div className="pot-label" style={at(layout.potLabel)}>
         Pot <b>{pot}</b>bb

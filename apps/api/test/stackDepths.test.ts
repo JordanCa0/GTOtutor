@@ -9,6 +9,7 @@ import { HandEngine } from '../src/engine/handEngine.js';
 import { runoutResolver } from '../src/engine/showdownResolver.js';
 import type { FlopStore } from '../src/postflop/flopStore.js';
 import { seededRng } from '../src/poker/rng.js';
+import { play } from './fakes.js';
 
 // The stacks-v1 manifest: 100bb is preflop-v9, plus 20bb, 60bb, 18 tables with one short seat and 60
 // with several. Mixed profiles load on demand as on the server (eviction has its own test below).
@@ -38,10 +39,12 @@ function playMany(req: { stackDepthBb: StackDepth | 'random'; mixedStacks?: Mixe
     profiles.add(profile);
     let view = engine.view(state);
     while (view.status === 'awaiting_hero') {
-      // Every decision is a solved node of this hand's profile, never a placeholder.
-      expect(view.pendingSpot!.nodeKey.startsWith(`SIX_MAX|${profile}|`)).toBe(true);
+      // Every graded decision is a solved node of this hand's profile, never a placeholder.
+      if (!state.multiway) expect(view.pendingSpot!.nodeKey.startsWith(`SIX_MAX|${profile}|`)).toBe(true);
+      // Every option, the call that takes a pot multiway included (three-way all-ins, side pots).
       const legal = view.legalActions;
-      engine.decide(state, legal[rng.int(legal.length)].id as ActionType, undefined);
+      const pick = legal[rng.int(legal.length)];
+      play(engine, state, pick.id as ActionType, pick.toBb ?? undefined);
       view = engine.view(state);
     }
     const r = view.result!;

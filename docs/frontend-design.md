@@ -112,6 +112,7 @@ Rules:
 | Cards dealt, chips sliding | Part of the game | Can be longer; the user can skip them |
 | Streak multiplier ("×7") | Every good decision in a run | Pops: scale 1 → 1.38 → 1 over 340ms with a 600ms gold flash behind it (1.6s at milestones); reduced motion fades it in |
 | Chip shower at streak milestones (5, 10, 15…) | Rarely | About 3s of chips falling behind the seats (transform and opacity only), more gold at higher milestones; off with reduced motion, Animations off or Celebrations off |
+| Hearts when Kaylie's name is typed (`Kaylie.tsx`) | Hidden; on request | The chip shower's motion with hearts, about 3s, plus a rose-gold felt for the rest of the hand; hearts off with reduced motion, Animations off or Celebrations off |
 | Skeleton shimmer | While loading | A faint band sliding across every 1.6s (translate only); reduced motion shows a still fill |
 | Coach text typing out (profile review and its answers) | Occasionally | At least 90 characters a second, never more than 3s per block; click to show it all; reduced motion shows it at once |
 | Style chart (profile card and its expanded view) | Each time the profile or chart opens | Once on mount: the star and dots pop in (scale 0.5 → 1 with a fade, 320ms `--ease`, 25ms apart), then each recent trail draws out of its dot (480ms) and its arrowhead lands (220ms). The expanded view starts 160ms later, after its modal opens. Never on hover; reduced motion fades |

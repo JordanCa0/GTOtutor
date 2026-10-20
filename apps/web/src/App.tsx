@@ -17,6 +17,7 @@ import type { Celebration } from './components/Streak';
 import { Table } from './components/Table';
 import { TitleScreen } from './components/TitleScreen';
 import { Tour, type TourStep } from './components/Tour';
+import { useKaylie } from './components/Kaylie';
 import { PLAY_STEPS, PLAY_STEPS_COMPACT, VERDICT_STEPS, VERDICT_STEPS_COMPACT } from './components/tourSteps';
 import { BottomSheet } from './components/BottomSheet';
 import { FeedbackStrip } from './components/FeedbackStrip';
@@ -237,6 +238,7 @@ interface PlayAreaProps {
 
 function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration, onNext, chats, onChat, animate, helpRequest }: PlayAreaProps) {
   const { playback, done, skip } = usePlayback(hand, animate);
+  const kaylie = useKaylie();
   useTableSounds(hand, playback, animate);
   const decide = useMutation({
     mutationFn: (action: LegalAction) => api.decide(hand.id, action.id, action.toBb),
@@ -359,6 +361,10 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration
     setSheetOpen(false);
     setTour({ steps: compact ? [...PLAY_STEPS_COMPACT, ...VERDICT_STEPS_COMPACT] : [...PLAY_STEPS, ...VERDICT_STEPS], part: null });
   }, [helpRequest]); // eslint-disable-line react-hooks/exhaustive-deps
+  // While the verdict tour is up or about to open, the panel and strip stay on the graded decision instead
+  // of jumping to the next spot; they move on when the tour ends.
+  const holdPanel = !!tour || (graded && !hasSeenTour('verdict'));
+  const panelDone = done && !holdPanel;
   const endTour = useCallback(() => {
     setTour((t) => {
       if (t?.part) markTourSeen(t.part);
@@ -371,13 +377,13 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration
       {tour && <Tour key={tour.part ?? 'all'} steps={tour.steps} onDone={endTour} />}
       <section className="left">
         <div className="table-area">
-          <Table hand={hand} playback={playback} onSkip={skip} celebration={celebration} />
+          <Table hand={hand} playback={playback} onSkip={skip} celebration={celebration} kaylie={kaylie} />
         </div>
 
         {compact && (
           <FeedbackStrip
             hand={hand}
-            playbackDone={done}
+            playbackDone={panelDone}
             streak={streak}
             onOpen={(t) => {
               setSheetTab(t);
@@ -473,9 +479,13 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration
               </div>
             )
           )}
-          {hand.freePlay && !complete && done && (
+          {hand.multiway && !complete && done ? (
+            <p className="muted small free-play-note">Not graded: this pot went multiway, and the charts and solver only cover heads-up pots.</p>
+          ) : hand.freePlay && !complete && done ? (
             <p className="muted small free-play-note">Not graded: there's no solver data for this pot, so JEV AI plays your opponent and the hand plays out.</p>
-          )}
+          ) : hand.multiwayCall && canAct ? (
+            <p className="muted small free-play-note">The charts keep pots heads-up here. You can still call, but the pot goes multiway and the rest of the hand isn't graded.</p>
+          ) : null}
           {(decide.error || error) && <p className="error small">{decide.error?.message ?? error}</p>}
           {hand.solverCommit && !compact && <SolverCredit commit={hand.solverCommit} />}
         </div>
@@ -487,7 +497,7 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration
         <BottomSheet open={sheetOpen} onClose={closeSheet} label="Decision details">
           <DecisionPanel
             hand={hand}
-            playbackDone={done}
+            playbackDone={panelDone}
             chats={chats}
             onChat={onChat}
             streak={streak}
@@ -507,7 +517,7 @@ function PlayArea({ hand, dealing, error, onHand, onDecided, streak, celebration
         </BottomSheet>
       ) : (
         <aside className="right">
-          <DecisionPanel hand={hand} playbackDone={done} chats={chats} onChat={onChat} streak={streak} />
+          <DecisionPanel hand={hand} playbackDone={panelDone} chats={chats} onChat={onChat} streak={streak} />
         </aside>
       )}
     </main>

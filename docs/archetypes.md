@@ -84,6 +84,14 @@ Some heads-up pots have no solved flops: limped pots outside the SB (the charts 
 - **Hero isn't graded** after the flop: no verdict, no hint, nothing for streaks, stats or the coach. `HandService.submit` answers with `feedback: null`, and the table says why (`HandView.freePlay`).
 - **Without a key**, or against opponents without a type, these pots run out as before.
 
+### Multiway pots
+
+The charts keep every pot heads-up: once someone has called, players behind may only raise or fold (`|nocall` nodes). Hero is offered the call there anyway (`HandView.multiwayCall`, with a note under the buttons). Taking it makes the pot multiway (`HandState.multiway`):
+- **Nothing from then on is graded,** that call included: `HandService.submit` routes it to `HandEngine.act` (`ungraded`), and the decision panel and phone strip show "Ungraded: this pot went multiway". Decisions before it keep their grades.
+- **Bots still play the charts preflop,** so they never make a pot multiway themselves; only hero's call does.
+- **All in** (two jams called, say): the board runs out and the pot is split into a main pot and side pots by stake (`sidePots`).
+- **Otherwise** it's free play from the flop with every player still in, whatever the opponents' types: archetypes play as themselves and chart bots play as a TAG, through JEV AI (the question says how many players are in), or by the simple rule without a key. Bets are capped at the smallest stack still in. If hero folds, the rest run it out.
+
 Measured on the 100bb charts (2026-10-13, hero still in after preflop): against fish, 36% of hands were unsolved limped or iso pots that ran out; mixed tables, 14%.
 
 ## The coach

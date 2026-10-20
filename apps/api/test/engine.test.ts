@@ -6,6 +6,7 @@ import { HandEngine, HttpError } from '../src/engine/handEngine.js';
 import { runoutResolver } from '../src/engine/showdownResolver.js';
 import { handClass } from '../src/poker/cards.js';
 import { seededRng } from '../src/poker/rng.js';
+import { chartActions, play } from './fakes.js';
 
 const charts = new ChartService(buildFixtureChartSet());
 const newEngine = (seed: number) => new HandEngine(charts, seededRng(seed), runoutResolver);
@@ -22,11 +23,12 @@ describe('hand engine', () => {
       expect(view.status).toBe('awaiting_hero');
       let guard = 0;
       while (view.status === 'awaiting_hero') {
+        // Every option, the call that takes a pot multiway included.
         const legal = view.legalActions;
-        const action = legal[rng.int(legal.length)].id as ActionType;
-        engine.decide(state, action);
+        const pick = legal[rng.int(legal.length)];
+        play(engine, state, pick.id as ActionType, pick.toBb ?? undefined);
         view = engine.view(state);
-        if (++guard > 10) throw new Error('hand did not terminate');
+        if (++guard > 30) throw new Error('hand did not terminate');
       }
       const r = view.result!;
       const committed = view.seats.reduce((s, seat) => s + seat.committedBb, 0);
@@ -34,7 +36,8 @@ describe('hand engine', () => {
       const hero = view.seats.find((s) => s.isHero)!;
       expect(r.heroNetBb).toBeGreaterThanOrEqual(-hero.committedBb - 1e-9);
       expect(r.heroNetBb).toBeLessThanOrEqual(r.potBb - hero.committedBb + 1e-9);
-      expect(view.decisions.length).toBeGreaterThan(0);
+      // Only the multiway call, as hero's first decision, goes ungraded from the start.
+      if (!state.multiway) expect(view.decisions.length).toBeGreaterThan(0);
       if (r.showdown) {
         showdowns++;
         expect(r.board).toHaveLength(5);
@@ -205,7 +208,7 @@ describe('hand engine', () => {
     throw new Error('never dealt an SB limp to a BB hero');
   });
 
-  it('keeps every pot heads-up: nobody may call once someone has already called', () => {
+  it('keeps pots heads-up on the charts: once someone has called, the only call left is the ungraded multiway one', () => {
     const engine = newEngine(11);
     const rng = seededRng(12);
     let blocked = 0;
@@ -215,9 +218,10 @@ describe('hand engine', () => {
       while (view.status === 'awaiting_hero') {
         if (view.pendingSpot?.nodeKey.endsWith('|nocall')) {
           blocked++;
-          expect(view.legalActions.map((a) => a.id)).not.toContain('call');
-        }
-        engine.decide(state, view.legalActions[rng.int(view.legalActions.length)].id as ActionType);
+          expect(view.multiwayCall).toBe(true);
+          expect(chartActions(view).map((a) => a.id)).not.toContain('call');
+        } else expect(view.multiwayCall).toBe(false);
+        engine.decide(state, chartActions(view)[rng.int(chartActions(view).length)].id as ActionType);
         view = engine.view(state);
       }
       const preflop = view.actionLog.filter((a) => a.street === 'preflop');
@@ -242,7 +246,7 @@ describe('hand engine', () => {
           // Facing an open and a caller: a squeeze (3-bet) or fold.
           if (view.pendingSpot!.nodeKey.includes('|VS_OPEN|')) expect(view.noCallReason!.title).toBe('3-bet or fold');
         }
-        engine.decide(state, view.legalActions[rng.int(view.legalActions.length)].id as ActionType);
+        engine.decide(state, chartActions(view)[rng.int(chartActions(view).length)].id as ActionType);
         view = engine.view(state);
       }
     }
@@ -276,7 +280,7 @@ describe('hand engine', () => {
             expect(view.legalActions.map((a) => a.id)).toContain('call');
           }
         }
-        engine.decide(state, view.legalActions[rng.int(view.legalActions.length)].id as ActionType);
+        engine.decide(state, chartActions(view)[rng.int(chartActions(view).length)].id as ActionType);
         view = engine.view(state);
       }
       // Bots still call hero's own raises.
@@ -314,7 +318,7 @@ describe('hand engine', () => {
         const state = engine.start({ ...req, heroPosition, opponentPosition });
         let guard = 0;
         while (state.heroToAct) {
-          const legal = engine.view(state).legalActions;
+          const legal = chartActions(engine.view(state));
           // Hero never folds first, so an opponent behind hero always gets to answer.
           const choices = state.decisions.length ? legal : legal.filter((a) => a.id !== 'fold');
           engine.decide(state, choices[rng.int(choices.length)].id as ActionType);

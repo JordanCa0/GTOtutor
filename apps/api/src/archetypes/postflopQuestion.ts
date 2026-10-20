@@ -9,8 +9,9 @@ export interface PostflopSituation {
   board: string[];
   cards: string[];
   position: Position;
-  opponent: Position;
-  /** The opponent acts after this player on every street. */
+  /** The players still in against this one: one heads-up, more in a multiway pot. */
+  opponents: Position[];
+  /** Every opponent acts before this player on each street. */
   inPosition: boolean;
   potBb: number;
   /** Still to put in to call (0 when checked to). */
@@ -34,14 +35,14 @@ export function buildPostflopQuestion(s: PostflopSituation): PostflopQuestion {
   const def = ARCHETYPE_DEFS[s.archetype];
   return {
     state: {
-      game: "6-max no-limit Texas hold'em cash game; heads-up after the flop",
+      game: `6-max no-limit Texas hold'em cash game; ${s.opponents.length > 1 ? `${s.opponents.length + 1}-way` : 'heads-up'} after the flop`,
       street: s.street,
       board: s.board.join(' '),
       my_cards: s.cards.join(' '),
       my_hand: read.madeHand,
       my_draws: read.draws.length ? read.draws.join(', ') : 'none',
       my_position: `${s.position}, ${s.inPosition ? 'in position (I act last)' : 'out of position (I act first)'}`,
-      opponent_position: s.opponent,
+      opponent_position: s.opponents.join(', '),
       pot_bb: s.potBb,
       to_call_bb: s.toCallBb,
       my_stack_behind_bb: s.behindBb,

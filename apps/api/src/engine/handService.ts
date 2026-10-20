@@ -76,11 +76,12 @@ export class HandService {
 
   /**
    * Hero's action, graded when there is a strategy to grade it against. In free play (a pot with no
-   * solver data, docs/archetypes.md) it is played without a grade: no feedback, the streak unchanged.
+   * solver data, docs/archetypes.md) or a pot that went multiway, it is played without a grade: no
+   * feedback, the streak unchanged.
    */
   async submit(player: Player, handId: string, action: ActionType, toBb?: number): Promise<{ state: HandState; feedback: DecisionFeedback | null; streak: StreakUpdate | null }> {
     const state = await this.get(player, handId);
-    if (!this.engine.inFreePlay(state)) return this.decide(player, handId, action, toBb);
+    if (!this.engine.ungraded(state, action)) return this.decide(player, handId, action, toBb);
     this.engine.act(state, action, toBb);
     await this.playVillains(state);
     await this.save(player, state);

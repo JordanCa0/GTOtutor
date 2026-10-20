@@ -32,13 +32,13 @@ import { mixedKind, parseProfile, profileBase, tierDepth } from '../charts/stack
 /** What a raise is called at each raise level: the open is level 1, so re-raising it is a 3-bet. */
 const RAISE_NAMES: Record<number, string> = { 1: '3-bet', 2: '4-bet', 3: '5-bet' };
 import { ALL_HAND_CLASSES, comboCount, fullDeck, handClass, shuffle } from '../poker/cards.js';
-import { bestHand } from '../poker/evaluator.js';
+import { bestHand, compareScores } from '../poker/evaluator.js';
 import { handIndex, mapHand, parseCards } from '../postflop/flopMap.js';
 import { flopClassStrategy, flopRangeSummary, historyKey, parseSolverAction, type FlopLookup, type FlopNode, type FlopStore, type LoadedFlop } from '../postflop/flopStore.js';
 import { lineReach, mapBoardCard, preflopRanges, turnRequest, turnStart, type LiveOut, type LiveRequest } from '../postflop/liveSolve.js';
 import type { SpotRanges } from '../teacher/spotSummary.js';
 import type { Rng } from '../poker/rng.js';
-import { FREE_PLAY_NOTE, freeActions, ruleChoice, type FreePlayState } from './freePlay.js';
+import { FREE_PLAY_NOTE, freeActions, MULTIWAY_NOTE, ruleChoice, type FreePlayState } from './freePlay.js';
 import type { ShowdownResolver } from './showdownResolver.js';
 
 export class HttpError extends Error {
@@ -93,6 +93,12 @@ export interface HandState {
    * hero ungraded (engine/freePlay.ts). Optional: hands saved before it existed lack it.
    */
   free?: FreePlayState | null;
+  /**
+   * Hero called where the charts keep pots heads-up (`overCall`), making the pot multiway: from then
+   * on hero's decisions are played, not graded, and after the flop it's free play. Optional: hands
+   * saved before it existed lack it.
+   */
+  multiway?: boolean;
   /** Dealt in flop practice mode (straight to a BTN vs BB flop). */
   flopPractice: boolean;
   /**
@@ -218,6 +224,26 @@ const profileOf = (state: HandState) => state.config.profile ?? String(state.con
 const stackOf = (state: HandState, pos: Position) => state.config.stacks?.[pos] ?? state.config.stackDepthBb;
 
 const round2 = (x: number) => Math.round(x * 100) / 100;
+
+/**
+ * The main pot and side pots at showdown, smallest stake first. Each player still in can win, from
+ * every player, at most what they put in themselves: one pot per distinct stake among the players
+ * still in, open to those who put in at least that much. Folded players' chips count toward the
+ * pots their amount reaches; anything above the biggest stake goes in the last pot.
+ */
+export function sidePots(players: Pick<Player, 'position' | 'committed'>[], live: Pick<Player, 'position' | 'committed'>[]): { amount: number; eligible: Position[] }[] {
+  const levels = [...new Set(live.map((p) => p.committed))].sort((a, b) => a - b);
+  const pots: { amount: number; eligible: Position[] }[] = [];
+  let prev = 0;
+  for (const level of levels) {
+    const amount = players.reduce((s, p) => s + Math.max(0, Math.min(p.committed, level) - prev), 0);
+    if (amount > 0) pots.push({ amount, eligible: live.filter((p) => p.committed >= level).map((p) => p.position) });
+    prev = level;
+  }
+  const above = players.reduce((s, p) => s + Math.max(0, p.committed - prev), 0);
+  if (above > 0 && pots.length) pots[pots.length - 1].amount += above;
+  return pots.map((p) => ({ ...p, amount: round2(p.amount) }));
+}
 const MIXED_THRESHOLD = 0.1;
 /** "Right idea, different size" when the chosen size gives up at most this share of the pot vs the best size of that action. */
 const SIZE_EV_TOLERANCE = 0.01;
@@ -532,20 +558,57 @@ export class HandEngine {
     if (state.heroToAct) state.hintUsedPending = true;
   }
 
-  /** Hero's decision in free play: applied, not graded (there is no solver answer). */
+  /**
+   * Hero's ungraded decision (see `ungraded`): applied, not graded, as there is no chart or solver
+   * answer. In free play, in a pot that went multiway, or the call that makes it multiway.
+   */
   act(state: HandState, action: ActionType, toBb?: number): void {
-    if (!state.free || !state.heroToAct) throw new HttpError(409, 'It is not your turn — this hand is complete.');
-    this.applyFree(state, chooseIndex(this.freeActionsFor(state), action, toBb));
+    if (!state.heroToAct || state.result) throw new HttpError(409, 'It is not your turn — this hand is complete.');
+    if (!this.ungraded(state, action)) throw new HttpError(409, 'This decision is graded; play it with decide().');
+    if (state.free) {
+      this.applyFree(state, chooseIndex(this.freeActionsFor(state), action, toBb));
+    } else {
+      const hero = state.players[this.nextToActIndex(state)!];
+      const over = this.overCall(state);
+      const actions = [...this.legalActions(state, hero), ...(over ? [over] : [])];
+      const chosen = actions[chooseIndex(actions, action, toBb)];
+      if (chosen === over) {
+        state.multiway = true;
+        state.liveNote = MULTIWAY_NOTE;
+      }
+      this.apply(state, hero, chosen);
+    }
     this.advance(state);
   }
 
-  /** The hand is in free play (see `act`). */
-  inFreePlay(state: HandState): boolean {
-    return !!state.free && !state.result;
+  /**
+   * Hero's next action is played without a grade: in free play, once the pot has gone multiway, or
+   * when it's the call that takes the pot multiway.
+   */
+  ungraded(state: HandState, action: ActionType): boolean {
+    return this.playedUngraded(state) || (action === 'call' && this.overCall(state) !== null);
+  }
+
+  /** The hand is being played without grades: free play, or a pot that went multiway. */
+  playedUngraded(state: HandState): boolean {
+    return !state.result && (!!state.free || !!state.multiway);
+  }
+
+  /**
+   * Hero's call where the charts keep pots heads-up (someone has already called): offered anyway,
+   * and taking it makes the pot multiway (see `multiway`). Null when there's no such call.
+   */
+  private overCall(state: HandState): LegalAction | null {
+    if (!state.heroToAct || state.postflop || state.free || state.result) return null;
+    const hero = state.players[this.nextToActIndex(state)!];
+    if (!hero?.isHero || !this.nodeKeyFor(state, hero).endsWith(NOCALL_SUFFIX)) return null;
+    const stack = stackOf(state, hero.position);
+    const callTo = Math.min(state.currentBet, stack);
+    return { id: 'call', label: callTo >= stack ? `Call all-in ${callTo}` : `Call ${callTo}`, toBb: callTo };
   }
 
   decide(state: HandState, action: ActionType, toBb?: number): DecisionFeedback {
-    if (state.free) throw new HttpError(409, 'This decision is not graded; play it with act().');
+    if (state.free || state.multiway) throw new HttpError(409, 'This decision is not graded; play it with act().');
     const pending = this.pendingDecision(state);
     if (!pending) throw new HttpError(409, 'It is not your turn — this hand is complete.');
     const { options } = pending;
@@ -602,6 +665,7 @@ export class HandEngine {
   view(state: HandState): HandView {
     const complete = state.result !== null;
     const pending = this.pendingDecision(state);
+    const over = pending ? this.overCall(state) : null;
     return {
       id: state.id,
       config: state.config,
@@ -620,8 +684,9 @@ export class HandEngine {
       potBb: round2(state.players.reduce((s, p) => s + p.committed, 0)),
       board: state.board,
       actionLog: state.actionLog,
-      legalActions: pending ? pending.options.map((o, i) => ({ ...pending.actions[i], label: o.label })) : [],
-      pendingSpot: pending && !state.free ? {
+      legalActions: pending ? [...pending.options.map((o, i) => ({ ...pending.actions[i], label: o.label })), ...(over ? [over] : [])] : [],
+      // Ungraded spots have no chart answer to show while hero decides.
+      pendingSpot: pending && !state.free && !state.multiway ? {
         nodeKey: pending.nodeKey,
         nodeLabel: pending.nodeLabel,
         handClass: pending.handClass,
@@ -634,6 +699,8 @@ export class HandEngine {
       dataSource: this.charts.dataSource,
       solving: state.postflop && (this.awaitingSolve(state) || this.awaitingVillain(state)) ? (state.postflop.street as 'turn' | 'river') : null,
       freePlay: !!state.free,
+      multiway: !!state.multiway,
+      multiwayCall: !!over,
       liveNote: state.liveNote ?? null,
       solverCommit: state.solverCommit ?? null,
       noCallReason: pending ? this.noCallReason(state) : null,
@@ -943,6 +1010,8 @@ export class HandEngine {
     if (state.postflop || state.free || state.board.length) return false;
     const live = state.players.filter((p) => !p.folded);
     if (live.some((p) => p.allIn)) return false;
+    // A pot hero took multiway has no solver answers, even if it's back to heads-up by now.
+    if (state.multiway) return this.startFreePlay(state);
     const spot = this.spotName(state);
     if (!this.flops || !spot || this.flops.solvedFlops(spot).length === 0) return this.startFreePlay(state);
     state.board = state.deck.splice(0, 3);
@@ -971,45 +1040,68 @@ export class HandEngine {
     return true;
   }
 
-  /** The decision at the current point of the street, or undefined when the street's betting is over. */
   /**
-   * Free play (engine/freePlay.ts) when the solver can't play this pot: heads-up with hero still in,
-   * nobody all in, against an opponent JEV AI plays. Otherwise the hand runs out, as before.
+   * Free play (engine/freePlay.ts) when the solver can't play this pot, with hero still in and nobody
+   * all in: a heads-up pot against an opponent JEV AI plays, or any pot hero took multiway (chart
+   * bots are played by JEV AI as a solid regular, or by simple rules without a key). Otherwise the
+   * hand runs out, as before.
    */
   private startFreePlay(state: HandState): boolean {
     const live = state.players.filter((p) => !p.folded);
-    const villain = live.find((p) => !p.isHero);
-    if (live.length !== 2 || !live.some((p) => p.isHero) || live.some((p) => p.allIn) || !villain || !this.jevPlays(state, villain)) return false;
+    if (live.length < 2 || !live.some((p) => p.isHero) || live.some((p) => p.allIn)) return false;
+    if (!state.multiway && (live.length !== 2 || !this.jevPlays(state, live.find((p) => !p.isHero)!))) return false;
     if (!state.board.length) state.board = state.deck.splice(0, 3);
-    const seats = [...live].sort((a, b) => postflopIndex(a.position) - postflopIndex(b.position)).map((p) => p.position) as [Position, Position];
+    const seats = [...live].sort((a, b) => postflopIndex(a.position) - postflopIndex(b.position)).map((p) => p.position);
     state.free = { seats, street: 'flop', base: live[0].committed, streetBets: {}, acted: [], aggression: 0 };
-    state.liveNote = FREE_PLAY_NOTE;
+    state.liveNote = state.multiway ? MULTIWAY_NOTE : FREE_PLAY_NOTE;
     return true;
   }
 
-  /** Who acts next in free play; null when the street's betting is over. */
+  /** The biggest bet on this street among the players still in, other than `except`'s. */
+  private freeTopBet(state: HandState, except?: Position): number {
+    const f = state.free!;
+    const bets = f.seats.filter((pos) => pos !== except && !state.players.find((p) => p.position === pos)!.folded).map((pos) => f.streetBets[pos] ?? 0);
+    return Math.max(0, ...bets);
+  }
+
+  /**
+   * Who acts next in free play, in seat order after the last to act: the first player still in with
+   * chips behind who hasn't acted on this street or is short of the biggest bet. Null when the
+   * street's betting is over.
+   */
   private freeToAct(state: HandState): Position | null {
     const f = state.free!;
+    const top = this.freeTopBet(state);
     const last = f.acted.at(-1);
-    if (!last) return f.seats[0];
-    const other = last === f.seats[0] ? f.seats[1] : f.seats[0];
-    if (!f.acted.includes(other) || (f.streetBets[other] ?? 0) < (f.streetBets[last] ?? 0)) return other;
+    const from = last ? f.seats.indexOf(last) + 1 : 0;
+    for (let k = 0; k < f.seats.length; k++) {
+      const pos = f.seats[(from + k) % f.seats.length];
+      const p = state.players.find((x) => x.position === pos)!;
+      if (p.folded || p.allIn) continue;
+      if (!f.acted.includes(pos) || (f.streetBets[pos] ?? 0) < top) return pos;
+    }
     return null;
   }
 
   private freeActionsFor(state: HandState): LegalAction[] {
     const f = state.free!;
     const pos = this.freeToAct(state)!;
-    const other = pos === f.seats[0] ? f.seats[1] : f.seats[0];
     const myBet = f.streetBets[pos] ?? 0;
     const potBb = round2(state.players.reduce((s, p) => s + p.committed, 0));
-    return freeActions(f.street, potBb, myBet, f.streetBets[other] ?? 0, round2(this.effectiveStack(state) - f.base - myBet), f.aggression);
+    return freeActions(f.street, potBb, myBet, this.freeTopBet(state, pos), round2(this.effectiveStack(state) - f.base - myBet), f.aggression);
+  }
+
+  /** A free-play opponent JEV AI decides for: an archetype, or in a multiway pot any bot (as a solid regular). */
+  private freeJev(state: HandState, player: Player): boolean {
+    return !player.isHero && this.archetypes.jevEnabled && (!!state.archetypes?.[player.position] || !!state.multiway);
   }
 
   /** Plays free-play streets until hero must act, JEV AI is awaited, or the hand ends. */
   private advanceFree(state: HandState): void {
     for (;;) {
       const f = state.free!;
+      // Hero folded: whoever is left just runs it out.
+      if (state.players.some((p) => p.isHero && p.folded)) return this.finish(state);
       const pos = this.freeToAct(state);
       if (pos === null) {
         // The street's betting is over: showdown after the river or an all-in, else the next card.
@@ -1027,30 +1119,38 @@ export class HandEngine {
         state.heroToAct = true;
         return;
       }
-      // HandService asks JEV AI (`villainQuestion`) and hands the answer back (`applyVillainChoice`).
-      if (!f.villainChoice) return;
-      const idx = this.sample(f.villainChoice);
-      const source = f.villainSource ?? null;
-      f.villainChoice = null;
-      f.villainSource = null;
+      let idx: number;
+      let source: FreePlayState['villainSource'];
+      if (this.freeJev(state, player)) {
+        // HandService asks JEV AI (`villainQuestion`) and hands the answer back (`applyVillainChoice`).
+        if (!f.villainChoice) return;
+        idx = this.sample(f.villainChoice);
+        source = f.villainSource ?? null;
+        f.villainChoice = null;
+        f.villainSource = null;
+      } else {
+        // A multiway pot with no JEV AI key: the bots play simple rules.
+        idx = this.sample(ruleChoice(this.freeActionsFor(state), player.cards, state.board));
+        source = { by: 'rules' };
+      }
       this.applyFree(state, idx, source);
-      if (player.folded) return this.finish(state);
+      if (state.players.filter((p) => !p.folded).length === 1) return this.finish(state);
     }
   }
 
   private applyFree(state: HandState, idx: number, source: FreePlayState['villainSource'] = null): void {
     const f = state.free!;
     const pos = this.freeToAct(state)!;
-    const other = pos === f.seats[0] ? f.seats[1] : f.seats[0];
+    const top = this.freeTopBet(state, pos);
     const action = this.freeActionsFor(state)[idx];
     const player = state.players.find((p) => p.position === pos)!;
     const effective = this.effectiveStack(state);
     let street = f.streetBets[pos] ?? 0;
     if (action.id === 'fold') player.folded = true;
-    else if (action.id === 'call') street = Math.min(f.streetBets[other] ?? 0, effective - f.base);
+    else if (action.id === 'call') street = Math.min(top, effective - f.base);
     else if (action.id !== 'check') {
       street = Math.min(action.toBb!, effective - f.base);
-      if (street > (f.streetBets[other] ?? 0)) f.aggression++;
+      if (street > top) f.aggression++;
     }
     f.streetBets[pos] = round2(street);
     player.committed = round2(f.base + street);
@@ -1187,7 +1287,7 @@ export class HandEngine {
     if (state.free) {
       if (state.result || state.heroToAct || state.free.villainChoice) return false;
       const pos = this.freeToAct(state);
-      return pos !== null && this.jevPlays(state, state.players.find((p) => p.position === pos)!);
+      return pos !== null && this.freeJev(state, state.players.find((p) => p.position === pos)!);
     }
     const pf = state.postflop;
     if (!pf || state.result || state.heroToAct || pf.villainChoice || this.awaitingSolve(state)) return false;
@@ -1211,7 +1311,7 @@ export class HandEngine {
       board: state.board,
       cards: me.cards,
       position: pos,
-      opponent,
+      opponents: [opponent],
       inPosition: node.player === 1,
       potBb: round2(state.players.reduce((s, p) => s + p.committed, 0)),
       toCallBb: round2(Math.max(0, (pf.streetBets[opponent] ?? 0) - myBet)),
@@ -1225,19 +1325,20 @@ export class HandEngine {
   private freeQuestion(state: HandState): PostflopQuestion {
     const f = state.free!;
     const pos = this.freeToAct(state)!;
-    const opponent = pos === f.seats[0] ? f.seats[1] : f.seats[0];
+    const inHand = f.seats.filter((s) => !state.players.find((p) => p.position === s)!.folded);
     const me = state.players.find((p) => p.position === pos)!;
     const myBet = f.streetBets[pos] ?? 0;
     return buildPostflopQuestion({
-      archetype: state.archetypes![pos]!,
+      // A chart bot in a multiway pot plays as a solid regular.
+      archetype: state.archetypes?.[pos] ?? 'tag',
       street: f.street,
       board: state.board,
       cards: me.cards,
       position: pos,
-      opponent,
-      inPosition: pos === f.seats[1],
+      opponents: inHand.filter((s) => s !== pos),
+      inPosition: pos === inHand.at(-1),
       potBb: round2(state.players.reduce((s, p) => s + p.committed, 0)),
-      toCallBb: round2(Math.max(0, (f.streetBets[opponent] ?? 0) - myBet)),
+      toCallBb: round2(Math.max(0, this.freeTopBet(state, pos) - myBet)),
       behindBb: round2(this.effectiveStack(state) - me.committed),
       streetBetBb: myBet,
       actionLog: state.actionLog,
@@ -1462,19 +1563,15 @@ export class HandEngine {
     }
     const pot = round2(state.players.reduce((s, p) => s + p.committed, 0));
     const hero = state.players.find((p) => p.isHero)!;
-    // A short stack all in can win only up to its own stake from each player. What anyone put in
-    // beyond it (folded players' dead money included) is a side pot for the bigger stack left in.
-    const shortStake = Math.min(...live.map((p) => p.committed));
-    const sideOwner = live.length > 1 ? live.find((p) => p.committed > shortStake) : undefined;
-    const side = sideOwner ? round2(state.players.reduce((s, p) => s + Math.max(0, p.committed - shortStake), 0)) : 0;
-    const main = round2(pot - side);
     let board: string[] = [...state.board];
     let showdown: HandResult['showdown'] = null;
     let winners: Position[];
     let summary: string;
+    const won: Partial<Record<Position, number>> = {};
 
     if (live.length === 1) {
       winners = [live[0].position];
+      won[live[0].position] = pot;
       summary = `${live[0].position} wins ${pot}bb uncontested.`;
     } else {
       const outcome = this.resolver.resolve(
@@ -1484,19 +1581,28 @@ export class HandEngine {
       );
       board = outcome.board;
       showdown = outcome.entries;
-      winners = outcome.winners;
       state.showdownPositions = live.map((p) => p.position);
-      const winningHand = outcome.entries.find((e) => e.isWinner)!.handName.toLowerCase();
-      summary =
-        winners.length === 1
-          ? `${winners[0]} wins ${main}bb at showdown with ${winningHand}.`
-          : `${winners.join(' and ')} split ${main}bb with ${winningHand}.`;
-      if (sideOwner) summary += ` ${sideOwner.position} also takes the ${side}bb side pot the all-in stack couldn't cover.`;
+      const hands = new Map(live.map((p) => [p.position, bestHand([...p.cards, ...board])]));
+      const pots = sidePots(state.players, live);
+      winners = [];
+      summary = '';
+      pots.forEach(({ amount, eligible }, i) => {
+        const top = eligible.reduce((a, b) => (compareScores(hands.get(b)!.score, hands.get(a)!.score) > 0 ? b : a));
+        const ws = eligible.filter((p) => compareScores(hands.get(p)!.score, hands.get(top)!.score) === 0);
+        for (const w of ws) won[w] = round2((won[w] ?? 0) + amount / ws.length);
+        const hand = hands.get(ws[0])!.name.toLowerCase();
+        if (i === 0) {
+          winners = ws;
+          summary = ws.length === 1 ? `${ws[0]} wins ${amount}bb at showdown with ${hand}.` : `${ws.join(' and ')} split ${amount}bb with ${hand}.`;
+        } else if (eligible.length === 1) {
+          summary += ` ${ws[0]} also takes the ${amount}bb side pot the all-in stack couldn't cover.`;
+        } else {
+          summary += ws.length === 1 ? ` ${ws[0]} wins the ${amount}bb side pot with ${hand}.` : ` ${ws.join(' and ')} split the ${amount}bb side pot with ${hand}.`;
+        }
+      });
+      // The entries mark the main pot's winners, as `winners` does.
+      for (const e of showdown) e.isWinner = winners.includes(e.position);
     }
-
-    const won: Partial<Record<Position, number>> = {};
-    for (const w of winners) won[w] = round2(main / winners.length);
-    if (sideOwner) won[sideOwner.position] = round2((won[sideOwner.position] ?? 0) + side);
     state.result = {
       board,
       showdown,

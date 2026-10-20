@@ -363,6 +363,9 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 .hand-verdict { font-weight: 600; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-sm); animation: pop 0.3s var(--ease) both; border: 1px solid transparent; }
 .hand-verdict.good { background: rgba(59, 182, 127, 0.1); border-color: rgba(59, 182, 127, 0.3); color: #86e3b6; }
 .hand-verdict.ok { background: rgba(226, 184, 76, 0.1); border-color: rgba(226, 184, 76, 0.3); color: #f0d27e; }
+/* The pot went multiway: what's left of the hand isn't graded (DecisionPanel). */
+.multiway-note { display: grid; gap: var(--sp-1); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--raised); font-size: var(--fs-sm); }
+.multiway-note span { color: var(--muted); }
 .hand-verdict.bad { background: rgba(226, 91, 86, 0.1); border-color: rgba(226, 91, 86, 0.3); color: #f3a19d; }
 .stepper { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
 .step { background: transparent; border: 1px solid var(--line-2); border-radius: 999px; padding: var(--sp-1) var(--sp-3); font-size: var(--fs-xs); color: var(--muted); display: inline-flex; gap: var(--sp-1); align-items: center; }
@@ -430,7 +433,8 @@ main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) 480px; 
 @media (hover: hover) and (pointer: fine) { .range-grid.clickable:hover { box-shadow: 0 0 0 2px var(--line-3); } }
 .range-hint { margin: var(--sp-2) 0 0; }
 .range-modal { position: relative; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r-lg); padding: var(--sp-4); max-width: 96vw; max-height: 94dvh; overflow: auto; box-shadow: var(--shadow-float); animation: modal-in 200ms var(--ease) both; }
-.range-close { position: absolute; top: 0.75rem; right: 0.75rem; }
+/* Above the chart: `.range`'s filling entrance animation gives it a stacking context that would otherwise cover the button. */
+.range-close { position: absolute; top: 0.75rem; right: 0.75rem; z-index: 1; }
 /* Floats over the enlarged chart when hero's next decision arrives; fixed, so it stays out of the backdrop's grid. */
 .next-ready { position: fixed; left: 50%; bottom: var(--sp-5); translate: -50% 0; border-radius: 999px; animation: next-in 300ms var(--ease) both; }
 @keyframes next-in { from { opacity: 0; transform: translateY(8px); } }
@@ -732,6 +736,13 @@ button.primary.danger { background: #c25a4b; color: #fff; }
   100% { transform: translate3d(var(--drift), 125cqh, 0) rotate(var(--spin)); opacity: 0; }
 }
 .no-anim .chip-rain { display: none; }
+/* Kaylie.tsx: hearts in place of chips, on a rose-gold felt for the rest of the hand. */
+.heart-rain i { width: auto; height: auto; border-radius: 0; background: none; box-shadow: none; font-size: var(--size); line-height: 1; text-shadow: 0 2px 5px rgba(0, 0, 0, 0.45); }
+.felt.rose {
+  background:
+    radial-gradient(ellipse at 50% 38%, rgba(255, 255, 255, 0.14), transparent 55%),
+    radial-gradient(ellipse at 50% 50%, #b4636f 0%, #8e4553 45%, #5a2734 100%);
+}
 
 /* ---------- Skeletons ---------- */
 /* Placeholder shapes in the real layout while data loads (Skeleton.tsx). The shimmer is a band sliding across (translate only). */

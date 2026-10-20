@@ -6,7 +6,8 @@ import { vi } from 'vitest';
 import { PlayerResolver } from '../src/auth/player.js';
 import { InvalidToken, type AuthVerifier } from '../src/auth/verify.js';
 import { MemoryRepo } from '../src/db/repo.js';
-import type { HandEngine } from '../src/engine/handEngine.js';
+import type { ActionType, HandView, LegalAction } from '@gtotutor/shared-types';
+import type { HandEngine, HandState } from '../src/engine/handEngine.js';
 import { HandService } from '../src/engine/handService.js';
 import type { FlopFile } from '../src/postflop/flopStore.js';
 import { ExplanationUnavailable, type CoachLlm, type CoachTool } from '../src/teacher/llmTeacher.js';
@@ -95,4 +96,13 @@ export function fakeSolverOutput({ threeBets = false } = {}): string {
   const classes = [...ranks].flatMap((a, i) => [...ranks].slice(i).map((b, j) => (j === 0 ? a + b : [a + b + 's', a + b + 'o']))).flat();
   writeFileSync(join(dir, '_spot.json'), JSON.stringify({ name: 'btn_vs_bb_srp_100', chips_per_bb: 20, pot_bb: 5.5, stack_bb: 97.5, oop_range: classes.join(','), ip_range: classes.join(',') }));
   return root;
+}
+
+/** Hero's options the charts grade: the legal actions without the call that takes a pot multiway. */
+export const chartActions = (view: HandView): LegalAction[] => (view.multiwayCall ? view.legalActions.filter((a) => a.id !== 'call') : view.legalActions);
+
+/** Plays hero's action the way HandService does: graded with decide(), or with act() when it isn't graded. */
+export function play(engine: HandEngine, state: HandState, action: ActionType, toBb?: number): void {
+  if (engine.ungraded(state, action)) engine.act(state, action, toBb);
+  else engine.decide(state, action, toBb);
 }

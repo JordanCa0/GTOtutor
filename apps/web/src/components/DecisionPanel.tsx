@@ -46,7 +46,19 @@ export function DecisionPanel({ hand, playbackDone, chats, onChat, streak = null
   const matched = hand.decisions.filter((d) => d.grade === 'best').length;
   const mistakes = hand.decisions.filter((d) => d.grade === 'mistake').length;
 
+  const multiwayNote = hand.multiway && (
+    <div className="multiway-note" role="note">
+      <strong>Ungraded: this pot went multiway</strong>
+      <span>
+        The charts and the solver only cover heads-up pots, so from your multiway call on, the hand is played out without grades.
+        {hand.decisions.length > 0 && ' Your decisions before it are graded below.'}
+      </span>
+    </div>
+  );
+
   if (itemCount === 0 && !sheet) {
+    // Hero's first decision took the pot multiway: nothing graded to show, just why.
+    if (multiwayNote) return <div className="decision-panel">{multiwayNote}</div>;
     return (
       <SkeletonGroup visible={skeleton.visible} label="Dealing" className="skeleton-stack">
         <Skeleton kind="block" height="4.5rem" />
@@ -91,6 +103,7 @@ export function DecisionPanel({ hand, playbackDone, chats, onChat, streak = null
         </div>
       )}
       <div className="panel-part" hidden={tab === 'hand' && !!sheet}>
+      {multiwayNote}
       {complete && hand.decisions.length > 1 && (
         <div className={`hand-verdict ${mistakes ? 'bad' : matched === hand.decisions.length ? 'good' : 'ok'}`}>
           {matched} of {hand.decisions.length} decision{hand.decisions.length > 1 ? 's' : ''} matched the chart
@@ -138,7 +151,7 @@ export function DecisionPanel({ hand, playbackDone, chats, onChat, streak = null
             <CoachCard key={`coach-${decision.id}`} handId={hand.id} decision={decision} messages={chats[decision.id] ?? []} onMessages={(m) => onChat(decision.id, m)} />
           </div>
         </>
-      ) : sheet ? (
+      ) : sheet && !hand.multiway ? (
         <div className="panel-part muted small" hidden={hide('verdict')}>
           Dealing…
         </div>

@@ -177,7 +177,7 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
     const state = await hands.get(player, req.params.id);
     const pending = engine.pendingDecision(state);
     if (!pending) throw new HttpError(409, 'There is no pending decision to hint at.');
-    if (engine.inFreePlay(state)) throw new HttpError(409, 'There is no solver data for this pot, so there is no hint.');
+    if (engine.playedUngraded(state)) throw new HttpError(409, 'There is no solver data for this pot, so there is no hint.');
     const spot: SpotContext = {
       ...baseSpot({ heroPosition: state.heroPosition, stackDepthBb: state.config.stackDepthBb, stacks: state.config.stacks, archetypes: state.archetypes }, { ...pending, board: state.board }),
       heroCards: pending.heroCards,

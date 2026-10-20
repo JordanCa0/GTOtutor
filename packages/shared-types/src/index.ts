@@ -228,6 +228,13 @@ export interface HandView {
    * the flop aren't graded (docs/archetypes.md, "Free play").
    */
   freePlay?: boolean;
+  /**
+   * Hero called where the charts keep pots heads-up, so the pot went multiway: hero's decisions
+   * from then on are played, not graded.
+   */
+  multiway?: boolean;
+  /** The Call in `legalActions` is that multiway call: taking it ends grading for the hand. */
+  multiwayCall?: boolean;
   /** Commit of the solver service behind this hand's turn and river strategies, for the source link (AGPL). */
   solverCommit?: string | null;
   /** Why hero has no Call option in this spot (someone already called, or facing a limp), or null. */

@@ -11,6 +11,7 @@ import { HandEngine } from '../src/engine/handEngine.js';
 import { runoutResolver } from '../src/engine/showdownResolver.js';
 import { ALL_HAND_CLASSES } from '../src/poker/cards.js';
 import { seededRng } from '../src/poker/rng.js';
+import { play } from './fakes.js';
 
 // The newest chart file the preflop solver has written, if any (preflop/charts/*.json).
 const chartsDir = fileURLToPath(new URL('../../../preflop/charts', import.meta.url));
@@ -81,9 +82,10 @@ describe('solved preflop charts', () => {
       let guard = 0;
       while (view.status === 'awaiting_hero') {
         const legal = view.legalActions;
-        engine.decide(state, legal[rng.int(legal.length)].id as ActionType);
+        const pick = legal[rng.int(legal.length)];
+        play(engine, state, pick.id as ActionType, pick.toBb ?? undefined);
         view = engine.view(state);
-        if (++guard > 10) throw new Error('hand did not terminate');
+        if (++guard > 30) throw new Error('hand did not terminate');
       }
       expect(view.result).not.toBeNull();
     }
