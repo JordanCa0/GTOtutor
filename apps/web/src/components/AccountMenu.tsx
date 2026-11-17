@@ -51,7 +51,7 @@ export function AccountDialogs() {
 }
 
 /** Header control: "Sign in" for guests, the account menu when signed in. Hidden when sign-in isn't configured. */
-export function AccountMenu({ onProfile }: { onProfile?: () => void }) {
+export function AccountMenu({ onProfile, onTracker }: { onProfile?: () => void; onTracker?: () => void }) {
   const { enabled, ready, session } = useAuth();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -80,6 +80,11 @@ export function AccountMenu({ onProfile }: { onProfile?: () => void }) {
           {onProfile && (
             <button role="menuitem" className="ghost" onClick={() => (setOpen(false), onProfile())}>
               My progress
+            </button>
+          )}
+          {onTracker && (
+            <button role="menuitem" className="ghost" onClick={() => (setOpen(false), onTracker())}>
+              Poker tracker
             </button>
           )}
           <button role="menuitem" className="ghost" onClick={() => void supabase!.auth.signOut().then(() => setOpen(false))}>

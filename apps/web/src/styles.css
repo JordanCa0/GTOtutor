@@ -889,6 +889,37 @@ button.primary.danger { background: #c25a4b; color: #fff; }
 .starred-detail { display: flex; flex-direction: column; gap: 1rem; }
 @media (hover: hover) and (pointer: fine) { .starred-item:hover { border-color: var(--line-3); } }
 @media (max-width: 640px) { .profile-stats { grid-template-columns: 1fr; } .profile-head { align-items: flex-start; flex-direction: column; } }
+/* Poker tracker (TrackerPage.tsx): reuses the profile page's shell, tiles and list rows. */
+.tracker-head-actions { display: flex; gap: var(--sp-3); flex-wrap: wrap; }
+.tracker-empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-3); }
+.tracker-empty p { margin: 0; }
+.tracker-item { align-items: flex-start; }
+.tracker-date { flex: none; width: 7.5rem; padding-top: 2px; font-variant-numeric: tabular-nums; }
+.tracker-result { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tracker-form { width: min(560px, 100%); display: flex; flex-direction: column; gap: var(--sp-4); }
+.tracker-form .error { margin: 0; }
+.tracker-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4) var(--sp-3); }
+.tracker-field { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.tracker-wide { grid-column: 1 / -1; }
+.tracker-field input, .tracker-field textarea, .tracker-field select { width: 100%; min-width: 0; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line-2); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); color: var(--text); font: inherit; font-size: var(--fs-sm); line-height: 1.2; color-scheme: dark; }
+.tracker-field textarea { resize: vertical; line-height: 1.55; }
+.tracker-field input:focus, .tracker-field textarea:focus, .tracker-field select:focus { outline: none; border-color: var(--line-3); }
+.tracker-field select { appearance: none; cursor: pointer; padding-right: var(--sp-6); background: rgba(255, 255, 255, 0.04) url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2714%27 height=%2714%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%239aa3ad%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E") no-repeat right var(--sp-3) center; }
+.tracker-field select option { background: var(--panel); color: var(--text); }
+.tracker-blinds { display: flex; gap: var(--sp-2); align-items: center; }
+.tracker-blinds input { flex: 1; font-variant-numeric: tabular-nums; }
+.tracker-field input[type="number"] { font-variant-numeric: tabular-nums; }
+.tracker-net { margin: 0; font-size: var(--fs-lg); font-weight: 600; line-height: 1.2; padding: var(--sp-1) 0; font-variant-numeric: tabular-nums; }
+.tracker-money { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
+.tracker-foot { margin-top: 0; gap: var(--sp-3); flex-wrap: wrap; }
+.tracker-confirm { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .tracker-fields { grid-template-columns: minmax(0, 1fr); }
+  .tracker-date { width: auto; }
+  .tracker-item { flex-wrap: wrap; }
+  .tracker-item .starred-text { flex-basis: 100%; order: 1; }
+  .tracker-item .tracker-money { margin-left: auto; }
+}
 /* Animations off (Settings): everything lands in its final state immediately. */
 .no-anim *, .no-anim *::before, .no-anim *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
 

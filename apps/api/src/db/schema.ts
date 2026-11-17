@@ -9,7 +9,7 @@
  * rows are deleted when the guest starts a new session or after 24 hours idle, unless they sign up.
  */
 import { sql } from 'drizzle-orm';
-import { boolean, check, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { bigint, boolean, check, date, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 const owner = {
   userId: uuid('user_id'),
@@ -168,4 +168,36 @@ export const solvedFlops = pgTable(
     solvedAt: timestamp('solved_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.spot, t.flop] })],
+);
+
+/** Poker tracker: real-world sessions a signed-in player logs (date, place, hours, result, notes). Accounts only. */
+export const trackedSessions = pgTable(
+  'tracked_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull(), // → auth.users, on delete cascade (added in the migration)
+    playedOn: date('played_on').notNull(),
+    location: text('location').notNull(),
+    hours: real('hours').notNull(),
+    /** Money in and out, and the net result (cash-out minus buy-in), all in cents so sums are exact. */
+    buyInCents: bigint('buy_in_cents', { mode: 'number' }).notNull(),
+    cashOutCents: bigint('cash_out_cents', { mode: 'number' }).notNull(),
+    resultCents: bigint('result_cents', { mode: 'number' }).notNull(),
+    gameType: text('game_type').notNull(), // 'cash' | 'tournament'
+    gameMode: text('game_mode'), // TRACKED_GAME_MODES id
+    /** Cash games: the blinds in cents (both or neither). */
+    smallBlindCents: bigint('small_blind_cents', { mode: 'number' }),
+    bigBlindCents: bigint('big_blind_cents', { mode: 'number' }),
+    notes: text('notes'),
+    createdAt,
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('tracked_sessions_user_idx').on(t.userId, t.playedOn),
+    check('tracked_sessions_game_type', sql`${t.gameType} in ('cash', 'tournament')`),
+    check('tracked_sessions_hours', sql`${t.hours} >= 0`),
+    check('tracked_sessions_money', sql`${t.buyInCents} >= 0 and ${t.cashOutCents} >= 0 and ${t.resultCents} = ${t.cashOutCents} - ${t.buyInCents}`),
+    check('tracked_sessions_game_mode', sql`${t.gameMode} in ('nlh', 'plo', 'plo5', 'lhe', 'short_deck', 'mixed', 'other')`),
+    check('tracked_sessions_blinds', sql`(${t.smallBlindCents} is null) = (${t.bigBlindCents} is null) and (${t.smallBlindCents} is null or (${t.smallBlindCents} > 0 and ${t.smallBlindCents} <= ${t.bigBlindCents}))`),
+  ],
 );

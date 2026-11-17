@@ -9,6 +9,8 @@ import {
   type SessionStatsResponse,
   type StarredResponse,
   type SubmitDecisionResponse,
+  type TrackedSession,
+  type TrackerResponse,
 } from '@gtotutor/shared-types';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, describe, expect, it, vi } from 'vitest';
@@ -41,6 +43,7 @@ function makeApp(repo: Repo, accounts?: { deleteUser: (id: string) => Promise<vo
     charts,
     engine,
     hands: new HandService(engine, repo),
+    repo,
     players: new PlayerResolver(fakeVerifier, repo),
     teacher: new LlmTeacher(llm, 'test', 50),
     accounts,
@@ -435,6 +438,67 @@ function repoContract(name: string, makeRepo: () => Repo, cleanup?: () => Promis
 }
 
 repoContract('in-memory', () => new MemoryRepo());
+
+describe('poker tracker', () => {
+  const OTHER_USER = '55555555-5555-4555-8555-555555555555';
+  const asUser = (app: FastifyInstance, userId = USER) => client(app, { token: `test-user:${userId}` });
+  const session = { date: '2026-11-01', location: '  Lucky Chances ', hours: 4.5, buyIn: 300.004, cashOut: 179.55, gameType: 'cash', gameMode: 'nlh', smallBlind: 1, bigBlind: 3, notes: '  ' };
+
+  it('is for signed-in players only', async () => {
+    const app = makeApp(new MemoryRepo());
+    expect((await client(app)({ method: 'GET', url: '/api/me/tracker' })).statusCode).toBe(401);
+    expect((await client(app)({ method: 'POST', url: '/api/me/tracker', payload: session })).statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('logs, lists, edits and deletes sessions, each only by its owner', async () => {
+    const app = makeApp(new MemoryRepo());
+    const me = asUser(app);
+    const other = asUser(app, OTHER_USER);
+
+    const added = await me({ method: 'POST', url: '/api/me/tracker', payload: session });
+    expect(added.statusCode).toBe(201);
+    const first = added.json<TrackedSession>();
+    expect(first).toMatchObject({ date: '2026-11-01', location: 'Lucky Chances', hours: 4.5, buyIn: 300, cashOut: 179.55, result: -120.45, gameType: 'cash', gameMode: 'nlh', smallBlind: 1, bigBlind: 3, notes: null });
+    const later = (await me({ method: 'POST', url: '/api/me/tracker', payload: { ...session, date: '2026-11-08', buyIn: 150, cashOut: 450, gameType: 'tournament', gameMode: null, notes: 'Final table' } })).json<TrackedSession>();
+    // Tournaments have no stakes.
+    expect(later).toMatchObject({ result: 300, smallBlind: null, bigBlind: null });
+
+    const list = (await me({ method: 'GET', url: '/api/me/tracker' })).json<TrackerResponse>();
+    expect(list.sessions.map((s) => s.id)).toEqual([later.id, first.id]);
+    expect((await other({ method: 'GET', url: '/api/me/tracker' })).json<TrackerResponse>().sessions).toEqual([]);
+
+    const url = `/api/me/tracker/${first.id}`;
+    expect((await other({ method: 'PUT', url, payload: session })).statusCode).toBe(404);
+    expect((await other({ method: 'DELETE', url })).statusCode).toBe(404);
+    const edited = await me({ method: 'PUT', url, payload: { ...session, cashOut: 350, smallBlind: 0.05, bigBlind: 0.1 } });
+    expect(edited.json<TrackedSession>()).toMatchObject({ id: first.id, result: 50, smallBlind: 0.05, bigBlind: 0.1 });
+
+    expect((await me({ method: 'DELETE', url })).statusCode).toBe(200);
+    expect((await me({ method: 'DELETE', url })).statusCode).toBe(404);
+    expect((await me({ method: 'GET', url: '/api/me/tracker' })).json<TrackerResponse>().sessions.map((s) => s.id)).toEqual([later.id]);
+    await app.close();
+  });
+
+  it('rejects bad sessions', async () => {
+    const app = makeApp(new MemoryRepo());
+    const me = asUser(app);
+    const post = (payload: object) => me({ method: 'POST', url: '/api/me/tracker', payload });
+    expect((await post({ ...session, location: '   ' })).statusCode).toBe(400);
+    expect((await post({ ...session, date: '2026-13-40' })).statusCode).toBe(400);
+    expect((await post({ ...session, date: '2999-01-01' })).statusCode).toBe(400);
+    expect((await post({ ...session, hours: 0 })).statusCode).toBe(400);
+    expect((await post({ ...session, hours: 100 })).statusCode).toBe(400);
+    expect((await post({ ...session, gameType: 'sng' })).statusCode).toBe(400);
+    expect((await post({ ...session, gameMode: 'stud' })).statusCode).toBe(400);
+    expect((await post({ ...session, buyIn: -5 })).statusCode).toBe(400);
+    expect((await post({ ...session, smallBlind: 5, bigBlind: 2 })).statusCode).toBe(400);
+    expect((await post({ ...session, smallBlind: null })).statusCode).toBe(400);
+    expect((await post({ ...session, notes: 'x'.repeat(2001) })).statusCode).toBe(400);
+    expect((await me({ method: 'PUT', url: '/api/me/tracker/not-an-id', payload: session })).statusCode).toBe(400);
+    await app.close();
+  });
+});
 
 // Against the real Supabase database only when asked: RUN_DB_TESTS=1 npm test -w apps/api
 if (process.env.RUN_DB_TESTS === '1') {

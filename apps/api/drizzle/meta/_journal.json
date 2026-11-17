@@ -22,6 +22,20 @@
       "when": 1791571005819,
       "tag": "0002_profile_reviews",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794954757761,
+      "tag": "0003_tracked_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794955730546,
+      "tag": "0004_tracker_stakes",
+      "breakpoints": true
     }
   ]
 }

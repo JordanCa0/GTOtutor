@@ -18,6 +18,9 @@ import type {
   StartHandRequest,
   SubmitDecisionResponse,
   TableOptions,
+  TrackedSession,
+  TrackedSessionInput,
+  TrackerResponse,
 } from '@gtotutor/shared-types';
 import { accessToken } from '../auth/auth';
 import { getGuestId } from '../auth/identity';
@@ -71,4 +74,8 @@ export const api = {
   profileReviewChat: (messages: ChatMessage[]) => request<ChatResponse>('/api/me/profile/review/chat', post({ messages })),
   starred: (before: string | null) => request<StarredResponse>(`/api/me/starred${before ? `?before=${encodeURIComponent(before)}` : ''}`),
   deleteAccount: () => request<{ ok: true }>('/api/me', { method: 'DELETE' }),
+  tracker: () => request<TrackerResponse>('/api/me/tracker'),
+  addTracked: (s: TrackedSessionInput) => request<TrackedSession>('/api/me/tracker', post(s)),
+  updateTracked: (id: string, s: TrackedSessionInput) => request<TrackedSession>(`/api/me/tracker/${id}`, { method: 'PUT', body: JSON.stringify(s) }),
+  deleteTracked: (id: string) => request<{ ok: true }>(`/api/me/tracker/${id}`, { method: 'DELETE' }),
 };

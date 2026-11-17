@@ -54,6 +54,7 @@ const app = buildApp({
   charts,
   engine,
   hands: new HandService(engine, repo, undefined, liveSolver, (msg) => app.log.warn(msg)),
+  repo,
   players: new PlayerResolver(supabaseUrl ? supabaseVerifier(supabaseUrl) : null, repo),
   teacher: new LlmTeacher(
     claudeCoachLlm(model),

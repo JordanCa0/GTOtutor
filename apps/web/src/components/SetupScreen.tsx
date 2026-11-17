@@ -41,7 +41,7 @@ interface Props {
   onClose?: () => void;
 }
 
-const JELLY_THEME = {
+export const JELLY_THEME = {
   chipColor: '#1a212b',
   activeColor: '#ece7dc',
   textColor: '#e2ddd2',

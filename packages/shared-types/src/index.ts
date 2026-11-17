@@ -485,3 +485,63 @@ export interface StarredResponse {
   items: StarredDecision[];
   nextBefore: string | null;
 }
+
+/** Poker tracker: real-world sessions a signed-in player logs by hand (not hands played here). */
+export type TrackedGameType = 'cash' | 'tournament';
+
+export interface TrackedSessionInput {
+  /** The day played, YYYY-MM-DD. */
+  date: string;
+  location: string;
+  hours: number;
+  /** Money in (buy-in plus rebuys or add-ons) and out (cash-out, or tournament cashes), in dollars. Cents at most. */
+  buyIn: number;
+  cashOut: number;
+  gameType: TrackedGameType;
+  /** The poker variant played. */
+  gameMode: TrackedGameMode | null;
+  /** Cash games only: the blinds, e.g. 1 and 3 for $1/$3. Both set or both null; null for tournaments. */
+  smallBlind: number | null;
+  bigBlind: number | null;
+  notes: string | null;
+}
+
+export const TRACKED_GAME_MODES = [
+  { id: 'nlh', label: "No-limit hold'em" },
+  { id: 'plo', label: 'Pot-limit Omaha' },
+  { id: 'plo5', label: '5-card PLO' },
+  { id: 'lhe', label: "Limit hold'em" },
+  { id: 'short_deck', label: 'Short deck' },
+  { id: 'mixed', label: 'Mixed games' },
+  { id: 'other', label: 'Other' },
+] as const;
+export type TrackedGameMode = (typeof TRACKED_GAME_MODES)[number]['id'];
+
+/** The stakes offered in the tracker's dropdown, as [small blind, big blind]. Anything else is entered as custom. */
+export const STAKES_PRESETS: readonly (readonly [number, number])[] = [
+  [0.05, 0.1],
+  [0.1, 0.25],
+  [0.25, 0.5],
+  [0.5, 1],
+  [1, 1],
+  [1, 2],
+  [1, 3],
+  [2, 3],
+  [2, 5],
+  [5, 5],
+  [5, 10],
+];
+
+export interface TrackedSession extends TrackedSessionInput {
+  id: string;
+  /** Net result: cash-out minus buy-in; negative for a losing session. */
+  result: number;
+  createdAt: string;
+}
+
+/** GET /api/me/tracker: every logged session, newest date first. */
+export interface TrackerResponse {
+  sessions: TrackedSession[];
+}
+
+export const TRACKER_LIMITS = { textMaxChars: 80, notesMaxChars: 2000, maxHours: 72, maxResult: 10_000_000, maxBlind: 100_000, maxSessions: 5000 } as const;

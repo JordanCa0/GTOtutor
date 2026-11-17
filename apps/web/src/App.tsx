@@ -11,6 +11,7 @@ import { HeaderMenu } from './components/HeaderMenu';
 import { ClipboardListIcon, HelpIcon, SlidersIcon, TrendingUpIcon } from './components/icons';
 import { Presence } from './components/Presence';
 import { ProfilePage } from './components/ProfilePage';
+import { TrackerPage } from './components/TrackerPage';
 import { SettingsMenu } from './components/SettingsMenu';
 import { dealRequest, SetupScreen, type DealSettings } from './components/SetupScreen';
 import type { Celebration } from './components/Streak';
@@ -70,6 +71,14 @@ export function App() {
       <ProfilePage onClose={() => setProfileOpen(false)} />
     </Presence>
   );
+  // The tracker opens over the table too.
+  const [trackerOpen, setTrackerOpen] = useState(false);
+  const openTracker = useCallback(() => setTrackerOpen(true), []);
+  const tracker = (
+    <Presence show={trackerOpen}>
+      <TrackerPage onClose={() => setTrackerOpen(false)} />
+    </Presence>
+  );
   const { animations } = useSettings();
   const { enabled: accountsOn, ready: authReady, session } = useAuth();
   const userId = session?.user.id ?? null;
@@ -108,11 +117,13 @@ export function App() {
   // Before the first hand there's no header, so the account control sits in the corner.
   const corner = (
     <div className="corner-account">
-      <AccountMenu onProfile={openProfile} />
+      <AccountMenu onProfile={openProfile} onTracker={openTracker} />
     </div>
   );
   // Guests see My progress too, so they can find it; for them it explains signing in instead of opening an empty page.
   const progress = () => (session ? openProfile() : openAccountDialog('progress'));
+  // Guests are asked to sign in first, like My progress.
+  const trackerOrSignIn = () => (session ? openTracker() : openAccountDialog('progress'));
   const help = () => setHelpRequest((n) => n + 1);
   // First visit only, and never once signed in. Wait for the stored session so signed-in users don't see it flash.
   if (!hand && showTitle && !userId) {
@@ -134,6 +145,7 @@ export function App() {
         {corner}
         <SetupScreen initial={settings} starting={start.isPending} error={start.error?.message ?? null} onStart={deal} />
         {profile}
+        {tracker}
       </>
     );
   }
@@ -170,9 +182,9 @@ export function App() {
               My progress
             </button>
           )}
-          <AccountMenu onProfile={openProfile} />
+          <AccountMenu onProfile={openProfile} onTracker={openTracker} />
         </div>
-        <HeaderMenu onConfigure={() => setConfigOpen(true)} onReview={() => setReviewOpen(true)} onProgress={progress} onHelp={help} />
+        <HeaderMenu onConfigure={() => setConfigOpen(true)} onReview={() => setReviewOpen(true)} onProgress={progress} onTracker={trackerOrSignIn} onHelp={help} />
       </header>
       <AccountDialogs />
 
@@ -203,6 +215,7 @@ export function App() {
       </Presence>
 
       {profile}
+      {tracker}
 
       <Presence show={reviewOpen}>
         <SessionReview

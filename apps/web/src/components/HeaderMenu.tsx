@@ -2,18 +2,19 @@ import { useRef, useState, type ReactNode } from 'react';
 import { displayName, useAuth } from '../auth/auth';
 import { supabase } from '../auth/supabase';
 import { openAccountDialog, useDismiss } from './AccountMenu';
-import { ClipboardListIcon, HelpIcon, MenuIcon, SlidersIcon, TrendingUpIcon } from './icons';
+import { ClipboardListIcon, HelpIcon, MenuIcon, SlidersIcon, TrendingUpIcon, WalletIcon } from './icons';
 import { SettingsSwitches } from './SettingsMenu';
 
 interface Props {
   onConfigure: () => void;
   onReview: () => void;
   onProgress: () => void;
+  onTracker: () => void;
   onHelp: () => void;
 }
 
 /** Below 1024px (phones and upright tablets): every header control in one menu. Wider screens show them as buttons. */
-export function HeaderMenu({ onConfigure, onReview, onProgress, onHelp }: Props) {
+export function HeaderMenu({ onConfigure, onReview, onProgress, onTracker, onHelp }: Props) {
   const { enabled, ready, session } = useAuth();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -57,6 +58,11 @@ export function HeaderMenu({ onConfigure, onReview, onProgress, onHelp }: Props)
             {accounts && (
               <Item icon={<TrendingUpIcon size={16} />} onClick={pick(session ? onProgress : () => openAccountDialog('progress'))}>
                 My progress
+              </Item>
+            )}
+            {accounts && (
+              <Item icon={<WalletIcon size={16} />} onClick={pick(onTracker)}>
+                Poker tracker
               </Item>
             )}
           </div>

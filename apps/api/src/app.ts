@@ -2,6 +2,8 @@ import {
   CHAT_LIMITS,
   MIN_DECISIONS_FOR_REVIEW,
   STAR_NOTE_MAX_CHARS,
+  TRACKED_GAME_MODES,
+  TRACKER_LIMITS,
   type ChartNodeView,
   type ChatRequest,
   type ChatResponse,
@@ -21,12 +23,15 @@ import {
   type TableOptions,
   type SubmitDecisionRequest,
   type SubmitDecisionResponse,
+  type TrackedSession,
+  type TrackedSessionInput,
+  type TrackerResponse,
 } from '@gtotutor/shared-types';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { AccountAdmin } from './auth/accounts.js';
 import type { PlayerResolver } from './auth/player.js';
 import type { ChartService } from './charts/chartService.js';
-import { playerKey, type CoachMessage } from './db/repo.js';
+import { playerKey, type CoachMessage, type Repo } from './db/repo.js';
 import { HttpError, isFlopNodeKey, type HandEngine } from './engine/handEngine.js';
 import type { HandContext, HandService } from './engine/handService.js';
 import type { ExplainInput, LlmTeacher, SpotContext } from './teacher/llmTeacher.js';
@@ -44,6 +49,8 @@ export interface AppDeps {
   hands: HandService;
   players: PlayerResolver;
   teacher: LlmTeacher;
+  /** Player data the hand service doesn't own (the poker tracker). */
+  repo: Repo;
   /** Deletes Supabase accounts; without it, DELETE /api/me answers 501. */
   accounts?: AccountAdmin;
 }
@@ -101,13 +108,61 @@ const starSchema = {
   properties: { starred: { type: 'boolean' }, note: { type: ['string', 'null'], maxLength: STAR_NOTE_MAX_CHARS } },
 } as const;
 
+const trackedSessionSchema = {
+  type: 'object',
+  required: ['date', 'location', 'hours', 'buyIn', 'cashOut', 'gameType'],
+  additionalProperties: false,
+  properties: {
+    date: { type: 'string', format: 'date' },
+    location: { type: 'string', maxLength: TRACKER_LIMITS.textMaxChars },
+    hours: { type: 'number', exclusiveMinimum: 0, maximum: TRACKER_LIMITS.maxHours },
+    buyIn: { type: 'number', minimum: 0, maximum: TRACKER_LIMITS.maxResult },
+    cashOut: { type: 'number', minimum: 0, maximum: TRACKER_LIMITS.maxResult },
+    gameType: { enum: ['cash', 'tournament'] },
+    gameMode: { enum: [...TRACKED_GAME_MODES.map((m) => m.id), null] },
+    smallBlind: { type: ['number', 'null'], exclusiveMinimum: 0, maximum: TRACKER_LIMITS.maxBlind },
+    bigBlind: { type: ['number', 'null'], exclusiveMinimum: 0, maximum: TRACKER_LIMITS.maxBlind },
+    notes: { type: ['string', 'null'], maxLength: TRACKER_LIMITS.notesMaxChars },
+  },
+} as const;
+
+const toCents = (n: number) => Math.round(n * 100) / 100;
+
+const trackedIdParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } } as const;
+
+/** Trims the text fields (blank optional ones become null), rounds money to cents, and checks the stakes. */
+function cleanTracked(body: TrackedSessionInput): TrackedSessionInput {
+  const location = body.location.trim();
+  if (!location) throw new HttpError(400, 'Add where you played.');
+  // A day after today allows for time zones ahead of the server's.
+  if (Date.parse(body.date) > Date.now() + 86_400_000) throw new HttpError(400, "That date hasn't happened yet.");
+  // Stakes are for cash games; tournaments drop them.
+  const cash = body.gameType === 'cash';
+  const smallBlind = cash && body.smallBlind != null ? toCents(body.smallBlind) : null;
+  const bigBlind = cash && body.bigBlind != null ? toCents(body.bigBlind) : null;
+  if ((smallBlind === null) !== (bigBlind === null)) throw new HttpError(400, 'Add both blinds, or neither.');
+  if (smallBlind !== null && (smallBlind <= 0 || smallBlind > bigBlind!)) throw new HttpError(400, "The small blind can't be bigger than the big blind.");
+  return {
+    date: body.date,
+    location,
+    hours: toCents(body.hours),
+    buyIn: toCents(body.buyIn),
+    cashOut: toCents(body.cashOut),
+    gameType: body.gameType,
+    gameMode: body.gameMode ?? null,
+    smallBlind,
+    bigBlind,
+    notes: body.notes?.trim() || null,
+  };
+}
+
 /** The saved explanation in a coach thread, shaped like a fresh one. */
 function savedExplanation(thread: CoachMessage[]): Extract<ExplanationResponse, { status: 'ok' }> | null {
   const m = thread.find((x) => x.kind === 'explanation');
   return m ? { status: 'ok', tldr: m.tldr ?? '', points: m.points ?? [], cached: true, ungroundedNumbers: m.ungrounded ?? [] } : null;
 }
 
-export function buildApp({ charts, engine, hands, players, teacher, accounts }: AppDeps): FastifyInstance {
+export function buildApp({ charts, engine, hands, players, teacher, repo, accounts }: AppDeps): FastifyInstance {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
 
   app.setErrorHandler((err, _req, reply) => {
@@ -372,6 +427,37 @@ export function buildApp({ charts, engine, hands, players, teacher, accounts }: 
       };
     },
   );
+
+  /** Poker tracker: sessions played away from here, logged by hand. Accounts only; every query is scoped to the caller. */
+  app.get('/api/me/tracker', async (req): Promise<TrackerResponse> => {
+    const { userId } = await signedIn(req);
+    return { sessions: await repo.trackedSessions(userId, TRACKER_LIMITS.maxSessions) };
+  });
+
+  app.post<{ Body: TrackedSessionInput }>('/api/me/tracker', { schema: { body: trackedSessionSchema } }, async (req, reply): Promise<TrackedSession> => {
+    const { userId } = await signedIn(req);
+    const input = cleanTracked(req.body);
+    if ((await repo.trackedSessionCount(userId)) >= TRACKER_LIMITS.maxSessions) throw new HttpError(409, `You can log up to ${TRACKER_LIMITS.maxSessions} sessions.`);
+    reply.status(201);
+    return repo.addTrackedSession(userId, input);
+  });
+
+  app.put<{ Params: { id: string }; Body: TrackedSessionInput }>(
+    '/api/me/tracker/:id',
+    { schema: { params: trackedIdParams, body: trackedSessionSchema } },
+    async (req): Promise<TrackedSession> => {
+      const { userId } = await signedIn(req);
+      const saved = await repo.updateTrackedSession(userId, req.params.id.toLowerCase(), cleanTracked(req.body));
+      if (!saved) throw new HttpError(404, 'Session not found.');
+      return saved;
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>('/api/me/tracker/:id', { schema: { params: trackedIdParams } }, async (req) => {
+    const { userId } = await signedIn(req);
+    if (!(await repo.deleteTrackedSession(userId, req.params.id.toLowerCase()))) throw new HttpError(404, 'Session not found.');
+    return { ok: true };
+  });
 
   /** After sign-in: move this browser's guest data into the account. */
   app.post<{ Body: { guestId: string } }>(

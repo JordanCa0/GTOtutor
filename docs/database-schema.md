@@ -155,6 +155,28 @@ Primary key: `session_id` + `decisions_count`.
 
 One row per account, replaced on refresh. A review that cites numbers not in the stats isn't saved. Added in migration `0002_profile_reviews`.
 
+### `tracked_sessions`: the poker tracker's logged sessions
+
+Sessions played away from GTOtutor (at a casino, a home game or online) that a signed-in player logs by hand. Accounts only: guests can't log sessions.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid | Primary key |
+| `user_id` | uuid | Owner → `auth.users`, on delete cascade |
+| `played_on` | date | The day played |
+| `location` | text | Where, up to 80 characters |
+| `hours` | real | More than 0, at most 72 |
+| `buy_in_cents` | bigint | Money in: buy-in plus rebuys (tournaments: buy-ins and re-entries), in cents |
+| `cash_out_cents` | bigint | Money out: cash-out (tournaments: cashes), in cents |
+| `result_cents` | bigint | `cash_out_cents - buy_in_cents` (a check keeps them in step), so totals are exact |
+| `game_type` | text | `cash` or `tournament` |
+| `game_mode` | text | Optional: `nlh`, `plo`, `plo5`, `lhe`, `short_deck`, `mixed` or `other` (`TRACKED_GAME_MODES`) |
+| `small_blind_cents`, `big_blind_cents` | bigint | Cash games only, optional: the stakes, both or neither, small ≤ big |
+| `notes` | text | Optional, up to 2000 characters |
+| `created_at`, `updated_at` | timestamptz | |
+
+Indexed on `(user_id, played_on)`. The API's `/api/me/tracker` routes read and write it, always scoped to the caller. Added in migration `0003_tracked_sessions`; money in and out, stakes, and the fixed game list came in `0004_tracker_stakes`, which filled in older rows from their result.
+
 ## Shared solver tables (not player data)
 
 **Unused (2026-10-09).** These tables were made for a plan to keep the solved flop files in Supabase Storage. The files went to S3 instead (see `docs/deployment.md`), and nothing reads or writes these tables. Remove them in a later migration, or reuse them as an index of the S3 files.

@@ -1,4 +1,4 @@
-import type { ActionLogEntry, DecisionFeedback, DecisionStar, HandConfig, HandResult, Position, SessionCoachReview, SessionStats } from '@gtotutor/shared-types';
+import type { ActionLogEntry, DecisionFeedback, DecisionStar, HandConfig, HandResult, Position, SessionCoachReview, SessionStats, TrackedSession, TrackedSessionInput } from '@gtotutor/shared-types';
 
 /** A coach review that came back clean, so it can be kept and shown again without asking the coach. */
 export type SavedCoachReview = Extract<SessionCoachReview, { status: 'ok' }>;
@@ -80,7 +80,21 @@ export interface Repo {
   profileReview(userId: string): Promise<{ decisionsCount: number; coach: SavedCoachReview } | null>;
   /** Replaces the account's saved all-time review. */
   saveProfileReview(userId: string, decisionsCount: number, stats: SessionStats, coach: SavedCoachReview): Promise<void>;
+  /** Poker tracker: an account's logged sessions, newest date first (at most `limit`). */
+  trackedSessions(userId: string, limit: number): Promise<TrackedSession[]>;
+  trackedSessionCount(userId: string): Promise<number>;
+  addTrackedSession(userId: string, input: TrackedSessionInput): Promise<TrackedSession>;
+  /** Null when the session doesn't exist or belongs to someone else. */
+  updateTrackedSession(userId: string, id: string, input: TrackedSessionInput): Promise<TrackedSession | null>;
+  /** False when the session doesn't exist or belongs to someone else. */
+  deleteTrackedSession(userId: string, id: string): Promise<boolean>;
 }
+
+/** Cash-out minus buy-in, worked out in cents so it is exact. */
+export const netResult = (s: Pick<TrackedSessionInput, 'buyIn' | 'cashOut'>) => (Math.round(s.cashOut * 100) - Math.round(s.buyIn * 100)) / 100;
+
+/** Newest date first; sessions on the same day, newest logged first. */
+export const byTrackedDate = (a: TrackedSession, b: TrackedSession) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt);
 
 /**
  * An account's most recent decisions, grouped by hand (newest hand first), and how many decisions it
@@ -115,6 +129,8 @@ export class MemoryRepo implements Repo {
   private readonly reviews = new Map<string, { sessionId: string; coach: SavedCoachReview }>(); // `${sessionId}|${count}`
   private readonly profileReviews = new Map<string, { decisionsCount: number; coach: SavedCoachReview }>();
   private lastStarAt = 0;
+  private readonly tracked = new Map<string, { userId: string; session: TrackedSession }>();
+  private lastTrackedAt = 0;
 
   async ensureSession(sessionId: string, player: Player): Promise<Player> {
     const s = this.sessions.get(sessionId);
@@ -219,6 +235,39 @@ export class MemoryRepo implements Repo {
 
   async saveProfileReview(userId: string, decisionsCount: number, _stats: SessionStats, coach: SavedCoachReview): Promise<void> {
     this.profileReviews.set(userId, { decisionsCount, coach: structuredClone(coach) });
+  }
+
+  async trackedSessions(userId: string, limit: number): Promise<TrackedSession[]> {
+    return [...this.tracked.values()]
+      .filter((t) => t.userId === userId)
+      .map((t) => structuredClone(t.session))
+      .sort(byTrackedDate)
+      .slice(0, limit);
+  }
+
+  async trackedSessionCount(userId: string): Promise<number> {
+    return [...this.tracked.values()].filter((t) => t.userId === userId).length;
+  }
+
+  async addTrackedSession(userId: string, input: TrackedSessionInput): Promise<TrackedSession> {
+    // Distinct times keep "newest logged first" stable within a day.
+    this.lastTrackedAt = Math.max(Date.now(), this.lastTrackedAt + 1);
+    const session: TrackedSession = { ...input, result: netResult(input), id: crypto.randomUUID(), createdAt: new Date(this.lastTrackedAt).toISOString() };
+    this.tracked.set(session.id, { userId, session });
+    return structuredClone(session);
+  }
+
+  async updateTrackedSession(userId: string, id: string, input: TrackedSessionInput): Promise<TrackedSession | null> {
+    const t = this.tracked.get(id);
+    if (!t || t.userId !== userId) return null;
+    t.session = { ...input, result: netResult(input), id, createdAt: t.session.createdAt };
+    return structuredClone(t.session);
+  }
+
+  async deleteTrackedSession(userId: string, id: string): Promise<boolean> {
+    const t = this.tracked.get(id);
+    if (!t || t.userId !== userId) return false;
+    return this.tracked.delete(id);
   }
 
   private userHands(userId: string): HandRecord[] {

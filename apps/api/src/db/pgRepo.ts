@@ -1,11 +1,11 @@
-import type { DecisionFeedback, DecisionStar, SessionStats } from '@gtotutor/shared-types';
+import type { DecisionFeedback, DecisionStar, SessionStats, TrackedGameMode, TrackedGameType, TrackedSession, TrackedSessionInput } from '@gtotutor/shared-types';
 import { and, asc, desc, eq, inArray, isNotNull, lt, ne, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { spotTypeOf } from '../teacher/sessionStats.js';
 import { groupByHand, type CoachMessage, type HandRecord, type HandReplay, type Player, type PlayerDecisions, type Repo, type SavedCoachReview, type StarredRow } from './repo.js';
 import * as schema from './schema.js';
-import { coachMessages, decisions, hands, practiceSessions, profileReviews, profiles, sessionReviews } from './schema.js';
+import { coachMessages, decisions, hands, practiceSessions, profileReviews, profiles, sessionReviews, trackedSessions } from './schema.js';
 
 const ownerCols = (p: Player) => (p.kind === 'user' ? { userId: p.userId, guestId: null } : { userId: null, guestId: p.guestId });
 const rowOwner = (r: { userId: string | null; guestId: string | null }): Player =>
@@ -202,6 +202,45 @@ export class PgRepo implements Repo {
     await this.db.insert(profileReviews).values(values).onConflictDoUpdate({ target: profileReviews.userId, set: { decisionsCount, stats, coach, createdAt: values.createdAt } });
   }
 
+  async trackedSessions(userId: string, limit: number): Promise<TrackedSession[]> {
+    const rows = await this.db
+      .select()
+      .from(trackedSessions)
+      .where(eq(trackedSessions.userId, userId))
+      .orderBy(desc(trackedSessions.playedOn), desc(trackedSessions.createdAt))
+      .limit(limit);
+    return rows.map(toTracked);
+  }
+
+  async trackedSessionCount(userId: string): Promise<number> {
+    const [{ n }] = await this.db.select({ n: sql<number>`count(*)::int` }).from(trackedSessions).where(eq(trackedSessions.userId, userId));
+    return n;
+  }
+
+  async addTrackedSession(userId: string, input: TrackedSessionInput): Promise<TrackedSession> {
+    const [row] = await this.db.insert(trackedSessions).values({ userId, ...trackedCols(input) }).returning();
+    return toTracked(row);
+  }
+
+  async updateTrackedSession(userId: string, id: string, input: TrackedSessionInput): Promise<TrackedSession | null> {
+    if (!UUID.test(id)) return null;
+    const [row] = await this.db
+      .update(trackedSessions)
+      .set({ ...trackedCols(input), updatedAt: new Date() })
+      .where(and(eq(trackedSessions.id, id), eq(trackedSessions.userId, userId)))
+      .returning();
+    return row ? toTracked(row) : null;
+  }
+
+  async deleteTrackedSession(userId: string, id: string): Promise<boolean> {
+    if (!UUID.test(id)) return false;
+    const deleted = await this.db
+      .delete(trackedSessions)
+      .where(and(eq(trackedSessions.id, id), eq(trackedSessions.userId, userId)))
+      .returning({ id: trackedSessions.id });
+    return deleted.length > 0;
+  }
+
   /** For checks and scripts: row counts per table. */
   async counts(): Promise<Record<string, number>> {
     const rows = await this.db.execute<{ t: string; n: number }>(sql`
@@ -247,5 +286,40 @@ function toRecord(row: typeof hands.$inferSelect, ds: DecisionFeedback[]): HandR
     replay: row.result as HandReplay | null,
     netBb: row.netBb,
     decisions: ds,
+  };
+}
+
+const cents = (n: number) => Math.round(n * 100);
+const fromCents = (n: number | null) => (n === null ? null : n / 100);
+
+const trackedCols = (t: TrackedSessionInput) => ({
+  playedOn: t.date,
+  location: t.location,
+  hours: t.hours,
+  buyInCents: cents(t.buyIn),
+  cashOutCents: cents(t.cashOut),
+  resultCents: cents(t.cashOut) - cents(t.buyIn),
+  gameType: t.gameType,
+  gameMode: t.gameMode,
+  smallBlindCents: t.smallBlind === null ? null : cents(t.smallBlind),
+  bigBlindCents: t.bigBlind === null ? null : cents(t.bigBlind),
+  notes: t.notes,
+});
+
+function toTracked(row: typeof trackedSessions.$inferSelect): TrackedSession {
+  return {
+    id: row.id,
+    date: row.playedOn,
+    location: row.location,
+    hours: row.hours,
+    buyIn: row.buyInCents / 100,
+    cashOut: row.cashOutCents / 100,
+    result: row.resultCents / 100,
+    gameType: row.gameType as TrackedGameType,
+    gameMode: row.gameMode as TrackedGameMode | null,
+    smallBlind: fromCents(row.smallBlindCents),
+    bigBlind: fromCents(row.bigBlindCents),
+    notes: row.notes,
+    createdAt: row.createdAt.toISOString(),
   };
 }
