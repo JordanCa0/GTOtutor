@@ -901,11 +901,11 @@ button.primary.danger { background: #c25a4b; color: #fff; }
 .tracker-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4) var(--sp-3); }
 .tracker-field { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
 .tracker-wide { grid-column: 1 / -1; }
-.tracker-field input, .tracker-field textarea, .tracker-field select { width: 100%; min-width: 0; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line-2); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); color: var(--text); font: inherit; font-size: var(--fs-sm); line-height: 1.2; color-scheme: dark; }
+.tracker-field input, .tracker-field textarea, .tracker-field select, .tracker-range select { width: 100%; min-width: 0; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line-2); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); color: var(--text); font: inherit; font-size: var(--fs-sm); line-height: 1.2; color-scheme: dark; }
 .tracker-field textarea { resize: vertical; line-height: 1.55; }
-.tracker-field input:focus, .tracker-field textarea:focus, .tracker-field select:focus { outline: none; border-color: var(--line-3); }
-.tracker-field select { appearance: none; cursor: pointer; padding-right: var(--sp-6); background: rgba(255, 255, 255, 0.04) url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2714%27 height=%2714%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%239aa3ad%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E") no-repeat right var(--sp-3) center; }
-.tracker-field select option { background: var(--panel); color: var(--text); }
+.tracker-field input:focus, .tracker-field textarea:focus, .tracker-field select:focus, .tracker-range select:focus { outline: none; border-color: var(--line-3); }
+.tracker-field select, .tracker-range select { appearance: none; cursor: pointer; padding-right: var(--sp-6); background: rgba(255, 255, 255, 0.04) url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2714%27 height=%2714%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%239aa3ad%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E") no-repeat right var(--sp-3) center; }
+.tracker-field select option, .tracker-range select option { background: var(--panel); color: var(--text); }
 .tracker-blinds { display: flex; gap: var(--sp-2); align-items: center; }
 .tracker-blinds input { flex: 1; font-variant-numeric: tabular-nums; }
 .tracker-field input[type="number"] { font-variant-numeric: tabular-nums; }
@@ -913,6 +913,28 @@ button.primary.danger { background: #c25a4b; color: #fff; }
 .tracker-money { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
 .tracker-foot { margin-top: 0; gap: var(--sp-3); flex-wrap: wrap; }
 .tracker-confirm { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.tracker-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3) var(--sp-4); }
+.tracker-range select { width: auto; min-width: 11rem; }
+.tracker-range select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tracker-chart-note { margin: calc(-1 * var(--sp-2)) 0 var(--sp-3); }
+.tracker-view-note { margin: calc(-1 * var(--sp-2)) 0 0; }
+/* Running-total chart (TrackerChart.tsx): one gold series (it's your money), recessive hairline grid. */
+.tracker-chart { position: relative; padding: var(--sp-3) 0 var(--sp-2); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); min-width: 0; }
+.tracker-chart svg { display: block; overflow: visible; touch-action: pan-y; }
+.tracker-chart svg:focus { outline: none; }
+.tracker-chart svg:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-md); }
+.tc-grid { stroke: var(--line); stroke-width: 1; shape-rendering: crispEdges; }
+.tc-zero { stroke: var(--line-3); stroke-width: 1; shape-rendering: crispEdges; }
+.tc-axis { fill: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.tc-line { fill: none; stroke: var(--gold); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.tc-area { fill: var(--gold); opacity: 0.1; }
+.tc-dot { fill: var(--gold); stroke: var(--panel); stroke-width: 2; }
+.tc-end { fill: var(--text); font-size: var(--fs-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
+.tc-cursor line { stroke: var(--line-3); stroke-width: 1; shape-rendering: crispEdges; }
+.tc-hit { fill: transparent; cursor: crosshair; }
+.tc-tip { position: absolute; transform: translate(-50%, -100%); pointer-events: none; display: flex; flex-direction: column; gap: 2px; padding: var(--sp-2) var(--sp-3); background: var(--raised); border: 1px solid var(--line-2); border-radius: var(--r-md); box-shadow: var(--shadow-float); font-size: var(--fs-xs); white-space: nowrap; max-width: 15rem; }
+.tc-tip strong { font-size: var(--fs-sm); color: var(--text); font-variant-numeric: tabular-nums; }
+.tc-tip span { overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 640px) {
   .tracker-fields { grid-template-columns: minmax(0, 1fr); }
   .tracker-date { width: auto; }

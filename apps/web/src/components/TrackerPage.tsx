@@ -15,8 +15,40 @@ import { Backdrop, Presence } from './Presence';
 import JellyRadio from './reactbits/JellyRadio';
 import { JELLY_THEME } from './SetupScreen';
 import { Skeleton, SkeletonGroup, useSkeleton } from './Skeleton';
+import { TrackerChart, type ChartUnit } from './TrackerChart';
 
 type Filter = 'all' | TrackedGameType;
+
+const TIMEFRAMES = [
+  { id: '30d', label: 'Last 30 days' },
+  { id: '90d', label: 'Last 90 days' },
+  { id: 'ytd', label: 'This year' },
+  { id: '1y', label: 'Last 12 months' },
+  { id: 'all', label: 'All time' },
+] as const;
+type Timeframe = (typeof TIMEFRAMES)[number]['id'];
+const TIMEFRAME_KEY = 'gtotutor.trackerTimeframe';
+
+/** The remembered timeframe for this browser, else all time. */
+function storedTimeframe(): Timeframe {
+  try {
+    const v = localStorage.getItem(TIMEFRAME_KEY);
+    if (TIMEFRAMES.some((t) => t.id === v)) return v as Timeframe;
+  } catch {
+    // Storage blocked: fall through.
+  }
+  return 'all';
+}
+
+/** The first day (YYYY-MM-DD, local) a timeframe includes, or null for all time. */
+function timeframeStart(t: Timeframe): string | null {
+  const d = new Date();
+  if (t === 'all') return null;
+  if (t === 'ytd') d.setMonth(0, 1);
+  else if (t === '1y') d.setFullYear(d.getFullYear() - 1, d.getMonth(), d.getDate() + 1);
+  else d.setDate(d.getDate() - (t === '30d' ? 29 : 89));
+  return localDate(d);
+}
 /** The form: a new session, or the one being edited. */
 type Editing = { kind: 'new' } | { kind: 'edit'; session: TrackedSession };
 
@@ -27,6 +59,26 @@ const money = (n: number) => (Math.abs(Math.round(n * 100) % 100) === 0 ? dollar
 /** "+$300", "−$120.50", "$0". */
 const signed = (n: number) => (n > 0 ? `+${money(n)}` : n < 0 ? `−${money(-n)}` : money(0));
 const resultClass = (n: number) => (n > 0 ? 'up' : n < 0 ? 'down' : '');
+
+/** The bb view: each cash session's result in its own big blinds, so different stakes compare fairly. */
+type View = ChartUnit;
+const VIEW_KEY = 'gtotutor.trackerView';
+function storedView(): View {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'bb' ? 'bb' : 'usd';
+  } catch {
+    return 'usd';
+  }
+}
+const hasBb = (s: TrackedSession) => s.gameType === 'cash' && s.bigBlind !== null && s.bigBlind > 0;
+const inDollars = (s: TrackedSession) => s.result;
+const inBb = (s: TrackedSession) => (s.bigBlind ? s.result / s.bigBlind : 0);
+const bbNum = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
+/** "+42.5 bb", "−18 bb", "0 bb". */
+const signedBb = (n: number) => {
+  const r = Math.round(n * 10) / 10;
+  return r > 0 ? `+${bbNum.format(r)} bb` : r < 0 ? `−${bbNum.format(-r)} bb` : '0 bb';
+};
 const hoursText = (h: number) => `${Number(h.toFixed(2))}h`;
 const GAME_TYPE_LABEL: Record<TrackedGameType, string> = { cash: 'Cash', tournament: 'Tournament' };
 const GAME_MODE_LABEL = Object.fromEntries(TRACKED_GAME_MODES.map((m) => [m.id, m.label])) as Record<TrackedGameMode, string>;
@@ -41,7 +93,10 @@ const STAKES_OPTIONS = STAKES_PRESETS.map(([sb, bb]) => ({ value: stakesKey(sb, 
 
 /** Today in the player's time zone, as YYYY-MM-DD. */
 function today() {
-  const d = new Date();
+  return localDate(new Date());
+}
+
+function localDate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
@@ -96,6 +151,24 @@ export function TrackerPage({ onClose }: { onClose: () => void }) {
 function TrackerBody({ onEdit, onNew }: { onEdit: (s: TrackedSession) => void; onNew: () => void }) {
   const tracker = useQuery({ queryKey: ['tracker'], queryFn: api.tracker });
   const [filter, setFilter] = useState<Filter>('all');
+  const [range, setRange] = useState<Timeframe>(storedTimeframe);
+  const pickRange = (r: Timeframe) => {
+    setRange(r);
+    try {
+      localStorage.setItem(TIMEFRAME_KEY, r);
+    } catch {
+      // Private mode: the choice just isn't remembered.
+    }
+  };
+  const [unit, setUnit] = useState<View>(storedView);
+  const pickUnit = (v: View) => {
+    setUnit(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      // Private mode: the choice just isn't remembered.
+    }
+  };
   const skeleton = useSkeleton(tracker.isPending);
 
   if (skeleton.active || tracker.isPending) return <TrackerSkeleton visible={skeleton.visible} />;
@@ -112,45 +185,107 @@ function TrackerBody({ onEdit, onNew }: { onEdit: (s: TrackedSession) => void; o
     );
   }
 
-  const shown = filter === 'all' ? all : all.filter((s) => s.gameType === filter);
-  const net = shown.reduce((sum, s) => sum + s.result, 0);
+  // The timeframe and game type scope everything below them: totals, chart and list agree.
+  // The bb view counts only cash sessions with stakes set (a tournament has no fixed big blind).
+  const anyBb = all.some(hasBb);
+  const view: View = anyBb ? unit : 'usd';
+  const bb = view === 'bb';
+  const since = timeframeStart(range);
+  const inRange = all.filter((s) => !since || s.date >= since);
+  const shown = bb ? inRange.filter(hasBb) : inRange.filter((s) => filter === 'all' || s.gameType === filter);
+  const left = bb ? inRange.length - shown.length : 0;
+  const value = bb ? inBb : inDollars;
+  const fmt = bb ? signedBb : signed;
+  const net = shown.reduce((sum, s) => sum + value(s), 0);
   const hours = shown.reduce((sum, s) => sum + s.hours, 0);
   const winning = shown.filter((s) => s.result > 0).length;
   const both = all.some((s) => s.gameType === 'cash') && all.some((s) => s.gameType === 'tournament');
+  const rangeLabel = TIMEFRAMES.find((t) => t.id === range)!.label.toLowerCase();
+  const periodText = rangeLabel === 'this year' ? 'year so far' : rangeLabel;
 
   return (
     <>
-      {both && (
-        <JellyRadio
-          {...JELLY_THEME}
-          ariaLabel="Show"
-          items={[
-            { value: 'all', label: 'All games' },
-            { value: 'cash', label: 'Cash' },
-            { value: 'tournament', label: 'Tournaments' },
-          ]}
-          value={filter}
-          onChange={(v) => setFilter(v as Filter)}
-        />
+      <div className="tracker-filters">
+        <label className="tracker-range">
+          <span className="sr-only">Timeframe</span>
+          <select value={range} onChange={(e) => pickRange(e.target.value as Timeframe)}>
+            {TIMEFRAMES.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {anyBb && (
+          <JellyRadio
+            {...JELLY_THEME}
+            ariaLabel="Measure in"
+            items={[
+              { value: 'usd', label: 'Dollars' },
+              { value: 'bb', label: 'Big blinds' },
+            ]}
+            value={view}
+            onChange={(v) => pickUnit(v as View)}
+          />
+        )}
+        {both && !bb && (
+          <JellyRadio
+            {...JELLY_THEME}
+            ariaLabel="Show"
+            items={[
+              { value: 'all', label: 'All games' },
+              { value: 'cash', label: 'Cash' },
+              { value: 'tournament', label: 'Tournaments' },
+            ]}
+            value={filter}
+            onChange={(v) => setFilter(v as Filter)}
+          />
+        )}
+      </div>
+      {bb && left > 0 && (
+        <p className="muted small tracker-view-note">
+          Cash sessions with stakes set only. {left} other session{left === 1 ? '' : 's'} in this timeframe (tournaments, or no stakes) {left === 1 ? 'is' : 'are'} left out.
+        </p>
       )}
+
       <section className="profile-stats" aria-label="Totals">
         <div className="profile-stat">
           <p className="profile-stat-label">Net result</p>
-          <p className={`profile-stat-value ${resultClass(net)}`}>{signed(net)}</p>
+          <p className={`profile-stat-value ${resultClass(net)}`}>{fmt(net)}</p>
           <p className="muted small">
             {shown.length} session{shown.length === 1 ? '' : 's'}, {winning} winning.
           </p>
         </div>
         <div className="profile-stat">
-          <p className="profile-stat-label">Per hour</p>
-          <p className={`profile-stat-value ${resultClass(net)}`}>{hours > 0 ? signed(net / hours) : '–'}</p>
-          <p className="muted small">Net result over hours played. It takes a few hundred hours to settle.</p>
+          <p className="profile-stat-label">{bb ? 'bb per hour' : 'Per hour'}</p>
+          <p className={`profile-stat-value ${resultClass(net)}`}>{hours > 0 ? (bb ? `${fmt(net / hours)}/hr` : fmt(net / hours)) : '–'}</p>
+          <p className="muted small">
+            {bb
+              ? 'Each result in its own big blinds, over hours played, so different stakes compare fairly. It takes a few hundred hours to settle.'
+              : 'Net result over hours played. It takes a few hundred hours to settle.'}
+          </p>
         </div>
         <div className="profile-stat">
           <p className="profile-stat-label">Hours played</p>
           <p className="profile-stat-value">{Number(hours.toFixed(1))}</p>
           <p className="muted small">About {hoursText(shown.length ? hours / shown.length : 0)} a session.</p>
         </div>
+      </section>
+
+      <section className="profile-section">
+        <h2>Running total</h2>
+        {shown.length ? (
+          <>
+            <p className="muted small tracker-chart-note">
+              Your net result {bb ? 'in big blinds ' : ''}adding up session by session, from {bb ? '0 bb' : '$0'} at the start of {range === 'all' ? 'your first session' : `the ${rangeLabel === 'this year' ? 'year' : rangeLabel}`}.
+            </p>
+            <TrackerChart sessions={shown} value={value} signed={fmt} unit={view} />
+          </>
+        ) : (
+          <p className="muted small">
+            No {bb ? 'cash sessions with stakes' : 'sessions'} in the {periodText}. Pick a longer timeframe to see more.
+          </p>
+        )}
       </section>
 
       <section className="profile-section">
@@ -177,16 +312,16 @@ function TrackerBody({ onEdit, onNew }: { onEdit: (s: TrackedSession) => void; o
                   {s.notes && <span className="starred-note">{s.notes}</span>}
                 </span>
                 <span className="tracker-money">
-                  <span className={`tracker-result ${resultClass(s.result)}`}>{signed(s.result)}</span>
+                  <span className={`tracker-result ${resultClass(s.result)}`}>{fmt(value(s))}</span>
                   <span className="muted small">
-                    In {money(s.buyIn)} · Out {money(s.cashOut)}
+                    {bb ? signed(s.result) : `In ${money(s.buyIn)} · Out ${money(s.cashOut)}`}
                   </span>
                 </span>
               </button>
             </li>
           ))}
         </ul>
-        {!shown.length && <p className="muted small">No {filter === 'cash' ? 'cash' : 'tournament'} sessions yet.</p>}
+        {!shown.length && <p className="muted small">No sessions match these filters.</p>}
       </section>
     </>
   );
@@ -204,6 +339,8 @@ function TrackerSkeleton({ visible }: { visible: boolean }) {
           </div>
         ))}
       </div>
+      <Skeleton width="9rem" height="1.4rem" />
+      <Skeleton kind="block" height="calc(220px + 1.25rem)" />
       <Skeleton width="7rem" height="1.4rem" />
       <div className="skeleton-stack">
         {[0, 1, 2].map((i) => (
