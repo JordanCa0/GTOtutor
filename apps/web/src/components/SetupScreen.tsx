@@ -86,7 +86,7 @@ export function SetupScreen({ initial, starting, error, onStart, onClose }: Prop
   // Rotate on and off again (or trying Random) doesn't lose it.
   const fixedSeat = position !== 'random' && !rotate;
   const activeOpponent = fixedSeat && opponent !== position ? opponent : 'any';
-  const [skipEasyFolds, setSkipEasyFolds] = useState(initial?.skipEasyFolds ?? true);
+  const [skipEasyFolds, setSkipEasyFolds] = useState(initial?.skipEasyFolds ?? false);
   const [simplePots, setSimplePots] = useState(initial?.simplePots ?? false);
   const [villainStyle, setVillainStyle] = useState<VillainStyle>(initial?.villainStyle ?? 'gto');
   const [mix, setMix] = useState<MixedStacks | 'equal'>(initial?.mixedStacks ?? 'equal');

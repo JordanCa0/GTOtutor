@@ -74,7 +74,7 @@ export interface StartHandRequest extends Omit<HandConfig, 'stackDepthBb'> {
   villainStyle?: VillainStyle;
   /** The practice session (a sitting of hands) this hand belongs to; the API requires it. */
   sessionId?: string;
-  /** Mostly skip hands whose first decision is an obvious fold. Defaults to true. */
+  /** Mostly skip hands whose first decision is an obvious fold. Defaults to false. */
   skipEasyFolds?: boolean;
   /**
    * Simple pots: opponents never limp or call ahead of hero, so every pot is one raiser against

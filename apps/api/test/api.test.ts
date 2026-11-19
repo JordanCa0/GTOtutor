@@ -93,7 +93,7 @@ describe('HTTP API', () => {
     for (let i = 0; i < 6; i++) await playHand(app, session);
     const review = (await call({ method: 'GET', url: `/api/sessions/${session}/review` })).json<SessionReviewResponse>();
     expect(review.stats.hands).toBe(7);
-    expect(review.stats.easyFoldsSkipped).toBe(true);
+    expect(review.stats.easyFoldsSkipped).toBe(false);
     expect(review.coach).toMatchObject({ status: 'ok', summary: 'Solid session.' });
   });
 

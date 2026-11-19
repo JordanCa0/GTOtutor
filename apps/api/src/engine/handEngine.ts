@@ -344,7 +344,7 @@ export class HandEngine {
       if (req.heroPosition === 'random') throw new HttpError(400, 'Choose your position to pick an opponent.');
       if (opponent === req.heroPosition) throw new HttpError(400, "Your opponent can't sit in your seat.");
     }
-    const skipEasyFolds = (req.skipEasyFolds ?? true) && this.rng.float() >= UNFILTERED_DEAL_RATE;
+    const skipEasyFolds = (req.skipEasyFolds ?? false) && this.rng.float() >= UNFILTERED_DEAL_RATE;
     // Mixed stacks: one solved profile per hand, picked before the redeals so they reuse its chart.
     const profile = this.pickProfile(req);
     // Redeal hands with nothing to train on: walks in the BB, and (mostly) trivial folds.
@@ -744,7 +744,7 @@ export class HandEngine {
     return {
       id: randomUUID(),
       sessionId: req.sessionId ?? null,
-      easyFoldsSkipped: req.skipEasyFolds ?? true,
+      easyFoldsSkipped: req.skipEasyFolds ?? false,
       flopPractice: req.flopPractice ?? false,
       simplePots: req.simplePots ?? false,
       opponentPosition: req.opponentPosition && req.opponentPosition !== 'any' ? req.opponentPosition : null,
